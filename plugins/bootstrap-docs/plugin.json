@@ -1,0 +1,10 @@
+{
+  "name": "bootstrap-docs",
+  "description": "Set up a comprehensive, AI-readable documentation strategy in any project",
+  "version": "1.0.0",
+  "author": {
+    "name": "benjamcalvin"
+  },
+  "license": "MIT",
+  "keywords": ["docs", "documentation", "strategy", "scaffolding"]
+}
