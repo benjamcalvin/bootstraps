@@ -1,50 +1,44 @@
 # Bootstraps
 
-An installable marketplace of Claude Code skills, hooks, and project scaffold templates.
+A Claude Code plugin marketplace of reusable skills, hooks, and project scaffolds.
 
 ## Project Purpose
 
-This repo is a curated collection of reusable patterns for bootstrapping new projects with Claude Code. It provides:
-
-- **Skills** — Slash-command skills (`.claude/skills/`) that can be installed into any project
-- **Hooks** — Lifecycle hook configurations (`hooks/hooks.json` within plugins) for automating workflows
-- **Scaffold Templates** — Project templates and starter configurations (not a Claude Code primitive — these are our own concept)
+This repo is a curated collection of reusable patterns for bootstrapping new projects with Claude Code, distributed as a plugin marketplace. Install with `/plugin marketplace add benjamcalvin/bootstraps`.
 
 ## Architecture
 
 ```
 bootstraps/
-├── skills/           # Installable skill definitions
-│   └── <skill>/
-│       ├── skill.md  # Skill prompt
-│       └── meta.json # Metadata (name, description, triggers)
-├── hooks/            # Hook definitions (within plugins)
-│   └── hooks.json    # Hook configuration (Claude Code JSON format)
-├── scaffold-templates/        # Project templates
-│   └── <template>/
-├── installer/        # CLI installer for marketplace
-│   └── install.sh
-├── registry.json     # Master registry of all available items
+├── marketplace.json       # Plugin marketplace manifest
+├── plugins/               # All distributable plugins
+│   └── <plugin>/
+│       ├── plugin.json    # Plugin metadata
+│       ├── SKILL.md       # Skill definition (Agent Skills open standard)
+│       ├── hooks/         # Hook configurations (if any)
+│       │   └── hooks.json
+│       ├── assets/        # Templates, schemas, data files
+│       └── references/    # On-demand documentation
 ├── CLAUDE.md
 └── README.md
 ```
 
 ## Conventions
 
-- Each skill/hook is self-contained in its own directory
+- Each plugin is self-contained in its own directory under `plugins/`
 - Skills use `SKILL.md` with YAML frontmatter (Agent Skills open standard)
-- Hooks use Claude Code's JSON format in `hooks/hooks.json` within plugins
-- All items include a description, tags, and version in their metadata
-- Keep skill prompts focused and composable — one skill does one thing well
-- Test skills and hooks locally before publishing to the registry
+- Hooks use Claude Code's JSON format in `hooks/hooks.json`
+- One plugin does one thing well
+- Plugins can bundle skills + hooks + agents + assets
 
 ## Development Workflow
 
-1. Create new items in the appropriate directory (`skills/`, `hooks/`, `scaffold-templates/`)
-2. Add `SKILL.md` with YAML frontmatter (for skills) or `hooks/hooks.json` (for hooks)
-3. Update `marketplace.json` to include the new item
-4. Test installation into a scratch project
-5. Commit with a clear description of what the item does
+1. Create a new plugin directory under `plugins/`
+2. Add `plugin.json` with name, description, version, author, license
+3. Add `SKILL.md` (for skills) and/or `hooks/hooks.json` (for hooks)
+4. Add entry to `marketplace.json`
+5. Validate: `claude plugin validate plugins/<name>`
+6. Test locally: `claude --plugin-dir plugins/<name>`
 
 ## Metadata Schema
 

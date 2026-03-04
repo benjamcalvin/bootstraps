@@ -10,7 +10,7 @@
   "plugins": [
     {
       "name": "bootstrap-docs",
-      "source": "./skills/bootstrap-docs",
+      "source": "./plugins/bootstrap-docs",
       "description": "Set up a comprehensive, AI-readable documentation strategy in any project",
       "version": "1.0.0",
       "category": "productivity",
