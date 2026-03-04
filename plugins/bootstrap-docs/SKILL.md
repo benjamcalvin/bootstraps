@@ -5,6 +5,8 @@ description: >-
   Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates.
   Triggers: /bootstrap-docs, set up documentation, create docs structure, bootstrap docs
 argument-hint: "[adr|specs|plans|guides|vision|standards|research|all]"
+context: fork
+agent: general-purpose
 license: MIT
 metadata:
   version: "1.0.0"
@@ -33,7 +35,7 @@ This skill runs six phases to set up project documentation. It is **re-runnable*
 - Specific module (e.g., `adr`, `specs`, `plans`, `guides`, `vision`, `standards`, `research`): run only Phase 0 (preferences) then the phases relevant to that module (directory, AGENTS.md, starter doc)
 - Multiple modules can be comma-separated: `adr,specs`
 
-**Template files** are in the skill's `assets/` directory (shown in Context above as `$SKILL_DIR`). Read them with the Read tool when needed — e.g., `Read $SKILL_DIR/examples/adr-template.md`.
+**Template files** are in the skill's `assets/` directory (shown in Context above as `$SKILL_DIR`). Read them on demand with the Read tool only when that phase needs them — e.g., `Read $SKILL_DIR/assets/adr-template.md`. Do NOT read all templates upfront; load each template only when creating the corresponding document.
 
 ---
 
@@ -131,7 +133,7 @@ Report what was created and what was skipped.
 
 ### Phase 2: Master Strategy (AGENTS.md)
 
-Create `{docs_location}/AGENTS.md` using the strategy template from `$SKILL_DIR/examples/strategy-template.md`.
+Create `{docs_location}/AGENTS.md` using the strategy template from `$SKILL_DIR/assets/strategy-template.md`.
 
 Read the template, then customize it:
 
@@ -243,7 +245,7 @@ Present three options:
 - **Interactive**: Walk through each section of the template, asking what content to fill in. Slower but tailored.
 - **Skip**: Don't create a starter doc for this module. Set its status to `declined` in preferences.
 
-**Templates to use** (read from `$SKILL_DIR/examples/`):
+**Templates to use** (read from `$SKILL_DIR/assets/`):
 
 | Module | Template | Default filename |
 |--------|----------|-----------------|
