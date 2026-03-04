@@ -8,16 +8,16 @@ WARNINGS=0
 echo "=== Bootstraps Plugin Validation ==="
 echo ""
 
-# Check marketplace.json exists and is valid JSON
-if [ ! -f "marketplace.json" ]; then
-  echo "ERROR: marketplace.json not found"
+# Check .claude-plugin/marketplace.json exists and is valid JSON
+if [ ! -f ".claude-plugin/marketplace.json" ]; then
+  echo "ERROR: .claude-plugin/marketplace.json not found"
   ERRORS=$((ERRORS + 1))
 else
-  if ! jq . marketplace.json > /dev/null 2>&1; then
-    echo "ERROR: marketplace.json is not valid JSON"
+  if ! jq . .claude-plugin/marketplace.json > /dev/null 2>&1; then
+    echo "ERROR: .claude-plugin/marketplace.json is not valid JSON"
     ERRORS=$((ERRORS + 1))
   else
-    echo "OK: marketplace.json is valid JSON"
+    echo "OK: .claude-plugin/marketplace.json is valid JSON"
   fi
 fi
 
@@ -29,18 +29,18 @@ for plugin_dir in plugins/*/; do
   echo "--- Plugin: $plugin_name ---"
 
   # Check plugin.json
-  if [ ! -f "$plugin_dir/plugin.json" ]; then
+  if [ ! -f "$plugin_dir/.claude-plugin/plugin.json" ]; then
     echo "  ERROR: Missing plugin.json"
     ERRORS=$((ERRORS + 1))
   else
-    if ! jq . "$plugin_dir/plugin.json" > /dev/null 2>&1; then
+    if ! jq . "$plugin_dir/.claude-plugin/plugin.json" > /dev/null 2>&1; then
       echo "  ERROR: plugin.json is not valid JSON"
       ERRORS=$((ERRORS + 1))
     else
       # Check required fields
-      name=$(jq -r '.name // empty' "$plugin_dir/plugin.json")
-      desc=$(jq -r '.description // empty' "$plugin_dir/plugin.json")
-      version=$(jq -r '.version // empty' "$plugin_dir/plugin.json")
+      name=$(jq -r '.name // empty' "$plugin_dir/.claude-plugin/plugin.json")
+      desc=$(jq -r '.description // empty' "$plugin_dir/.claude-plugin/plugin.json")
+      version=$(jq -r '.version // empty' "$plugin_dir/.claude-plugin/plugin.json")
 
       if [ -z "$name" ]; then
         echo "  ERROR: plugin.json missing 'name'"
@@ -90,12 +90,12 @@ for plugin_dir in plugins/*/; do
     fi
   fi
 
-  # Check marketplace.json references this plugin
-  if [ -f "marketplace.json" ]; then
-    if jq -e ".plugins[] | select(.name == \"$plugin_name\")" marketplace.json > /dev/null 2>&1; then
-      echo "  OK: Listed in marketplace.json"
+  # Check .claude-plugin/marketplace.json references this plugin
+  if [ -f ".claude-plugin/marketplace.json" ]; then
+    if jq -e ".plugins[] | select(.name == \"$plugin_name\")" .claude-plugin/marketplace.json > /dev/null 2>&1; then
+      echo "  OK: Listed in .claude-plugin/marketplace.json"
     else
-      echo "  WARN: Not listed in marketplace.json"
+      echo "  WARN: Not listed in .claude-plugin/marketplace.json"
       WARNINGS=$((WARNINGS + 1))
     fi
   fi

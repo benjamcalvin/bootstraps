@@ -6,10 +6,12 @@ A plugin marketplace of reusable skills, hooks, and project scaffolds for AI cod
 
 ```
 bootstraps/
-├── marketplace.json       # Plugin marketplace manifest
+├── .claude-plugin/
+│   └── marketplace.json   # Plugin marketplace manifest
 ├── plugins/               # All distributable plugins
 │   └── <plugin>/
-│       ├── plugin.json    # Plugin metadata
+│       ├── .claude-plugin/
+│       │   └── plugin.json  # Plugin metadata
 │       ├── SKILL.md       # Skill definition (Agent Skills open standard)
 │       ├── hooks/         # Hook configurations (if any)
 │       │   └── hooks.json
@@ -30,7 +32,7 @@ bootstraps/
 ## Development
 
 1. Create directory under `plugins/`
-2. Add `plugin.json` (name, description, version, author, license)
+2. Add `.claude-plugin/plugin.json` (name, description, version, author, license)
 3. Add `SKILL.md` and/or hook configurations
-4. Add entry to `marketplace.json`
+4. Add entry to `.claude-plugin/marketplace.json`
 5. Validate: `./validate-all.sh`
