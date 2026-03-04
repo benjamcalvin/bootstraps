@@ -2,11 +2,11 @@
 
 A Claude Code plugin marketplace of reusable skills, hooks, and project scaffolds.
 
-## Why
+## Project Purpose
 
-Curated collection of reusable patterns for bootstrapping new projects with Claude Code. Distributed as a standard plugin marketplace — no custom installer needed.
+This repo is a curated collection of reusable patterns for bootstrapping new projects with Claude Code, distributed as a plugin marketplace. Install with `/plugin marketplace add benjamcalvin/bootstraps`.
 
-## What
+## Architecture
 
 ```
 bootstraps/
@@ -19,41 +19,68 @@ bootstraps/
 │       │   └── hooks.json
 │       ├── assets/        # Templates, schemas, data files
 │       └── references/    # On-demand documentation
-├── validate-all.sh        # Plugin validation script
 ├── CLAUDE.md
 └── README.md
 ```
 
-## How
-
-### Install
-
-```bash
-/plugin marketplace add benjamcalvin/bootstraps
-/plugin install bootstrap-docs@bootstraps
-```
-
-### Create a new plugin
-
-1. Create directory under `plugins/`
-2. Add `plugin.json` (name, description, version, author, license)
-3. Add `SKILL.md` and/or `hooks/hooks.json`
-4. Add entry to `marketplace.json`
-
-### Validate and test
-
-```bash
-./validate-all.sh                          # Validate all plugins
-claude plugin validate plugins/<name>      # Validate one plugin
-claude --plugin-dir plugins/<name>         # Test locally
-claude --debug                             # Debug hook matching
-```
-
 ## Conventions
 
-- Each plugin is self-contained under `plugins/`
-- Skills use `SKILL.md` with YAML frontmatter ([Agent Skills standard](https://agentskills.io/specification))
-- Hooks use Claude Code JSON format in `hooks/hooks.json` (handler types: command, http, prompt, agent)
+- Each plugin is self-contained in its own directory under `plugins/`
+- Skills use `SKILL.md` with YAML frontmatter (Agent Skills open standard)
+- Hooks use Claude Code's JSON format in `hooks/hooks.json`
 - One plugin does one thing well
 - Plugins can bundle skills + hooks + agents + assets
-- See existing plugins for schema examples (e.g., `plugins/bootstrap-docs/plugin.json`, `plugins/bootstrap-docs/SKILL.md`)
+
+## Development Workflow
+
+1. Create a new plugin directory under `plugins/`
+2. Add `plugin.json` with name, description, version, author, license
+3. Add `SKILL.md` (for skills) and/or `hooks/hooks.json` (for hooks)
+4. Add entry to `marketplace.json`
+5. Validate: `./validate-all.sh` (or `claude plugin validate plugins/<name>`)
+6. Test locally: `claude --plugin-dir plugins/<name>`
+
+## Testing
+
+- **Validate all plugins**: `./validate-all.sh` — checks JSON validity, required fields, SKILL.md frontmatter, marketplace references
+- **Validate a single plugin**: `claude plugin validate plugins/<name>`
+- **Test a plugin locally**: `claude --plugin-dir plugins/<name>` then invoke the skill
+- **Debug hooks**: Run `claude --debug` to see which hooks matched and their exit codes
+
+## Metadata Schema
+
+### SKILL.md (skills — Agent Skills open standard)
+```yaml
+---
+name: skill-name
+description: What this skill does
+license: MIT
+metadata:
+  version: "1.0.0"
+  tags: ["category"]
+  author: author-name
+---
+
+[Skill instructions in markdown...]
+```
+
+### hooks.json (hooks — Claude Code format)
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "script-to-run.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Hook handler types: `command`, `http`, `prompt`, `agent`
