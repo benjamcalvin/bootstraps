@@ -12,11 +12,13 @@ bootstraps/
 │   └── <plugin>/
 │       ├── .claude-plugin/
 │       │   └── plugin.json  # Plugin metadata
-│       ├── SKILL.md       # Skill definition (Agent Skills open standard)
-│       ├── hooks/         # Hook configurations (if any)
+│       ├── skills/
+│       │   └── <skill-name>/
+│       │       ├── SKILL.md   # Skill definition (Agent Skills open standard)
+│       │       └── assets/    # Templates, schemas, data files
+│       ├── hooks/           # Hook configurations (if any)
 │       │   └── hooks.json
-│       ├── assets/        # Templates, schemas, data files
-│       └── references/    # On-demand documentation
+│       └── references/      # On-demand documentation
 ├── validate-all.sh        # Plugin validation script
 └── README.md
 ```
@@ -33,6 +35,6 @@ bootstraps/
 
 1. Create directory under `plugins/`
 2. Add `.claude-plugin/plugin.json` (name, description, version, author, license)
-3. Add `SKILL.md` and/or hook configurations
+3. Add `skills/<skill-name>/SKILL.md` and/or hook configurations
 4. Add entry to `.claude-plugin/marketplace.json`
 5. Validate: `./validate-all.sh`
