@@ -61,24 +61,31 @@ for plugin_dir in plugins/*/; do
     fi
   fi
 
-  # Check SKILL.md
-  if [ -f "$plugin_dir/SKILL.md" ]; then
-    if head -1 "$plugin_dir/SKILL.md" | grep -q "^---$"; then
-      echo "  OK: SKILL.md has frontmatter"
-    else
-      echo "  WARN: SKILL.md missing frontmatter delimiter"
-      WARNINGS=$((WARNINGS + 1))
-    fi
+  # Check skills
+  for skill_dir in "$plugin_dir"/skills/*/; do
+    [ -d "$skill_dir" ] || continue
+    skill_name=$(basename "$skill_dir")
+    if [ -f "$skill_dir/SKILL.md" ]; then
+      if head -1 "$skill_dir/SKILL.md" | grep -q "^---$"; then
+        echo "  OK: skills/$skill_name/SKILL.md has frontmatter"
+      else
+        echo "  WARN: skills/$skill_name/SKILL.md missing frontmatter delimiter"
+        WARNINGS=$((WARNINGS + 1))
+      fi
 
-    # Check line count
-    lines=$(wc -l < "$plugin_dir/SKILL.md")
-    if [ "$lines" -gt 500 ]; then
-      echo "  WARN: SKILL.md is $lines lines (recommended: < 500)"
-      WARNINGS=$((WARNINGS + 1))
+      # Check line count
+      lines=$(wc -l < "$skill_dir/SKILL.md")
+      if [ "$lines" -gt 500 ]; then
+        echo "  WARN: skills/$skill_name/SKILL.md is $lines lines (recommended: < 500)"
+        WARNINGS=$((WARNINGS + 1))
+      else
+        echo "  OK: skills/$skill_name/SKILL.md is $lines lines"
+      fi
     else
-      echo "  OK: SKILL.md is $lines lines"
+      echo "  WARN: skills/$skill_name/ exists but has no SKILL.md"
+      WARNINGS=$((WARNINGS + 1))
     fi
-  fi
+  done
 
   # Check hooks.json if present
   if [ -f "$plugin_dir/hooks/hooks.json" ]; then
