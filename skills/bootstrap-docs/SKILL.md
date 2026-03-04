@@ -1,8 +1,16 @@
 ---
 name: bootstrap-docs
-description: Set up a comprehensive, AI-readable documentation strategy in any project
+description: >-
+  Set up comprehensive AI-readable documentation strategy.
+  Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates.
+  Triggers: /bootstrap-docs, set up documentation, create docs structure, bootstrap docs
 argument-hint: "[adr|specs|plans|guides|vision|standards|research|all]"
-# Standards sub-types: testing, code, pr
+license: MIT
+metadata:
+  version: "1.0.0"
+  tags: ["docs", "documentation", "strategy", "scaffolding"]
+  author: benjamcalvin
+  standards-sub-types: ["testing", "code", "pr"]
 ---
 
 # Bootstrap Documentation Strategy
@@ -25,7 +33,7 @@ This skill runs six phases to set up project documentation. It is **re-runnable*
 - Specific module (e.g., `adr`, `specs`, `plans`, `guides`, `vision`, `standards`, `research`): run only Phase 0 (preferences) then the phases relevant to that module (directory, AGENTS.md, starter doc)
 - Multiple modules can be comma-separated: `adr,specs`
 
-**Template files** are in the skill's `examples/` directory (shown in Context above as `$SKILL_DIR`). Read them with the Read tool when needed — e.g., `Read $SKILL_DIR/examples/adr-template.md`.
+**Template files** are in the skill's `assets/` directory (shown in Context above as `$SKILL_DIR`). Read them with the Read tool when needed — e.g., `Read $SKILL_DIR/examples/adr-template.md`.
 
 ---
 
