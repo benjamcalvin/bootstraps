@@ -7,6 +7,7 @@ description: >-
 argument-hint: "[adr|specs|plans|guides|vision|standards|research|all]"
 context: fork
 agent: general-purpose
+allowed-tools: Read, Glob, Bash(cat *), Bash(find *)
 license: MIT
 metadata:
   version: "1.0.0"
@@ -21,10 +22,12 @@ Set up a comprehensive, AI-readable documentation strategy for this project.
 
 ## Context
 
-- Skill source directory: !`echo "$SKILL_DIR"`
-- Existing preferences: !`cat .bootstraps-preferences 2>/dev/null || echo "NO_PREFERENCES_FILE"`
-- Current docs structure: !`find . -name "AGENTS.md" -not -path "./.git/*" -not -path "./node_modules/*" 2>/dev/null | head -20 || echo "NONE_FOUND"`
+- Skill source directory: $SKILL_DIR
 - Arguments: $ARGUMENTS
+
+Before starting, gather context by running these commands:
+1. Check for existing preferences: `cat .bootstraps-preferences 2>/dev/null || echo "NO_PREFERENCES_FILE"`
+2. Check for existing docs structure: `find . -name "AGENTS.md" -not -path "./.git/*" -not -path "./node_modules/*" 2>/dev/null | head -20 || echo "NONE_FOUND"`
 
 ## Instructions
 
@@ -35,13 +38,13 @@ This skill runs six phases to set up project documentation. It is **re-runnable*
 - Specific module (e.g., `adr`, `specs`, `plans`, `guides`, `vision`, `standards`, `research`): run only Phase 0 (preferences) then the phases relevant to that module (directory, AGENTS.md, starter doc)
 - Multiple modules can be comma-separated: `adr,specs`
 
-**Template files** are in the skill's `assets/` directory (shown in Context above as `$SKILL_DIR`). Read them on demand with the Read tool only when that phase needs them — e.g., `Read $SKILL_DIR/assets/adr-template.md`. Do NOT read all templates upfront; load each template only when creating the corresponding document.
+**Template files** are in the skill's `assets/` directory at `$SKILL_DIR/assets/`. Read them on demand with the Read tool only when that phase needs them — e.g., `Read $SKILL_DIR/assets/adr-template.md`. Do NOT read all templates upfront; load each template only when creating the corresponding document.
 
 ---
 
 ### Phase 0: Preferences
 
-Check if `.bootstraps-preferences` exists (see Context above).
+Check if `.bootstraps-preferences` exists (from the context-gathering step above).
 
 **If NO_PREFERENCES_FILE:**
 1. Ask the user for:
