@@ -1,0 +1,24 @@
+{
+  "name": "bootstraps",
+  "owner": {
+    "name": "benjamcalvin"
+  },
+  "metadata": {
+    "description": "Curated collection of reusable patterns for bootstrapping projects with Claude Code",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "bootstrap-docs",
+      "source": "./skills/bootstrap-docs",
+      "description": "Set up a comprehensive, AI-readable documentation strategy in any project",
+      "version": "1.0.0",
+      "category": "productivity",
+      "tags": ["docs", "documentation", "strategy", "scaffolding"],
+      "author": {
+        "name": "benjamcalvin"
+      },
+      "license": "MIT"
+    }
+  ]
+}
