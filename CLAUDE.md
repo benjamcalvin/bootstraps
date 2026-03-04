@@ -37,8 +37,15 @@ bootstraps/
 2. Add `plugin.json` with name, description, version, author, license
 3. Add `SKILL.md` (for skills) and/or `hooks/hooks.json` (for hooks)
 4. Add entry to `marketplace.json`
-5. Validate: `claude plugin validate plugins/<name>`
+5. Validate: `./validate-all.sh` (or `claude plugin validate plugins/<name>`)
 6. Test locally: `claude --plugin-dir plugins/<name>`
+
+## Testing
+
+- **Validate all plugins**: `./validate-all.sh` — checks JSON validity, required fields, SKILL.md frontmatter, marketplace references
+- **Validate a single plugin**: `claude plugin validate plugins/<name>`
+- **Test a plugin locally**: `claude --plugin-dir plugins/<name>` then invoke the skill
+- **Debug hooks**: Run `claude --debug` to see which hooks matched and their exit codes
 
 ## Metadata Schema
 
