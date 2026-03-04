@@ -1,0 +1,14 @@
+{
+  "version": "1.0.0",
+  "skills": [
+    {
+      "name": "bootstrap-docs",
+      "path": "skills/bootstrap-docs",
+      "description": "Set up a comprehensive, AI-readable documentation strategy in any project",
+      "version": "1.0.0",
+      "tags": ["docs", "documentation", "strategy", "scaffolding"]
+    }
+  ],
+  "hooks": [],
+  "scaffold-templates": []
+}
