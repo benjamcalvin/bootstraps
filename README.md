@@ -42,6 +42,7 @@ Navigate to the **Discover** tab to browse plugins from this marketplace.
 
 ```
 /plugin install bootstrap-docs@bootstraps
+/plugin install implement-lifecycle@bootstraps
 ```
 
 Choose a scope when prompted:
@@ -55,13 +56,18 @@ Invoke a plugin's skill as a slash command:
 
 ```
 /bootstrap-docs
+/implement #42
 ```
 
 Some skills accept arguments:
 
 ```
 /bootstrap-docs adr
-/bootstrap-docs specs
+/implement #42
+/implement fix the login bug
+/implement 17 just review
+/review-pr 17
+/draft-issue add user avatar support
 ```
 
 ## Update Plugins
@@ -74,6 +80,7 @@ Some skills accept arguments:
 
 ```
 /plugin uninstall bootstrap-docs@bootstraps
+/plugin uninstall implement-lifecycle@bootstraps
 ```
 
 ## Available Plugins
@@ -81,6 +88,38 @@ Some skills accept arguments:
 | Plugin | Description |
 |--------|-------------|
 | **bootstrap-docs** | Set up a comprehensive, AI-readable documentation strategy in any project. Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates. |
+| **implement-lifecycle** | Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, merge. |
+
+### implement-lifecycle
+
+Provides 8 skills and 4 reviewer agents for the complete implementation lifecycle:
+
+**Skills:**
+
+| Skill | Description |
+|-------|-------------|
+| `/implement` | Lean orchestrator — 6-phase lifecycle (plan → implement → PR → review loop → verify → merge). Accepts `#issue`, PR number, or freeform task. Supports trailing instructions like "just review" or "skip planning". |
+| `/draft-issue` | Create well-structured GitHub issues with testable acceptance criteria, optimized for `/implement` consumption. |
+| `/merge-pr` | Validate, squash-merge, delete branch, and update linked GitHub issues with delivery status. |
+| `/pr-check` | Pre-flight PR validation — branch naming, title, description, sizing, commits, references. |
+
+**Subagent skills** (invoked by the orchestrator, not directly):
+
+| Skill | Description |
+|-------|-------------|
+| `implement-plan` | Explore codebase and produce acceptance criteria, test cases, and implementation plan. |
+| `implement-code` | Write tests first, implement, self-review, commit, and create PR. |
+| `implement-address` | Address filtered review findings from the referee's action plan. |
+| `verify` | End-to-end verification — exercises the real running system, checks downstream effects, regression tests existing flows. |
+
+**Reviewer agents** (invoked in parallel during the review loop):
+
+| Agent | Focus |
+|-------|-------|
+| `review-correctness` | Logic bugs, edge cases, error handling, race conditions |
+| `review-security` | AuthZ, injection risks, PII handling, spec conformance |
+| `review-architecture` | Pattern consistency, module boundaries, coupling, forward-looking design |
+| `review-testing` | Test coverage, assertion quality, edge cases, test anti-patterns |
 
 ## License
 
