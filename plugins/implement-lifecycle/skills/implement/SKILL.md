@@ -135,18 +135,20 @@ Do **NOT** fetch the full diff — it fills the context window. Read specific fi
 
 #### Step A: Invoke Reviewers
 
-**Dynamically select** which specialist reviewers to invoke based on the complexity and surface area of the changes. Balance thoroughness with efficiency — you may invoke 1, 2, or all 3 depending on what the changes warrant:
+**Dynamically select** which specialist reviewers to invoke based on the complexity and surface area of the changes. Balance thoroughness with efficiency — invoke the subset that matches the change:
 
 - `review-correctness` — Logic bugs, edge cases, error handling, race conditions
 - `review-security` — Spec conformance, authZ, PII, injection risks
-- `review-standards` — Conventions, test coverage, PR format, branch targeting
+- `review-architecture` — Pattern consistency, module boundaries, coupling, forward-looking design
+- `review-testing` — Test coverage, assertion quality, edge cases, test anti-patterns
 
 **Always invoke selected reviewers in parallel using multiple Agent tool calls in a single response:**
 
 ```
 Agent tool → agent: "review-correctness", prompt: "Review PR #<pr-number>, round <round-number>"
 Agent tool → agent: "review-security", prompt: "Review PR #<pr-number>, round <round-number>"
-Agent tool → agent: "review-standards", prompt: "Review PR #<pr-number>, round <round-number>"
+Agent tool → agent: "review-architecture", prompt: "Review PR #<pr-number>, round <round-number>"
+Agent tool → agent: "review-testing", prompt: "Review PR #<pr-number>, round <round-number>"
 ```
 
 Each reviewer fetches PR context, posts findings to GitHub, and returns them to you.
@@ -241,23 +243,13 @@ Then stop and inform the user directly.
 
 ### Phase 5: Manual Verification Gate
 
-After the review loop completes, verify the PR's final state with **real-world execution** before merging. Code review catches logic and style issues, but only running the feature catches integration and runtime bugs.
+After the review loop completes, invoke the verification agent to test the PR's changes with real-world execution before merging:
 
-#### Verification Matrix
+```
+Skill tool → skill: "verify", args: "<pr-number>"
+```
 
-| Change type | What to verify |
-|-------------|---------------|
-| **CLI commands / scripts** | Run with representative inputs. Verify expected output. Test at least one error case. |
-| **API endpoints** | Start the server. Hit each new/changed endpoint. Verify response status, body, and errors. |
-| **Configuration changes** | Start the affected service. Verify it loads correctly and behavior is observable. |
-| **Database migrations** | Apply the migration. Verify schema changes. Roll back and reapply. |
-| **Library code / refactoring / docs** | No manual verification required — automated tests are sufficient. Skip to Phase 6. |
-
-#### Verification Process
-
-1. **Check for existing evidence.** Read the PR description and comments for real execution output. Look for actual command output, not just "it works."
-2. **If evidence is missing or insufficient:** Run the verification steps from the matrix above. If bugs are found, fix directly and push (or invoke the addresser), then re-verify. Post results as a PR comment.
-3. **If evidence is present and adequate:** proceed to Phase 6.
+The verification agent will classify the change type, devise a verification plan, execute it, and report structured evidence. If the verdict is **FAIL**, address the issues (invoke the addresser or fix directly) and re-verify. If **PASS** or **N/A**, proceed to Phase 6.
 
 ---
 
