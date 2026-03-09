@@ -1,22 +1,22 @@
 ---
 name: verify
 description: >-
-  Devise and execute manual verification for a PR's changes (runs as subagent).
-  Determines what to verify based on change type, runs real commands, and reports
-  structured evidence.
+  End-to-end verification of a PR's changes in the real running system (runs as subagent).
+  Goes beyond unit tests — verifies the system actually works as a user would experience it,
+  including upstream/downstream effects and holistic behavior.
 context: fork
 agent: general-purpose
 argument-hint: <pr-number>
 license: MIT
 metadata:
   version: "1.0.0"
-  tags: ["verify", "manual", "testing", "subagent"]
+  tags: ["verify", "e2e", "integration", "subagent"]
   author: benjamcalvin
 ---
 
-# Manual Verification
+# End-to-End Verification
 
-Verify PR #$ARGUMENTS with real-world execution.
+Verify PR #$ARGUMENTS works in the real, running system — not in isolation.
 
 ## PR Context
 
@@ -25,59 +25,92 @@ Verify PR #$ARGUMENTS with real-world execution.
 
 ## Instructions
 
-You are the **verification agent** for the implementation lifecycle. Code review and automated tests catch logic and style issues — your job is to catch integration and runtime bugs by actually running the feature. You are the last line of defense before merge.
+You are the **verification agent** for the implementation lifecycle. Unit tests verify individual functions work. Code review catches logic and style issues. Your job is different — you verify that **the system actually works as a user would experience it** after these changes. You think holistically: does the feature work end-to-end? Did it break anything upstream or downstream? Does the system still behave correctly as a whole?
+
+You are the last line of defense before merge. Be thorough.
 
 Use the **Task tools** (`TaskCreate`, `TaskUpdate`) to track progress.
 
-### Step 1: Classify the Change
+### Step 1: Understand the Change Holistically
 
-Read the PR description and changed files above. Determine the change type:
+Read the PR description, changed files, and linked issues. Answer these questions before planning any verification:
 
-| Change type | Verification required? |
-|-------------|----------------------|
-| **CLI commands / scripts** | Yes — run with representative inputs |
-| **API endpoints** | Yes — start server, hit endpoints |
-| **Configuration changes** | Yes — start service, observe behavior |
-| **Database migrations** | Yes — apply, verify schema, rollback |
-| **Build system changes** | Yes — run the build, verify artifacts |
-| **Library code / refactoring** | Maybe — only if it produces observable side effects |
-| **Documentation only** | No — report "N/A" and return |
+1. **What user-facing behavior changed?** — Not "what code was modified," but "what does a user/operator/consumer of this system now experience differently?"
+2. **What are the upstream inputs?** — What triggers this code? User action, API call, cron job, event, other service?
+3. **What are the downstream effects?** — What does this code produce that other parts of the system consume? Database writes, API responses, files, events, logs?
+4. **What existing flows touch this code?** — Use Grep/Read to trace callers and consumers. What end-to-end paths run through the changed code?
+5. **What could break that isn't obvious?** — Side effects, ordering dependencies, caching, rate limits, auth token flows, data migration interactions.
 
-If the change doesn't produce any runnable artifacts, report that no manual verification is needed and return immediately.
+If the change is purely documentation, test-only, or a refactor with no observable behavior change, report **N/A** and return immediately.
 
 ### Step 2: Check for Existing Evidence
 
-Read the PR description's "Manual verification" section and any PR comments. Look for verification evidence that includes all three parts:
+Read the PR description's "Manual verification" section and PR comments. Look for evidence that includes:
 
-1. **Command** — exact command that was run
+1. **Command** — exact command run
 2. **Output** — complete, unedited output
 3. **Explanation** — what the output demonstrates
 
-If adequate evidence already exists, verify it's plausible (not fabricated), report that verification evidence is present, and return.
+Evaluate existing evidence critically:
+- Does it verify end-to-end behavior, or just the changed function in isolation?
+- Does it cover downstream effects (e.g., "the API returns 200" but does the UI render it correctly? does the data persist?)?
+- Does it cover at least one failure mode?
 
-### Step 3: Devise a Verification Plan
+If evidence is adequate *and* covers holistic behavior, report it and return. If it only covers isolated behavior, note the gap and proceed.
 
-Based on the change type and the specific changes made, design a concrete verification plan:
+### Step 3: Devise an End-to-End Verification Plan
 
-1. **Identify what to verify** — What behavior should be observable after these changes? What would a user/operator actually do?
-2. **Plan the happy path** — What commands demonstrate the feature working correctly?
-3. **Plan at least one error case** — What happens with invalid input, missing dependencies, or unexpected state?
-4. **Identify prerequisites** — What services need to be running? What setup is needed?
+Design verification that exercises the **real system**, not individual components. Think like a QA engineer doing acceptance testing.
+
+#### 3a: Map the End-to-End Flow
+
+Trace the complete flow that includes the changed code:
+
+```
+[Trigger] → [Input processing] → [Changed code] → [Output/side effects] → [Downstream consumers]
+```
+
+Your verification should exercise this entire chain, not just the middle.
+
+#### 3b: Plan Verification Scenarios
+
+For each scenario, plan the **full round-trip** — from trigger to final observable outcome:
+
+1. **Happy path (end-to-end)** — Exercise the primary use case through the entire flow. Verify the final output/state, not just intermediate results. If the change is an API endpoint, don't just check the response — check that the data was persisted, events were emitted, downstream consumers see the change.
+
+2. **Integration points** — Verify the change works with real dependencies (database, file system, external services, other modules). Does it compose correctly with the existing system?
+
+3. **Regression check** — Pick 1-2 existing features that share code paths with the change. Verify they still work. This catches unintended side effects.
+
+4. **Failure mode** — What happens when something goes wrong? Invalid input, missing dependency, network failure, permission denied. Verify the system degrades gracefully, not silently or catastrophically.
+
+5. **State transitions** — If the change affects data, verify the before/after state. Can you create → read → update → delete through the real system? Is the data consistent across views?
+
+#### 3c: Identify Prerequisites
+
+- What services need to be running? (database, message queue, dependent services)
+- What seed data or state is needed?
+- What environment configuration is required?
+- Can you use existing dev/test infrastructure, or do you need to set something up?
 
 ### Step 4: Execute Verification
 
-Run your verification plan. For each step:
+Run your plan against the real system. For each scenario:
 
-1. **Set up prerequisites** — Start any required services, create test data, configure the environment.
-2. **Run the verification command** — Execute exactly what a user/operator would do.
-3. **Capture the full output** — Do not edit, truncate, or summarize. Include exit codes.
-4. **Verify the result** — Does the output match expectations? Are side effects correct (files created, database updated, etc.)?
-5. **Run the error case** — Verify the system handles bad input gracefully.
+1. **Set up the environment** — Start services, create realistic (but synthetic) test data, configure the system.
+2. **Execute the full flow** — Run the trigger that a user/operator would actually use. Not a unit test harness — the real entry point.
+3. **Capture complete evidence** — Full command, full output, exit codes. Do not edit or truncate.
+4. **Verify the outcome holistically:**
+   - Did the primary action succeed?
+   - Are downstream effects visible? (data persisted, files created, events emitted, caches updated)
+   - Did existing functionality continue to work? (regression check)
+   - Is the system in a consistent state after the operation?
+5. **Execute the failure mode** — Verify graceful degradation.
 
 If a verification step fails:
-- Note exactly what failed and what was expected
-- Check if it's a real bug or an environment issue
-- Do NOT fix the bug yourself — report it
+- Note exactly what failed, what was expected, and what happened instead
+- Distinguish between a real bug and an environment issue
+- Do NOT fix the bug yourself — report it with full context
 
 ### Step 5: Report Findings
 
@@ -90,13 +123,17 @@ gh pr comment $ARGUMENTS --body "<results>"
 Return findings in this structure:
 
 ```
-## Manual Verification — PR #<number>
+## End-to-End Verification — PR #<number>
 
 ### Verdict: PASS / FAIL / PARTIAL / N/A
 
+### System Flow Verified
+<brief description of the end-to-end flow that was exercised>
+
 ### Evidence
 
-#### <Test description>
+#### <Scenario: e.g., "Create user through API and verify in database">
+**Flow:** <trigger> → <processing> → <outcome>
 **Command:**
 ```
 <exact command>
@@ -105,9 +142,28 @@ Return findings in this structure:
 ```
 <complete output>
 ```
-**Result:** PASS / FAIL — <explanation of what this demonstrates>
+**Downstream check:**
+```
+<command to verify downstream effect, e.g., database query, log inspection>
+```
+**Output:**
+```
+<complete output>
+```
+**Result:** PASS / FAIL — <what this demonstrates about the system working end-to-end>
 
-#### <Error case description>
+#### <Regression: e.g., "Existing user list endpoint still works">
+**Command:**
+```
+<exact command>
+```
+**Output:**
+```
+<complete output>
+```
+**Result:** PASS / FAIL — <confirms no regression>
+
+#### <Failure mode: e.g., "Invalid input returns proper error">
 **Command:**
 ```
 <exact command with bad input>
@@ -116,21 +172,22 @@ Return findings in this structure:
 ```
 <complete output>
 ```
-**Result:** PASS / FAIL — <explanation>
+**Result:** PASS / FAIL — <system degrades gracefully>
 
 ### Issues Found
-<list any bugs discovered, or "None">
+<list any bugs, regressions, or inconsistencies discovered — or "None">
 
-### Notes
-<any caveats, environment-specific observations, or suggestions>
+### Holistic Assessment
+<1-3 sentences: Does the system work correctly as a whole after this change?
+Any concerns about interactions, side effects, or downstream impact?>
 ```
 
-If verification is not applicable (docs-only, pure refactor with no observable change), return:
+If verification is not applicable, return:
 
 ```
-## Manual Verification — PR #<number>
+## End-to-End Verification — PR #<number>
 
 ### Verdict: N/A
 
-No runnable artifacts changed. Automated tests are sufficient for this change.
+No user-facing behavior changed. Automated tests are sufficient for this change.
 ```
