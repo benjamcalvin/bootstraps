@@ -5,9 +5,9 @@ description: >-
   Docker Compose projects, and config files. Discovers services, generates
   create/remove scripts and Claude Code hook configuration.
   Triggers: /bootstrap-worktrees, set up worktree isolation, bootstrap worktrees
-argument-hint: "[audit]"
 context: fork
 agent: general-purpose
+allowed-tools: Read, Write, Glob, Grep, Bash(chmod *), Bash(bash -n *), Bash(mkdir *), Bash(ls *), Bash(cat *)
 license: MIT
 metadata:
   version: "1.0.0"
@@ -75,10 +75,10 @@ For each service with port mappings, create a service entry:
   range_end: <number>            # End of allocation range
 ```
 
-**Range allocation strategy**: For each service, compute the range based on the default port:
+**Range allocation strategy**: For each service, compute a 100-port range starting at the default port:
 
-- If the default port is below 1024, pick a high range (e.g., default 5432 → range 5432–5532)
-- Otherwise, use default_port as range_start and default_port + 99 as range_end
+- Use default_port as range_start and default_port + 99 as range_end (e.g., default 5432 → range 5432–5531)
+- If the default port is below 1024 (privileged), shift the range to start at 10000 + default_port (e.g., default 443 → range 10443–10542)
 - Ensure ranges don't overlap between services (shift if needed)
 
 #### 1b. Environment files

@@ -43,6 +43,13 @@ if [ $# -ge 1 ]; then
   # the directory naming convention (feat/foo → feat-foo).
   dbg "mode: manual (arg=$1)"
   name="$(echo "$1" | tr '/' '-')"
+  # Validate name — reject path traversal and shell metacharacters.
+  if [[ "$name" == "." || "$name" == *..* ]]; then
+    die "name contains path traversal: $name"
+  fi
+  if [[ ! "$name" =~ ^[A-Za-z0-9./_-]+$ ]]; then
+    die "name contains invalid characters (allowed: A-Za-z0-9./_-): $name"
+  fi
   worktree_path="$worktree_dir/$name"
 else
   dbg "mode: hook (stdin JSON)"

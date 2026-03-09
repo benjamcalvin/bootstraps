@@ -48,7 +48,7 @@ dbg "parsed name=$name"
 # ---------------------------------------------------------------------------
 # 2. Validate name — reject path traversal and shell metacharacters
 # ---------------------------------------------------------------------------
-if [[ "$name" == *..* ]]; then
+if [[ "$name" == "." || "$name" == *..* ]]; then
   die "name contains path traversal: $name"
 fi
 if [[ ! "$name" =~ ^[A-Za-z0-9./_-]+$ ]]; then
