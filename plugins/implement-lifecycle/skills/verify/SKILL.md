@@ -35,13 +35,14 @@ Use the **Task tools** (`TaskCreate`, `TaskUpdate`) to track progress.
 
 Read the PR description, changed files, and linked issues. Answer these questions before planning any verification:
 
-1. **What user-facing behavior changed?** — Not "what code was modified," but "what does a user/operator/consumer of this system now experience differently?"
+1. **What behavior changed?** — Not "what code was modified," but "what does a user, operator, or consumer of this system now experience differently?" Even internal changes have observable effects somewhere.
 2. **What are the upstream inputs?** — What triggers this code? User action, API call, cron job, event, other service?
-3. **What are the downstream effects?** — What does this code produce that other parts of the system consume? Database writes, API responses, files, events, logs?
+3. **What are the downstream effects?** — What does this code produce that other parts of the system consume? Database writes, API responses, files, events, logs, metrics?
 4. **What existing flows touch this code?** — Use Grep/Read to trace callers and consumers. What end-to-end paths run through the changed code?
 5. **What could break that isn't obvious?** — Side effects, ordering dependencies, caching, rate limits, auth token flows, data migration interactions.
+6. **What is directly observable?** — Every change affects *something* concrete. Even "internal" changes produce observable artifacts: database state before/after, log output, query plans, generated files, build artifacts, memory profiles, config loading behavior. Find the observable surface.
 
-If the change is purely documentation, test-only, or a refactor with no observable behavior change, report **N/A** and return immediately.
+**There is almost always something to verify.** "N/A" is reserved for pure documentation changes (markdown/comments only). Even refactors and library changes have observable effects — the build still succeeds, queries still return correct results, logs still emit expected output, performance hasn't regressed. Look for the concrete artifact and verify it.
 
 ### Step 2: Check for Existing Evidence
 
@@ -85,6 +86,14 @@ For each scenario, plan the **full round-trip** — from trigger to final observ
 4. **Failure mode** — What happens when something goes wrong? Invalid input, missing dependency, network failure, permission denied. Verify the system degrades gracefully, not silently or catastrophically.
 
 5. **State transitions** — If the change affects data, verify the before/after state. Can you create → read → update → delete through the real system? Is the data consistent across views?
+
+6. **Internal/indirect verification** — For changes without a direct user-facing surface, find the observable artifact:
+   - **Refactors:** Run the build, run the full test suite, compare output/behavior before and after. Verify no change in observable behavior.
+   - **Data model changes:** Query the database before and after migration. Verify schema, constraints, indexes, and existing data integrity.
+   - **Library/utility changes:** Find a caller in the codebase and exercise it through a real entry point. Trace the result end-to-end.
+   - **Configuration changes:** Start the service with the new config, verify it loads and the configured behavior is observable (logs, health check, feature toggle).
+   - **Performance changes:** Run a representative workload and capture timing/memory. Compare to baseline if available.
+   - **Build/tooling changes:** Run the build pipeline. Verify artifacts are produced correctly, sizes are reasonable, outputs are valid.
 
 #### 3c: Identify Prerequisites
 
@@ -182,12 +191,12 @@ Return findings in this structure:
 Any concerns about interactions, side effects, or downstream impact?>
 ```
 
-If verification is not applicable, return:
+If verification is truly not applicable (pure documentation/comment changes only), return:
 
 ```
 ## End-to-End Verification — PR #<number>
 
 ### Verdict: N/A
 
-No user-facing behavior changed. Automated tests are sufficient for this change.
+Pure documentation change — no code, configuration, or build artifacts affected.
 ```
