@@ -1,0 +1,10 @@
+{
+  "name": "bootstrap-worktrees",
+  "description": "Set up project-agnostic worktree isolation with per-worktree ports, Docker Compose projects, and config files",
+  "version": "1.0.0",
+  "author": {
+    "name": "benjamcalvin"
+  },
+  "license": "MIT",
+  "keywords": ["worktree", "isolation", "docker", "compose", "ports", "hooks"]
+}
