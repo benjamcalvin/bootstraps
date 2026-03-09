@@ -23,6 +23,14 @@ bootstraps/
 └── README.md
 ```
 
+## Autonomy
+
+Run as autonomously as possible by default. Do not ask for confirmation on routine actions — just do them. This includes file edits, running tests, creating branches, committing, and pushing. Only pause to ask when something is genuinely ambiguous or destructive beyond recovery. If the user wants more oversight, they'll say so.
+
+## Versioning
+
+Every change to a plugin **must** include a version bump in that plugin's `.claude-plugin/plugin.json`. Follow semver: patch for fixes, minor for new features or non-breaking changes, major for breaking changes.
+
 ## Conventions
 
 - Each plugin is self-contained under `plugins/`
