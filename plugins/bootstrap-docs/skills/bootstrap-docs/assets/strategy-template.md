@@ -195,6 +195,16 @@ Create an `AGENTS.md` + `CLAUDE.md` pair when:
 
 ---
 
+## Execution Tracking
+
+For tracking implementation work (tasks, milestones, delivery), use **git issues and pull requests** rather than plan documents. Issues provide better visibility, traceability, and integration with your development workflow.
+
+- Create issues for discrete units of work tied to specs
+- Link PRs to issues for automatic progress tracking
+- Use `/implement` to plan and execute work against your specs
+
+Plan documents (`docs/plans/`) are available as an opt-in module for cases where a narrative execution plan adds value beyond issue tracking, but issues + PRs are the recommended default.
+
 ## Related Documents
 
 ### Project Context

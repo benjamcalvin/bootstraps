@@ -1,5 +1,7 @@
 # {TITLE}
 
+> **Note:** Plans are an opt-in module. For most projects, git issues and PRs provide better execution tracking. Use plan documents when a narrative execution plan adds value beyond issue tracking — e.g., multi-phase migrations or cross-team coordination.
+
 **Status:** Draft
 **Last Updated:** {DATE}
 **Target Date:** {TARGET_DATE}
