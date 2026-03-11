@@ -312,7 +312,7 @@ Report to the user:
    >
    > Work through your documentation in this order. Each step builds on the previous one.
    >
-   > 1. **Strategy** — Define your competitive position and strategic bets *(scaffolded by this skill)*
+   > 1. **Documentation Strategy** — Establish the rules for how all docs are organized, classified, and maintained *(scaffolded by this skill)*. Ensure it's linked from your root `AGENTS.md`/`CLAUDE.md` so agents discover it automatically.
    > 2. **Vision** — Articulate the product vision, philosophy, and success metrics
    > 3. **Product Specs** — Detail features, user stories, and requirements from the consumer perspective
    > 4. **Tech Specs** — Design the technical architecture and implementation approach
@@ -328,8 +328,8 @@ When the skill detects an existing `.bootstraps-preferences` file, after reporti
 
 > **Sequence progress:**
 >
-> For each step in the implementation sequence (Strategy → Vision → Product Specs → Tech Specs → Standards), check whether the corresponding module has status `enabled` with at least one non-placeholder file. Report:
-> - ✅ **Strategy** — complete (files: docs/AGENTS.md)
+> For each step in the implementation sequence (Documentation Strategy → Vision → Product Specs → Tech Specs → Standards), check whether the corresponding module has status `enabled` with at least one non-placeholder file. Report:
+> - ✅ **Documentation Strategy** — complete (files: docs/AGENTS.md)
 > - ✅ **Vision** — complete (files: docs/vision/philosophy.md)
 > - ⬜ **Product Specs** — not started
 > - ⬜ **Tech Specs** — not started
