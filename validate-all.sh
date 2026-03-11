@@ -28,6 +28,11 @@ for plugin_dir in plugins/*/; do
   plugin_name=$(basename "$plugin_dir")
   echo "--- Plugin: $plugin_name ---"
 
+  # Reset per-plugin variables
+  name=""
+  desc=""
+  version=""
+
   # Check plugin.json
   if [ ! -f "$plugin_dir/.claude-plugin/plugin.json" ]; then
     echo "  ERROR: Missing plugin.json"
@@ -71,6 +76,17 @@ for plugin_dir in plugins/*/; do
       else
         echo "  WARN: skills/$skill_name/SKILL.md missing frontmatter delimiter"
         WARNINGS=$((WARNINGS + 1))
+      fi
+
+      # Check SKILL.md version sync for eponymous skill (skill name == plugin name)
+      if [ "$skill_name" = "$plugin_name" ] && [ -n "$version" ]; then
+        skill_version=$(sed -n '/^---$/,/^---$/p' "$skill_dir/SKILL.md" | grep 'version:' | head -1 | sed 's/.*version:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}/\1/')
+        if [ -n "$skill_version" ] && [ "$skill_version" != "$version" ]; then
+          echo "  ERROR: Version mismatch — plugin.json=$version, SKILL.md=$skill_version"
+          ERRORS=$((ERRORS + 1))
+        elif [ -n "$skill_version" ]; then
+          echo "  OK: SKILL.md version in sync ($skill_version)"
+        fi
       fi
 
       # Check line count

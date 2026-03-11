@@ -263,6 +263,9 @@ Present three options:
 | vision | `vision-template.md` | `{docs_location}/vision/philosophy.md` |
 | research | `research-template.md` | `{docs_location}/research/initial-research.md` |
 
+**Additional reference templates** (not tied to a module — available for manual use):
+- `changelog-template.md` — [Keep a Changelog](https://keepachangelog.com) format. Use when setting up a project CHANGELOG.md at the repository root.
+
 For **defaults**: replace `{PROJECT_NAME}` with project name, `{DATE}` with today's date, `{NUMBER}` with `001` for ADRs, `{TITLE}` with a sensible generic title, `{OWNER}` with "TBD", `{TARGET_DATE}` with "TBD". Leave section body content as template placeholders.
 
 **Standards sub-types:** When creating standards starter docs, create one file per enabled standard type (testing, code, pr). Each uses its own template. Ask about all enabled types together — e.g., "Create starter standards docs? (testing, code, pr) — Defaults / Interactive / Skip". If the user picks Interactive, walk through each type separately. The `{placeholders in braces}` in standards templates mark sections the user should customize for their language/framework — during Interactive mode, ask what to fill in for each.

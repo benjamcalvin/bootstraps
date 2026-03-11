@@ -31,7 +31,7 @@ This strategy defines how we organize and maintain documentation in {PROJECT_NAM
 {TAXONOMY_DESCRIPTIONS}
 ### Changelog
 
-**CHANGELOG.md** tracks notable changes across releases using [Keep a Changelog](https://keepachangelog.com) format. Organized by version with sections: Added, Changed, Deprecated, Removed, Fixed, Security. Lives at the project root. Updated as part of every version bump.
+**CHANGELOG.md** tracks notable changes across releases using [Keep a Changelog](https://keepachangelog.com) format. Organized by version with sections: Added, Changed, Deprecated, Removed, Fixed, Security. Updated as part of every version bump.
 
 ## Content Classification
 
