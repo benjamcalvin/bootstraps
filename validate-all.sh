@@ -101,6 +101,17 @@ for plugin_dir in plugins/*/; do
   if [ -f ".claude-plugin/marketplace.json" ]; then
     if jq -e ".plugins[] | select(.name == \"$plugin_name\")" .claude-plugin/marketplace.json > /dev/null 2>&1; then
       echo "  OK: Listed in .claude-plugin/marketplace.json"
+
+      # Check version sync between plugin.json and marketplace.json
+      if [ -n "$version" ]; then
+        marketplace_version=$(jq -r ".plugins[] | select(.name == \"$plugin_name\") | .version" .claude-plugin/marketplace.json)
+        if [ "$version" != "$marketplace_version" ]; then
+          echo "  ERROR: Version mismatch — plugin.json=$version, marketplace.json=$marketplace_version"
+          ERRORS=$((ERRORS + 1))
+        else
+          echo "  OK: Version in sync ($version)"
+        fi
+      fi
     else
       echo "  WARN: Not listed in .claude-plugin/marketplace.json"
       WARNINGS=$((WARNINGS + 1))

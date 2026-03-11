@@ -25,15 +25,21 @@ This strategy defines how we organize and maintain documentation in {PROJECT_NAM
 {DOCS_LOCATION}
 ├── AGENTS.md           # THIS FILE (documentation strategy)
 ├── CLAUDE.md           # @AGENTS.md wrapper
-{TAXONOMY_ENTRIES}```
+{TAXONOMY_ENTRIES}├── CHANGELOG.md        # Release history — what changed between versions
+```
 
 {TAXONOMY_DESCRIPTIONS}
+### Changelog
+
+**CHANGELOG.md** tracks notable changes across releases using [Keep a Changelog](https://keepachangelog.com) format. Organized by version with sections: Added, Changed, Deprecated, Removed, Fixed, Security. Lives at the project root. Updated as part of every version bump.
+
 ## Content Classification
 
 | Content Type | Belongs In | Anti-Pattern |
 |---|---|---|
-{CLASSIFICATION_ROWS}
-**Rule of thumb:** "Why do we build this?" → vision. "What should it be?" → spec. "Why did we decide?" → ADR. "How do I do X?" → guide. "When/how to build it?" → plan.
+{CLASSIFICATION_ROWS}| Release notes, version history | Changelog | Putting change history in specs or ADRs |
+
+**Rule of thumb:** "Why do we build this?" → vision. "What should it be?" → spec. "Why did we decide?" → ADR. "How do I do X?" → guide. "When/how to build it?" → plan. "What changed?" → changelog.
 
 ## Frontmatter Requirements
 
@@ -92,6 +98,7 @@ Not rigid rules, but signals for document health:
 | Vision | 300–600 | 800 |
 | Guide | 300–600 | 800 |
 | Plan | Variable | — |
+| Changelog | Variable | — |
 
 **Split when:**
 - Document exceeds 1,000 lines
