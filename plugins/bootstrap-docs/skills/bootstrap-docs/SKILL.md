@@ -4,7 +4,7 @@ description: >-
   Set up comprehensive AI-readable documentation strategy.
   Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates.
   Triggers: /bootstrap-docs, set up documentation, create docs structure, bootstrap docs
-argument-hint: "[adr|specs|plans|guides|vision|standards|research|all] — Recommended sequence: strategy → vision → product specs → tech specs → standards"
+argument-hint: "[adr|specs|plans|guides|vision|standards|research|all]"
 context: fork
 agent: general-purpose
 allowed-tools: Read, Glob, Bash(cat *), Bash(find *)
@@ -50,7 +50,7 @@ Check if `.bootstraps-preferences` exists (from the context-gathering step above
 1. Ask the user for:
    - **Project name** (used in templates and headings)
    - **Docs location** (default: `docs/`)
-   - **Which modules to enable** (default: all). Modules: `adr`, `specs` (with sub-options: `product`, `technical`, `standards`), `plans`, `guides`, `vision`, `research`
+   - **Which modules to enable** (default: all except `plans`, which is opt-in). Modules: `adr`, `specs` (with sub-options: `product`, `technical`, `standards`), `plans`, `guides`, `vision`, `research`
    - **If standards enabled**, which standard types to include (default: all): `testing`, `code`, `pr`
 2. Create `.bootstraps-preferences` in the project root. Modules the user selects start as `pending`. Modules the user declines are `declined`. As subsequent phases create files, update the status to `enabled` and record the files created.
 
