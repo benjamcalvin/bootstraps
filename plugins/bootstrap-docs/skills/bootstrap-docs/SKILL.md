@@ -10,7 +10,7 @@ agent: general-purpose
 allowed-tools: Read, Glob, Bash(cat *), Bash(find *)
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   tags: ["docs", "documentation", "strategy", "scaffolding"]
   author: benjamcalvin
   standards-sub-types: ["testing", "code", "pr"]
@@ -50,7 +50,7 @@ Check if `.bootstraps-preferences` exists (from the context-gathering step above
 1. Ask the user for:
    - **Project name** (used in templates and headings)
    - **Docs location** (default: `docs/`)
-   - **Which modules to enable** (default: all). Modules: `adr`, `specs` (with sub-options: `product`, `technical`, `standards`), `plans`, `guides`, `vision`, `research`
+   - **Which modules to enable** (default: all except `plans`, which is opt-in). Modules: `adr`, `specs` (with sub-options: `product`, `technical`, `standards`), `plans`, `guides`, `vision`, `research`
    - **If standards enabled**, which standard types to include (default: all): `testing`, `code`, `pr`
 2. Create `.bootstraps-preferences` in the project root. Modules the user selects start as `pending`. Modules the user declines are `declined`. As subsequent phases create files, update the status to `enabled` and record the files created.
 
@@ -78,7 +78,7 @@ Check if `.bootstraps-preferences` exists (from the context-gathering step above
        pr:
          status: pending
      plans:
-       status: pending
+       status: declined
      guides:
        status: pending
      vision:
@@ -306,8 +306,33 @@ Report to the user:
 1. **Created** (`enabled`) — list all files and directories that were created this run
 2. **Skipped** (`enabled`) — list anything that was already enabled from a previous run
 3. **Declined** — list modules the user declined (can be re-enabled later with `/bootstrap-docs {module}`)
-4. **Next steps** — suggest:
-   - Fill in starter document placeholders (especially `{bracketed}` sections in standards templates)
-   - Create additional ADRs for key architectural decisions
-   - Add content to spec templates as the project design evolves
-   - Run `/bootstrap-docs {module}` to add individual modules later (including previously declined ones)
+4. **Implementation sequence** — present this ordered workflow as actionable next steps:
+
+   > **Recommended implementation sequence:**
+   >
+   > Work through your documentation in this order. Each step builds on the previous one.
+   >
+   > 1. **Documentation Strategy** — Establish the rules for how all docs are organized, classified, and maintained *(scaffolded by this skill)*. Ensure it's linked from your root `AGENTS.md`/`CLAUDE.md` so agents discover it automatically.
+   > 2. **Vision** — Articulate the product vision, philosophy, and success metrics
+   > 3. **Product Specs** — Detail features, user stories, and requirements from the consumer perspective
+   > 4. **Tech Specs** — Design the technical architecture and implementation approach
+   > 5. **Standards** — Establish coding standards and engineering practices for the team
+   >
+   > Skip any step whose module you declined. For execution tracking (tasks, milestones, delivery), use git issues and PRs — run `/implement` to plan and track work against your specs.
+   >
+   > Run `/bootstrap-docs {module}` to add individual modules later (including previously declined ones).
+
+**Audit mode (re-run on existing project):**
+
+When the skill detects an existing `.bootstraps-preferences` file, after reporting the Created/Skipped/Declined lists above, also report the implementation sequence progress:
+
+> **Sequence progress:**
+>
+> For each step in the implementation sequence (Documentation Strategy → Vision → Product Specs → Tech Specs → Standards), check whether the corresponding module has status `enabled` with at least one non-placeholder file. Report:
+> - ✅ **Documentation Strategy** — complete (files: docs/AGENTS.md)
+> - ✅ **Vision** — complete (files: docs/vision/philosophy.md)
+> - ⬜ **Product Specs** — not started
+> - ⬜ **Tech Specs** — not started
+> - ⬜ **Standards** — not started
+>
+> Suggest the user work on the first incomplete step next.

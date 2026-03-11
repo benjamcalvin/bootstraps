@@ -12,7 +12,7 @@
       "name": "bootstrap-docs",
       "source": "./plugins/bootstrap-docs",
       "description": "Set up a comprehensive, AI-readable documentation strategy in any project",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "category": "productivity",
       "tags": ["docs", "documentation", "strategy", "scaffolding"],
       "author": {
