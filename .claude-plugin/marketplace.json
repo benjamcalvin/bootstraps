@@ -12,7 +12,7 @@
       "name": "bootstrap-docs",
       "source": "./plugins/bootstrap-docs",
       "description": "Set up a comprehensive, AI-readable documentation strategy in any project",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "productivity",
       "tags": ["docs", "documentation", "strategy", "scaffolding"],
       "author": {
@@ -24,7 +24,7 @@
       "name": "implement-lifecycle",
       "source": "./plugins/implement-lifecycle",
       "description": "Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, merge",
-      "version": "2.0.0",
+      "version": "2.1.0",
       "category": "productivity",
       "tags": ["implement", "review", "pr", "lifecycle", "adversarial", "tdd", "merge", "issue"],
       "author": {

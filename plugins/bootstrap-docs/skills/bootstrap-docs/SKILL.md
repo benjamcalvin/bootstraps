@@ -10,7 +10,7 @@ agent: general-purpose
 allowed-tools: Read, Glob, Bash(cat *), Bash(find *)
 license: MIT
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
   tags: ["docs", "documentation", "strategy", "scaffolding"]
   author: benjamcalvin
   standards-sub-types: ["testing", "code", "pr"]
@@ -262,6 +262,9 @@ Present three options:
 | guides | `guide-template.md` | `{docs_location}/guides/development-setup.md` |
 | vision | `vision-template.md` | `{docs_location}/vision/philosophy.md` |
 | research | `research-template.md` | `{docs_location}/research/initial-research.md` |
+
+**Additional reference templates** (not tied to a module — available for manual use):
+- `changelog-template.md` — [Keep a Changelog](https://keepachangelog.com) format. Use when setting up a project CHANGELOG.md at the repository root.
 
 For **defaults**: replace `{PROJECT_NAME}` with project name, `{DATE}` with today's date, `{NUMBER}` with `001` for ADRs, `{TITLE}` with a sensible generic title, `{OWNER}` with "TBD", `{TARGET_DATE}` with "TBD". Leave section body content as template placeholders.
 

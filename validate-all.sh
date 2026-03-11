@@ -28,6 +28,11 @@ for plugin_dir in plugins/*/; do
   plugin_name=$(basename "$plugin_dir")
   echo "--- Plugin: $plugin_name ---"
 
+  # Reset per-plugin variables
+  name=""
+  desc=""
+  version=""
+
   # Check plugin.json
   if [ ! -f "$plugin_dir/.claude-plugin/plugin.json" ]; then
     echo "  ERROR: Missing plugin.json"
@@ -73,6 +78,17 @@ for plugin_dir in plugins/*/; do
         WARNINGS=$((WARNINGS + 1))
       fi
 
+      # Check SKILL.md version sync for eponymous skill (skill name == plugin name)
+      if [ "$skill_name" = "$plugin_name" ] && [ -n "$version" ]; then
+        skill_version=$(sed -n '/^---$/,/^---$/p' "$skill_dir/SKILL.md" | grep 'version:' | head -1 | sed 's/.*version:[[:space:]]*"\{0,1\}\([^"]*\)"\{0,1\}/\1/')
+        if [ -n "$skill_version" ] && [ "$skill_version" != "$version" ]; then
+          echo "  ERROR: Version mismatch — plugin.json=$version, SKILL.md=$skill_version"
+          ERRORS=$((ERRORS + 1))
+        elif [ -n "$skill_version" ]; then
+          echo "  OK: SKILL.md version in sync ($skill_version)"
+        fi
+      fi
+
       # Check line count
       lines=$(wc -l < "$skill_dir/SKILL.md")
       if [ "$lines" -gt 500 ]; then
@@ -101,6 +117,17 @@ for plugin_dir in plugins/*/; do
   if [ -f ".claude-plugin/marketplace.json" ]; then
     if jq -e ".plugins[] | select(.name == \"$plugin_name\")" .claude-plugin/marketplace.json > /dev/null 2>&1; then
       echo "  OK: Listed in .claude-plugin/marketplace.json"
+
+      # Check version sync between plugin.json and marketplace.json
+      if [ -n "$version" ]; then
+        marketplace_version=$(jq -r ".plugins[] | select(.name == \"$plugin_name\") | .version" .claude-plugin/marketplace.json)
+        if [ "$version" != "$marketplace_version" ]; then
+          echo "  ERROR: Version mismatch — plugin.json=$version, marketplace.json=$marketplace_version"
+          ERRORS=$((ERRORS + 1))
+        else
+          echo "  OK: Version in sync ($version)"
+        fi
+      fi
     else
       echo "  WARN: Not listed in .claude-plugin/marketplace.json"
       WARNINGS=$((WARNINGS + 1))
