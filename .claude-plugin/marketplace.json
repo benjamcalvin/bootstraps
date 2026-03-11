@@ -31,6 +31,18 @@
         "name": "benjamcalvin"
       },
       "license": "MIT"
+    },
+    {
+      "name": "bootstrap-worktrees",
+      "source": "./plugins/bootstrap-worktrees",
+      "description": "Set up project-agnostic worktree isolation with per-worktree ports, Docker Compose projects, and config files",
+      "version": "1.0.0",
+      "category": "productivity",
+      "tags": ["worktree", "isolation", "docker", "compose", "ports", "hooks"],
+      "author": {
+        "name": "benjamcalvin"
+      },
+      "license": "MIT"
     }
   ]
 }

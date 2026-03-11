@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "WorktreeCreate": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c '\"$(cd \"$(git rev-parse --git-common-dir)/..\" && pwd)/{{SCRIPTS_DIR}}/create-worktree.sh\"'",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "WorktreeRemove": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c '\"$(cd \"$(git rev-parse --git-common-dir)/..\" && pwd)/{{SCRIPTS_DIR}}/remove-worktree.sh\"'",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
