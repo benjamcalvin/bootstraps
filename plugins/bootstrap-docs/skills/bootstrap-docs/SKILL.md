@@ -65,7 +65,7 @@ On a fresh repo, the documentation strategy must be created **before** module se
    ```
 
 3. Create the `{docs_location}/` root directory.
-4. **Create the strategy document now** — execute the full Phase 2 logic (see below) to create `{docs_location}/AGENTS.md` and `{docs_location}/CLAUDE.md`. Update strategy status to `enabled` in preferences.
+4. **Create the strategy document now** — execute the full Phase 2 logic (see below) to create `{docs_location}/AGENTS.md` and `{docs_location}/CLAUDE.md`. Since no modules have been selected or declined yet, include all modules in the taxonomy. Update strategy status to `enabled` in preferences.
 5. **Present module selection informed by the strategy.** Now that the strategy document exists, present the user with module choices and reference the taxonomy it defines:
 
    > "Your documentation strategy has been created at `{docs_location}/AGENTS.md`. It defines these documentation categories:
@@ -138,7 +138,7 @@ On a fresh repo, the documentation strategy must be created **before** module se
 
 7. Confirm the preferences with the user before proceeding to Phase 1.
 
-**If preferences exist:** Parse them from the Context above. Confirm with the user: "Found existing preferences for {project_name}. Proceeding with docs at {docs_location}." Check for any `pending` modules — these are work the user previously requested but hasn't completed yet. Check for any `declined` modules — don't offer these again unless the user explicitly asks. If strategy status is `pending` (interrupted previous run), create the strategy document (Phase 2 logic) before proceeding. Move to Phase 1.
+**If preferences exist:** Parse them from the Context above. Confirm with the user: "Found existing preferences for {project_name}. Proceeding with docs at {docs_location}." Check for any `pending` modules — these are work the user previously requested but hasn't completed yet. Check for any `declined` modules — don't offer these again unless the user explicitly asks. If strategy status is `pending` (interrupted previous run), create the strategy document (Phase 2 logic, including all modules in the taxonomy) before proceeding. If preferences contain no module entries besides `strategy` (indicating the previous run was interrupted before module selection), present module selection as in step 5 of the fresh-repo flow above. Move to Phase 1.
 
 **If a specific module argument was provided:** Only that module matters — but preferences must still exist for project name and docs_location. If the module was previously `declined`, reset it to `pending` (the user is explicitly requesting it now).
 
@@ -351,7 +351,7 @@ Report to the user:
    >
    > Work through your documentation in this order. Each step builds on the previous one.
    >
-   > 1. **Documentation Strategy** — ✅ Created during initial setup. Establishes the rules for how all docs are organized, classified, and maintained. Linked from your root `AGENTS.md`/`CLAUDE.md` so agents discover it automatically.
+   > 1. **Documentation Strategy** — If strategy status is `enabled`: "✅ Complete. Establishes the rules for how all docs are organized, classified, and maintained." If `pending`: "Establish the rules for how all docs are organized, classified, and maintained. Ensure it's linked from your root `AGENTS.md`/`CLAUDE.md` so agents discover it automatically."
    > 2. **Vision** — Articulate the product vision, philosophy, and success metrics
    > 3. **Product Specs** — Detail features, user stories, and requirements from the consumer perspective
    > 4. **Tech Specs** — Design the technical architecture and implementation approach
