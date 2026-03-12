@@ -10,7 +10,7 @@ agent: general-purpose
 allowed-tools: Read, Glob, Bash(cat *), Bash(find *)
 license: MIT
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
   tags: ["docs", "documentation", "strategy", "scaffolding"]
   author: benjamcalvin
   standards-sub-types: ["testing", "code", "pr"]
@@ -42,17 +42,18 @@ This skill runs six phases to set up project documentation. It is **re-runnable*
 
 ---
 
-### Phase 0: Preferences
+### Phase 0: Preferences & Strategy-First Setup
 
 Check if `.bootstraps-preferences` exists (from the context-gathering step above).
 
-**If NO_PREFERENCES_FILE:**
+**If NO_PREFERENCES_FILE (fresh repo):**
+
+On a fresh repo, the documentation strategy must be created **before** module selection. The strategy document defines the taxonomy and classification that inform which modules the user should enable.
+
 1. Ask the user for:
    - **Project name** (used in templates and headings)
    - **Docs location** (default: `docs/`)
-   - **Which modules to enable** (default: all except `plans`, which is opt-in). Modules: `adr`, `specs` (with sub-options: `product`, `technical`, `standards`), `plans`, `guides`, `vision`, `research`
-   - **If standards enabled**, which standard types to include (default: all): `testing`, `code`, `pr`
-2. Create `.bootstraps-preferences` in the project root. Modules the user selects start as `pending`. Modules the user declines are `declined`. As subsequent phases create files, update the status to `enabled` and record the files created.
+2. Create a minimal `.bootstraps-preferences` in the project root with only project metadata and the strategy module:
 
    ```yaml
    project_name: "{name}"
@@ -61,6 +62,39 @@ Check if `.bootstraps-preferences` exists (from the context-gathering step above
    modules:
      strategy:
        status: pending
+   ```
+
+3. Create the `{docs_location}/` root directory.
+4. **Create the strategy document now** — execute the full Phase 2 logic (see below) to create `{docs_location}/AGENTS.md` and `{docs_location}/CLAUDE.md`. Update strategy status to `enabled` in preferences.
+5. **Present module selection informed by the strategy.** Now that the strategy document exists, present the user with module choices and reference the taxonomy it defines:
+
+   > "Your documentation strategy has been created at `{docs_location}/AGENTS.md`. It defines these documentation categories:
+   >
+   > - **vision/** — WHY: project vision, philosophy, strategy
+   > - **specs/** — WHAT: design documents (product, technical, standards)
+   > - **adr/** — WHY (decisions): immutable architecture decision records
+   > - **guides/** — HOW: step-by-step operational instructions
+   > - **research/** — WHAT (learned): compiled LLM research for future reference
+   > - **plans/** — WHEN: active execution work, ephemeral
+   >
+   > Which modules would you like to enable? (default: all except `plans`, which is opt-in)"
+
+   Ask which modules to enable (default: all except `plans`). Modules: `adr`, `specs` (with sub-options: `product`, `technical`, `standards`), `plans`, `guides`, `vision`, `research`.
+   If standards enabled, ask which standard types to include (default: all): `testing`, `code`, `pr`.
+
+6. Update `.bootstraps-preferences` with the user's module selections. Modules the user selects start as `pending`. Modules the user declines are `declined`.
+
+   The full preferences file now looks like:
+   ```yaml
+   project_name: "{name}"
+   docs_location: "docs/"
+
+   modules:
+     strategy:
+       status: enabled
+       files:
+         - docs/AGENTS.md
+         - docs/CLAUDE.md
      adr:
        status: pending
      specs:
@@ -102,9 +136,9 @@ Check if `.bootstraps-preferences` exists (from the context-gathering step above
        - docs/adr/001-first-decision.md
    ```
 
-3. Confirm the preferences with the user before proceeding.
+7. Confirm the preferences with the user before proceeding to Phase 1.
 
-**If preferences exist:** Parse them from the Context above. Confirm with the user: "Found existing preferences for {project_name}. Proceeding with docs at {docs_location}." Check for any `pending` modules — these are work the user previously requested but hasn't completed yet. Check for any `declined` modules — don't offer these again unless the user explicitly asks. Move to Phase 1.
+**If preferences exist:** Parse them from the Context above. Confirm with the user: "Found existing preferences for {project_name}. Proceeding with docs at {docs_location}." Check for any `pending` modules — these are work the user previously requested but hasn't completed yet. Check for any `declined` modules — don't offer these again unless the user explicitly asks. If strategy status is `pending` (interrupted previous run), create the strategy document (Phase 2 logic) before proceeding. Move to Phase 1.
 
 **If a specific module argument was provided:** Only that module matters — but preferences must still exist for project name and docs_location. If the module was previously `declined`, reset it to `pending` (the user is explicitly requesting it now).
 
@@ -135,6 +169,8 @@ Report what was created and what was skipped.
 ---
 
 ### Phase 2: Master Strategy (AGENTS.md)
+
+**Skip guard:** If strategy status is already `enabled` in preferences (e.g., it was created during Phase 0 on a fresh repo), skip this phase entirely.
 
 Create `{docs_location}/AGENTS.md` using the strategy template from `$SKILL_DIR/assets/strategy-template.md`.
 
@@ -315,7 +351,7 @@ Report to the user:
    >
    > Work through your documentation in this order. Each step builds on the previous one.
    >
-   > 1. **Documentation Strategy** — Establish the rules for how all docs are organized, classified, and maintained *(scaffolded by this skill)*. Ensure it's linked from your root `AGENTS.md`/`CLAUDE.md` so agents discover it automatically.
+   > 1. **Documentation Strategy** — ✅ Created during initial setup. Establishes the rules for how all docs are organized, classified, and maintained. Linked from your root `AGENTS.md`/`CLAUDE.md` so agents discover it automatically.
    > 2. **Vision** — Articulate the product vision, philosophy, and success metrics
    > 3. **Product Specs** — Detail features, user stories, and requirements from the consumer perspective
    > 4. **Tech Specs** — Design the technical architecture and implementation approach
