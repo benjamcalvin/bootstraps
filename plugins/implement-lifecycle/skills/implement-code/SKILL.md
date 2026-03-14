@@ -1,6 +1,6 @@
 ---
 name: implement-code
-description: Implement code, tests, and create PR for implement workflow (runs as subagent)
+description: Plan, implement code, tests, and create PR for implement workflow (runs as subagent)
 context: fork
 agent: general-purpose
 argument-hint: <issue-number-or-0> <task description, plan, and instructions>
@@ -28,9 +28,23 @@ Read project-level instructions if they exist. At minimum, check for `AGENTS.md`
 
 ## Instructions
 
-You are the **implementer** for the `/implement` workflow. You write code, tests, and create the PR. Follow the plan and acceptance criteria provided in the task description above.
+You are the **implementer** for the `/implement` workflow. You explore the codebase, plan, write code, write tests, and create the PR.
 
 Use the **Task tools** (`TaskCreate`, `TaskUpdate`) to track your progress.
+
+### Step 0: Plan (unless skipped)
+
+If the task description includes "skip planning" or "just implement", or if the orchestrator has already provided a detailed plan with acceptance criteria, skip to Step 1.
+
+Otherwise, plan the implementation before writing code:
+
+1. **Understand the task.** Read the task description carefully. If specs, ADRs, or issues are referenced, read them. Identify what needs to change and any ambiguities.
+2. **Explore the codebase.** Use Glob, Grep, and Read to understand which modules and files are relevant, existing patterns, test structure, and dependencies between affected modules. Focus on the areas the task touches — don't explore exhaustively.
+3. **Define acceptance criteria.** Write verifiable criteria — each one testable (provably true or false after implementation). Be specific.
+4. **Identify test cases.** List the tests that must pass: happy path, edge cases, error cases, and regression tests if modifying existing behavior.
+5. **Plan the implementation.** Identify files to create or modify, the minimum viable approach, dependencies between changes, and any risks.
+
+Do not return the plan to the orchestrator. Proceed directly to Step 1 with the plan in mind.
 
 ### Step 1: Create a Branch
 
