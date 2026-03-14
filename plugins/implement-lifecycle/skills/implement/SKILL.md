@@ -7,7 +7,7 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "2.0.0"
+  version: "2.2.0"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -177,7 +177,7 @@ Produce a **filtered action plan** containing only Accepted and Downgraded findi
 
 **Referee mindset:** Think like a principal engineer. Good review isn't just about catching bugs — it's about raising the bar. When the reviewer identifies a legitimate improvement (consolidating duplication, using a more idiomatic API, improving test structure), accept it if it's in scope and doesn't incur technical debt. "Recommended" doesn't mean "optional" — it means "the code would be better for it." Embrace going the extra mile on quality; reject only what is truly out of scope, incorrect, or adds unnecessary complexity.
 
-**If zero findings survive filtering**, post a brief PR comment — `"Review Round <N>: no actionable findings — review loop complete."` — then skip to Phase 6.
+**If zero findings survive filtering**, post a brief PR comment — `"Review Round <N>: no actionable findings — review loop complete."` — then skip to Phase 4.5.
 
 #### Step C: Post Referee Decisions & Write Findings File
 
@@ -306,7 +306,7 @@ Skill tool → skill: "implement-address", args: "<pr-number> docs-<round-number
 
 #### Step D: Evaluate Continuation
 
-Re-invoke the docs reviewer to verify fixes. Loop until clean. **Same 10-round escalation limit as Phase 4** — if docs review does not converge, escalate with the same format.
+Re-invoke the docs reviewer to verify fixes. The round counter starts from round 1 (independent of Phase 4 rounds). Loop until clean. **Same 10-round escalation limit as Phase 4** — if docs review does not converge, escalate with the same format.
 
 ---
 

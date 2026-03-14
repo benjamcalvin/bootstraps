@@ -70,7 +70,7 @@ Only flag ADR triggers when the change is genuinely architectural. Do not flag r
 
 ## Round Context
 
-Check the round number from your prompt. If this is round 2 or later, read the PR comments for previous "Docs Compliance Gate — Referee Decisions" comments. Do NOT repeat addressed or rejected findings. Focus on:
+Check the round number from your prompt. If this is round 2 or later, read the PR comments for previous "Docs Compliance Gate Round <N> — Referee Decisions" comments. Do NOT repeat addressed or rejected findings. Focus on:
 - New documentation issues introduced by previous fixes
 - Issues missed in prior rounds
 - Whether previously-addressed findings were actually fixed correctly
