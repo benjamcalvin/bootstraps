@@ -7,7 +7,7 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "2.0.0"
+  version: "2.2.0"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -177,7 +177,7 @@ Produce a **filtered action plan** containing only Accepted and Downgraded findi
 
 **Referee mindset:** Think like a principal engineer. Good review isn't just about catching bugs — it's about raising the bar. When the reviewer identifies a legitimate improvement (consolidating duplication, using a more idiomatic API, improving test structure), accept it if it's in scope and doesn't incur technical debt. "Recommended" doesn't mean "optional" — it means "the code would be better for it." Embrace going the extra mile on quality; reject only what is truly out of scope, incorrect, or adds unnecessary complexity.
 
-**If zero findings survive filtering**, post a brief PR comment — `"Review Round <N>: no actionable findings — review loop complete."` — then skip to Phase 6.
+**If zero findings survive filtering**, post a brief PR comment — `"Review Round <N>: no actionable findings — review loop complete."` — then skip to Phase 4.5.
 
 #### Step C: Post Referee Decisions & Write Findings File
 
@@ -240,6 +240,73 @@ EOF
 ```
 
 Then stop and inform the user directly.
+
+---
+
+### Phase 4.5: Docs Compliance Gate
+
+After the code review/address loop converges, run a documentation compliance check to ensure docs reflect the final state of the code (including all review fixes).
+
+**Do NOT include `review-docs` in the Phase 4 reviewer pool.** It runs only here, after the code review loop is complete.
+
+#### Step A: Invoke Docs Reviewer
+
+```
+Agent tool → agent: "review-docs", prompt: "Review PR #<pr-number> for documentation compliance, round <round-number>"
+```
+
+The docs reviewer fetches PR context, loads project documentation standards, and returns findings.
+
+#### Step B: Referee Evaluation
+
+Apply the same accept/downgrade/reject evaluation as Phase 4. Read the relevant docs and code yourself.
+
+| Decision | When to use | Effect |
+|----------|-------------|--------|
+| **Accept** | Finding is valid — you verified by reading the docs/code | Include in addresser action plan at reviewer's severity |
+| **Downgrade** | Finding has merit but severity is overstated | Include at lower severity with your reasoning |
+| **Reject** | Finding is incorrect, irrelevant, or demands docs for trivial changes | Exclude from action plan; record your reasoning |
+
+**If zero findings survive filtering**, post a brief PR comment — `"Docs Compliance Gate: no actionable findings — proceeding to verification."` — then skip to Phase 5.
+
+#### Step C: Post Referee Decisions & Invoke Addresser
+
+Post referee decisions to GitHub (same table format as Phase 4):
+
+```
+gh pr comment <number> --body "$(cat <<'EOF'
+## Docs Compliance Gate Round <N> — Referee Decisions
+
+| # | Finding | Reviewer Severity | Decision | Reasoning |
+|---|---------|-------------------|----------|-----------|
+| 1 | <brief description> | Action Required / Recommended / Minor | Accept / Downgrade to X / Reject | <why> |
+| ... | ... | ... | ... | ... |
+
+**Findings forwarded to addresser:** <count>
+EOF
+)"
+```
+
+Write findings to a temp file and invoke the addresser:
+
+```bash
+cat > /tmp/implement-docs-findings-pr-<PR>-round-<N>.md <<'EOF'
+# Docs Compliance Findings — Round <N>
+
+| # | Finding | Severity | Details |
+|---|---------|----------|---------|
+| 1 | <description> | <severity> | <file:line + what to fix> |
+| ... | ... | ... | ... |
+EOF
+```
+
+```
+Skill tool → skill: "implement-address", args: "<pr-number> docs-<round-number> /tmp/implement-docs-findings-pr-<PR>-round-<N>.md"
+```
+
+#### Step D: Evaluate Continuation
+
+Re-invoke the docs reviewer to verify fixes. The round counter starts from round 1 (independent of Phase 4 rounds). Loop until clean. **Same 10-round escalation limit as Phase 4** — if docs review does not converge, escalate with the same format.
 
 ---
 

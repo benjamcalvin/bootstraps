@@ -1,7 +1,7 @@
 {
   "name": "implement-lifecycle",
   "description": "Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, merge",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "author": {
     "name": "benjamcalvin"
   },
