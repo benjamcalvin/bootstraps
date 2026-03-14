@@ -23,7 +23,7 @@ Create a GitHub issue for: $ARGUMENTS
 
 ## Instructions
 
-Good issues are the single biggest lever for `/implement` quality. A well-crafted issue gives `/implement`'s planner, implementer, and reviewers everything they need to succeed autonomously. A vague issue produces vague code.
+Good issues are the single biggest lever for `/implement` quality. A well-crafted issue gives `/implement`'s implementer and reviewers everything they need to succeed autonomously. A vague issue produces vague code.
 
 The downstream consumer of these issues is an AI agent. Every section you write should be optimized for machine comprehension: specific, unambiguous, verifiable, and grounded in concrete code references.
 
