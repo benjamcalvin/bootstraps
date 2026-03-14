@@ -243,6 +243,73 @@ Then stop and inform the user directly.
 
 ---
 
+### Phase 4.5: Docs Compliance Gate
+
+After the code review/address loop converges, run a documentation compliance check to ensure docs reflect the final state of the code (including all review fixes).
+
+**Do NOT include `review-docs` in the Phase 4 reviewer pool.** It runs only here, after the code review loop is complete.
+
+#### Step A: Invoke Docs Reviewer
+
+```
+Agent tool → agent: "review-docs", prompt: "Review PR #<pr-number> for documentation compliance, round <round-number>"
+```
+
+The docs reviewer fetches PR context, loads project documentation standards, and returns findings.
+
+#### Step B: Referee Evaluation
+
+Apply the same accept/downgrade/reject evaluation as Phase 4. Read the relevant docs and code yourself.
+
+| Decision | When to use | Effect |
+|----------|-------------|--------|
+| **Accept** | Finding is valid — you verified by reading the docs/code | Include in addresser action plan at reviewer's severity |
+| **Downgrade** | Finding has merit but severity is overstated | Include at lower severity with your reasoning |
+| **Reject** | Finding is incorrect, irrelevant, or demands docs for trivial changes | Exclude from action plan; record your reasoning |
+
+**If zero findings survive filtering**, post a brief PR comment — `"Docs Compliance Gate: no actionable findings — proceeding to verification."` — then skip to Phase 5.
+
+#### Step C: Post Referee Decisions & Invoke Addresser
+
+Post referee decisions to GitHub (same table format as Phase 4):
+
+```
+gh pr comment <number> --body "$(cat <<'EOF'
+## Docs Compliance Gate Round <N> — Referee Decisions
+
+| # | Finding | Reviewer Severity | Decision | Reasoning |
+|---|---------|-------------------|----------|-----------|
+| 1 | <brief description> | Action Required / Recommended / Minor | Accept / Downgrade to X / Reject | <why> |
+| ... | ... | ... | ... | ... |
+
+**Findings forwarded to addresser:** <count>
+EOF
+)"
+```
+
+Write findings to a temp file and invoke the addresser:
+
+```bash
+cat > /tmp/implement-docs-findings-pr-<PR>-round-<N>.md <<'EOF'
+# Docs Compliance Findings — Round <N>
+
+| # | Finding | Severity | Details |
+|---|---------|----------|---------|
+| 1 | <description> | <severity> | <file:line + what to fix> |
+| ... | ... | ... | ... |
+EOF
+```
+
+```
+Skill tool → skill: "implement-address", args: "<pr-number> docs-<round-number> /tmp/implement-docs-findings-pr-<PR>-round-<N>.md"
+```
+
+#### Step D: Evaluate Continuation
+
+Re-invoke the docs reviewer to verify fixes. Loop until clean. **Same 10-round escalation limit as Phase 4** — if docs review does not converge, escalate with the same format.
+
+---
+
 ### Phase 5: Manual Verification Gate
 
 After the review loop completes, invoke the verification agent to test the PR's changes with real-world execution before merging:
