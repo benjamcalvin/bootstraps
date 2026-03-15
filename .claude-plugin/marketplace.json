@@ -43,6 +43,18 @@
         "name": "benjamcalvin"
       },
       "license": "MIT"
+    },
+    {
+      "name": "implement-cli",
+      "source": "./plugins/implement-cli",
+      "description": "CLI-based multi-provider implementation lifecycle using the Python Agent SDK for subprocess orchestration",
+      "version": "1.0.0",
+      "category": "productivity",
+      "tags": ["implement", "cli", "agent-sdk", "multi-provider", "orchestrator", "review", "lifecycle"],
+      "author": {
+        "name": "benjamcalvin"
+      },
+      "license": "MIT"
     }
   ]
 }
