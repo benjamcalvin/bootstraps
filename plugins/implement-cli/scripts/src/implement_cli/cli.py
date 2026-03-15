@@ -14,6 +14,7 @@ import argparse
 import asyncio
 import json
 import logging
+import math
 import sys
 from pathlib import Path
 
@@ -28,17 +29,21 @@ def _load_version() -> str:
     try:
         data = json.loads(plugin_json.read_text())
         return data["version"]
-    except (FileNotFoundError, KeyError, json.JSONDecodeError):
+    except (OSError, KeyError, json.JSONDecodeError):
         return "unknown"
 
 
 def main(argv: list[str] | None = None) -> None:
     """Top-level CLI entry point."""
-    # Handle --version before argparse so it works without a subcommand
+    # Handle --version before argparse so it works without a subcommand.
+    # Only scan argv before the first non-flag token (subcommand).
     args_to_parse = argv if argv is not None else sys.argv[1:]
-    if "--version" in args_to_parse:
-        print(f"implement-cli {_load_version()}")
-        sys.exit(0)
+    for arg in args_to_parse:
+        if not arg.startswith("--"):
+            break
+        if arg == "--version":
+            print(f"implement-cli {_load_version()}")
+            sys.exit(0)
 
     parser = argparse.ArgumentParser(
         prog="implement-cli",
@@ -230,7 +235,7 @@ def main(argv: list[str] | None = None) -> None:
     _configure_logging(args.verbose)
 
     # Validate numeric arguments
-    if args.max_cost <= 0:
+    if not math.isfinite(args.max_cost) or args.max_cost <= 0:
         print(
             f"Error: --max-cost must be a positive number, got: {args.max_cost}",
             file=sys.stderr,
