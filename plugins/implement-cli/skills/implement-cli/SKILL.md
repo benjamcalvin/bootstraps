@@ -70,10 +70,11 @@ CLI="<path returned by Glob>"
 # Debug: resume a session with follow-up
 "$CLI" debug resume <session-id> "What happened with the null check?" --cwd "$(pwd)"
 
-# Global flags (apply to all commands)
+# Global flags (must come BEFORE the subcommand)
+# --dry-run            Print resolved config without running agents
 # --max-depth 5       Maximum recursion depth (default: 5)
 # --max-cost 50.0     Maximum cumulative cost in USD (default: 50.0)
-# -v                  Verbose logging
+# --verbose / -v       Verbose logging
 ```
 
 ---
@@ -113,9 +114,9 @@ TASK
 Invoke the implementer:
 
 ```bash
-"$CLI" run-agent \
+"$CLI" --verbose run-agent \
   --prompt-file "$RUN_DIR/implement-task.md" \
-  --phase implement --role implementer --cwd "$(pwd)" -v
+  --phase implement --role implementer --cwd "$(pwd)"
 ```
 
 Parse the JSON output to extract:
@@ -139,8 +140,8 @@ gh issue comment <N> --body "Implementation PR created: #<pr-number>. Entering r
 Invoke parallel reviewers:
 
 ```bash
-"$CLI" run-reviewers \
-  --pr <PR> --round <N> --cwd "$(pwd)" -v
+"$CLI" --verbose run-reviewers \
+  --pr <PR> --round <N> --cwd "$(pwd)"
 ```
 
 Parse JSON output — each reviewer's result is in `reviewers.<name>`:
@@ -175,10 +176,10 @@ EOF
 #### Step D: Invoke Addresser
 
 ```bash
-"$CLI" run-agent \
+"$CLI" --verbose run-agent \
   --prompt-file "$RUN_DIR/address-prompt.md" \
   --phase address --role addresser --cwd "$(pwd)" \
-  --context-files "$RUN_DIR/findings-round-<N>.md" -v
+  --context-files "$RUN_DIR/findings-round-<N>.md"
 ```
 
 #### Step E: Next Round or Exit
@@ -206,8 +207,8 @@ If a reviewer or addresser produces unexpected results, use the debug commands:
 Same pattern as Phase 4, but only `review-docs`:
 
 ```bash
-"$CLI" run-reviewers \
-  --pr <PR> --round 1 --reviewers review-docs --cwd "$(pwd)" -v
+"$CLI" --verbose run-reviewers \
+  --pr <PR> --round 1 --reviewers review-docs --cwd "$(pwd)"
 ```
 
 ---
@@ -215,9 +216,9 @@ Same pattern as Phase 4, but only `review-docs`:
 ### Phase 5: Verification
 
 ```bash
-"$CLI" run-agent \
+"$CLI" --verbose run-agent \
   --prompt-file "$RUN_DIR/verify-prompt.md" \
-  --phase verify --role verifier --cwd "$(pwd)" -v
+  --phase verify --role verifier --cwd "$(pwd)"
 ```
 
 ---
@@ -225,8 +226,8 @@ Same pattern as Phase 4, but only `review-docs`:
 ### Phase 6: Merge
 
 ```bash
-"$CLI" run-agent --prompt-file "$RUN_DIR/merge-prompt.md" \
-  --phase merge --role merger --cwd "$(pwd)" -v
+"$CLI" --verbose run-agent --prompt-file "$RUN_DIR/merge-prompt.md" \
+  --phase merge --role merger --cwd "$(pwd)"
 ```
 
 ---
