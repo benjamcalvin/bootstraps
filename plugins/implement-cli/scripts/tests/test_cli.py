@@ -105,6 +105,35 @@ class TestDryRun:
         # Should NOT contain JSON tracking output
         assert '"tracking"' not in output
 
+    def test_run_agent_dry_run_with_session_and_context_files(self, capsys) -> None:
+        """Verify dry-run prints session-id and context-files when provided."""
+        main([
+            "--dry-run", "run-agent",
+            "--session-id", "sess-abc123",
+            "Do the thing",
+            "--context-files", "foo.py", "bar.py",
+        ])
+        captured = capsys.readouterr()
+        output = captured.out
+        assert "Session ID: sess-abc123" in output
+        assert "Context Files: foo.py, bar.py" in output
+
+    def test_dry_run_unsupported_command(self, capsys) -> None:
+        """Verify --dry-run with unsupported command prints error and exits 1."""
+        with pytest.raises(SystemExit) as exc_info:
+            main(["--dry-run", "debug", "sessions", "file.json"])
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "--dry-run is not supported for 'debug'" in captured.err
+
+    def test_dry_run_reviewers_invalid_reviewer(self, capsys) -> None:
+        """Verify --dry-run run-reviewers rejects invalid reviewer names."""
+        with pytest.raises(SystemExit) as exc_info:
+            main(["--dry-run", "run-reviewers", "--pr", "10", "--reviewers", "review-bogus"])
+        assert exc_info.value.code == 1
+        captured = capsys.readouterr()
+        assert "Unknown reviewer" in captured.err
+
     def test_dry_run_does_not_create_run_context(self, capsys) -> None:
         """Verify no tracking output — no agents ran."""
         main(["--dry-run", "run-agent", "Hello world"])

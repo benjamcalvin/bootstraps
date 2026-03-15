@@ -312,6 +312,10 @@ def _dry_run_agent(args: argparse.Namespace) -> None:
     print(f"CWD: {cwd}")
     print(f"Model: {model}")
     print(f"Tools: {', '.join(tools)}")
+    if args.session_id:
+        print(f"Session ID: {args.session_id}")
+    if args.context_files:
+        print(f"Context Files: {', '.join(args.context_files)}")
     print()
     print("--- Prompt ---")
     print(prompt)
@@ -320,9 +324,18 @@ def _dry_run_agent(args: argparse.Namespace) -> None:
 def _dry_run_reviewers(args: argparse.Namespace) -> None:
     """Print resolved run-reviewers configuration without spawning agents."""
     from implement_cli.prompts import load_prompt
-    from implement_cli.types import DEFAULT_REVIEWERS
+    from implement_cli.types import DEFAULT_REVIEWERS, VALID_REVIEWERS
 
     reviewers = args.reviewers or list(DEFAULT_REVIEWERS)
+
+    for reviewer in reviewers:
+        if reviewer not in VALID_REVIEWERS:
+            print(
+                f"Unknown reviewer {reviewer!r}. Valid reviewers: {VALID_REVIEWERS}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
     cwd = Path(args.cwd).resolve()
 
     print("=== DRY RUN: run-reviewers ===")
