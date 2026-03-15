@@ -7,7 +7,7 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "2.3.0"
+  version: "2.3.1"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -96,9 +96,14 @@ EOF
 
 ---
 
-### Phase 4: Review/Address Loop
+### Phase 4: Review/Address Loop {#review-loop}
 
-Loops until clean. Each round: Specialist reviewers → Referee (you) → Addresser. **10-round escalation limit.**
+**This is a mandatory loop.** It repeats Steps A → B → C → D → E for each round until one of exactly two exit conditions is met:
+
+1. **Clean exit (Step B):** Zero findings survive referee filtering → skip to Phase 4.5.
+2. **Escalation exit (Step E):** Round 10+ reached → escalate and stop.
+
+There is no other way to exit this loop. Each round: Specialist reviewers → Referee (you) → Addresser → next round. **10-round escalation limit.**
 
 #### Before Round 1
 
@@ -206,12 +211,11 @@ Skill tool → skill: "implement-address", args: "<pr-number> <round-number> /tm
 
 The addresser will fix issues, run tests, commit, push, and return a summary.
 
-#### Step E: Evaluate Continuation
+#### Step E: Next Round
 
-At this point, findings were accepted and the addresser has pushed fixes. Decide:
+The addresser has pushed fixes. **Increment the round counter and return to Step A.**
 
-1. **Continue** — run a verification round. Re-fetch the changed files summary and return to Step A.
-2. **Escalate** if this is round 10+:
+Before returning, check the escalation limit: if the round counter has reached 10, escalate instead of continuing:
 
 ```
 gh pr comment <number> --body "$(cat <<'EOF'
@@ -228,6 +232,8 @@ EOF
 ```
 
 Then stop and inform the user directly.
+
+**Otherwise, re-fetch the changed files summary and return to Step A immediately.** Do not pause, do not ask for confirmation, do not evaluate whether to continue — the loop continues unconditionally until a clean exit in Step B or the escalation limit here.
 
 ---
 
