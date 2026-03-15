@@ -210,7 +210,7 @@ def main(argv: list[str] | None = None) -> None:
         elif args.command == "orchestrate":
             result = asyncio.run(_cmd_orchestrate(args, run_context))
         elif args.command == "debug":
-            result = _cmd_debug(args)
+            result = _cmd_debug(args, run_context)
         else:
             parser.print_help()
             sys.exit(1)
@@ -293,12 +293,9 @@ async def _cmd_run_reviewers(args: argparse.Namespace, run_context: RunContext) 
     """Run parallel reviewers."""
     from implement_cli.review import run_parallel_reviewers
 
-    reviewers = args.reviewers or [
-        "review-correctness",
-        "review-security",
-        "review-architecture",
-        "review-testing",
-    ]
+    from implement_cli.types import DEFAULT_REVIEWERS
+
+    reviewers = args.reviewers or list(DEFAULT_REVIEWERS)
 
     results = await run_parallel_reviewers(
         reviewers,
@@ -341,14 +338,14 @@ async def _cmd_orchestrate(args: argparse.Namespace, run_context: RunContext) ->
     }
 
 
-def _cmd_debug(args: argparse.Namespace) -> dict:
+def _cmd_debug(args: argparse.Namespace, run_context: RunContext) -> dict:
     """Debug subcommands — inspect sessions from previous runs."""
     if args.debug_command == "sessions":
         return _debug_sessions(args)
     elif args.debug_command == "session":
         return _debug_session(args)
     elif args.debug_command == "resume":
-        return asyncio.run(_debug_resume(args))
+        return asyncio.run(_debug_resume(args, run_context))
     return {"error": f"Unknown debug command: {args.debug_command}"}
 
 
@@ -402,7 +399,7 @@ def _debug_session(args: argparse.Namespace) -> dict:
     }
 
 
-async def _debug_resume(args: argparse.Namespace) -> dict:
+async def _debug_resume(args: argparse.Namespace, run_context: RunContext) -> dict:
     """Resume a session with a follow-up prompt."""
     from implement_cli.sdk import run_agent
     from implement_cli.types import Phase
@@ -412,8 +409,6 @@ async def _debug_resume(args: argparse.Namespace) -> dict:
         prompt = sys.stdin.read()
     if not prompt:
         return {"error": "No prompt provided for resume"}
-
-    run_context = RunContext()
 
     result = await run_agent(
         prompt,

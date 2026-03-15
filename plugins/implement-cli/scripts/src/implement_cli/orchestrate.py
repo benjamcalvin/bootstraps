@@ -21,7 +21,7 @@ from implement_cli.merge import run_merger
 from implement_cli.plan import run_planner
 from implement_cli.review import run_parallel_reviewers
 from implement_cli.tracking import RunContext
-from implement_cli.types import OrchestratorConfig, Phase, PhaseResult
+from implement_cli.types import DEFAULT_REVIEWERS, OrchestratorConfig, Phase, PhaseResult
 from implement_cli.verify import run_verifier
 
 logger = logging.getLogger(__name__)
@@ -51,12 +51,7 @@ def build_config(args: argparse.Namespace) -> OrchestratorConfig:
         except ValueError:
             pass
 
-    reviewers = args.reviewers or [
-        "review-correctness",
-        "review-security",
-        "review-architecture",
-        "review-testing",
-    ]
+    reviewers = args.reviewers or list(DEFAULT_REVIEWERS)
 
     return OrchestratorConfig(
         cwd=Path(args.cwd).resolve(),
@@ -295,23 +290,31 @@ async def _run_docs_gate(
 
 
 def has_actionable_findings(text: str) -> bool:
-    """Heuristic: check if reviewer output contains actionable findings."""
+    """Heuristic: check if reviewer output contains actionable findings.
+
+    The presence of findings section headers (### Action Required, ### Recommended)
+    takes precedence over "no findings" phrases, since those phrases may appear
+    in summary sections alongside real findings.
+    """
     lower = text.lower()
-    no_findings_phrases = [
-        "no actionable findings",
-        "no findings",
-        "code is correct",
-        "looks solid",
-        "no issues found",
-        "the code is correct",
-        "architecture looks solid",
-        "test coverage and quality look solid",
-        "security and requirements look solid",
-    ]
-    has_no_findings = any(phrase in lower for phrase in no_findings_phrases)
 
     has_findings_section = bool(
         re.search(r"###\s*(action required|recommended)", lower)
     )
 
-    return has_findings_section and not has_no_findings
+    # If there are findings section headers, trust them — the reviewer found something
+    if has_findings_section:
+        return True
+
+    # No findings sections — check for explicit "all clear" signals
+    no_findings_phrases = [
+        "no actionable findings",
+        "no findings",
+        "no issues found",
+    ]
+    has_no_findings = any(phrase in lower for phrase in no_findings_phrases)
+    if has_no_findings:
+        return False
+
+    # No findings sections and no explicit "all clear" — assume no findings
+    return False

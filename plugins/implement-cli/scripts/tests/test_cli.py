@@ -1,10 +1,11 @@
 """Tests for implement_cli.cli."""
 
+import argparse
 import json
 
 import pytest
 
-from implement_cli.cli import main
+from implement_cli.cli import _resolve_prompt, main
 
 
 class TestCliHelp:
@@ -32,6 +33,30 @@ class TestCliHelp:
         with pytest.raises(SystemExit) as exc_info:
             main([])
         assert exc_info.value.code != 0
+
+
+class TestResolvePrompt:
+    def test_prompt_from_argument(self) -> None:
+        args = argparse.Namespace(prompt="hello world", prompt_file=None)
+        assert _resolve_prompt(args) == "hello world"
+
+    def test_prompt_from_file(self, tmp_path) -> None:
+        prompt_file = tmp_path / "prompt.md"
+        prompt_file.write_text("file prompt content")
+        args = argparse.Namespace(prompt=None, prompt_file=str(prompt_file))
+        assert _resolve_prompt(args) == "file prompt content"
+
+    def test_prompt_argument_takes_precedence(self, tmp_path) -> None:
+        prompt_file = tmp_path / "prompt.md"
+        prompt_file.write_text("from file")
+        args = argparse.Namespace(prompt="from arg", prompt_file=str(prompt_file))
+        assert _resolve_prompt(args) == "from arg"
+
+    def test_missing_prompt_exits(self, monkeypatch) -> None:
+        monkeypatch.setattr("sys.stdin", type("FakeTTY", (), {"isatty": lambda self: True})())
+        args = argparse.Namespace(prompt=None, prompt_file=None)
+        with pytest.raises(SystemExit):
+            _resolve_prompt(args)
 
 
 class TestDebugSessions:

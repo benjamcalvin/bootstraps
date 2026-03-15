@@ -17,6 +17,14 @@ class Phase(Enum):
     MERGE = "merge"
 
 
+DEFAULT_REVIEWERS: list[str] = [
+    "review-correctness",
+    "review-security",
+    "review-architecture",
+    "review-testing",
+]
+
+
 class Severity(Enum):
     ACTION_REQUIRED = "Action Required"
     RECOMMENDED = "Recommended"
@@ -84,10 +92,5 @@ class OrchestratorConfig:
     skip_planning: bool = False
     max_review_rounds: int = 10
     reviewers: list[str] = field(
-        default_factory=lambda: [
-            "review-correctness",
-            "review-security",
-            "review-architecture",
-            "review-testing",
-        ]
+        default_factory=lambda: list(DEFAULT_REVIEWERS)
     )

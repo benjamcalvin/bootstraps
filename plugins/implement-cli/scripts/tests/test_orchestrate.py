@@ -1,6 +1,10 @@
 """Tests for implement_cli.orchestrate."""
 
+import argparse
+from pathlib import Path
+
 from implement_cli.orchestrate import (
+    build_config,
     has_actionable_findings,
     parse_pr_number,
 )
@@ -21,6 +25,62 @@ class TestParsePrNumber:
         assert parse_pr_number(text) == 123
 
 
+class TestBuildConfig:
+    def _make_args(self, **overrides) -> argparse.Namespace:
+        defaults = {
+            "task": "implement something",
+            "cwd": ".",
+            "skip_planning": False,
+            "reviewers": None,
+            "max_rounds": 10,
+            "pr": None,
+            "phases": None,
+        }
+        defaults.update(overrides)
+        return argparse.Namespace(**defaults)
+
+    def test_freeform_task(self) -> None:
+        config = build_config(self._make_args(task="fix the login bug"))
+        assert config.task_description == "fix the login bug"
+        assert config.issue_number is None
+        assert config.pr_number is None
+
+    def test_issue_number_parsing(self) -> None:
+        config = build_config(self._make_args(task="#42 fix the login bug"))
+        assert config.issue_number == 42
+        assert config.task_description == "#42 fix the login bug"
+
+    def test_invalid_issue_number(self) -> None:
+        config = build_config(self._make_args(task="#abc not a number"))
+        assert config.issue_number is None
+
+    def test_pr_number_from_args(self) -> None:
+        config = build_config(self._make_args(pr=99))
+        assert config.pr_number == 99
+
+    def test_default_reviewers(self) -> None:
+        config = build_config(self._make_args())
+        assert "review-correctness" in config.reviewers
+        assert "review-security" in config.reviewers
+        assert len(config.reviewers) == 4
+
+    def test_custom_reviewers(self) -> None:
+        config = build_config(self._make_args(reviewers=["review-correctness"]))
+        assert config.reviewers == ["review-correctness"]
+
+    def test_cwd_resolved(self) -> None:
+        config = build_config(self._make_args(cwd="."))
+        assert Path(config.cwd).is_absolute()
+
+    def test_skip_planning(self) -> None:
+        config = build_config(self._make_args(skip_planning=True))
+        assert config.skip_planning is True
+
+    def test_max_rounds(self) -> None:
+        config = build_config(self._make_args(max_rounds=5))
+        assert config.max_review_rounds == 5
+
+
 class TestHasActionableFindings:
     def test_no_findings(self) -> None:
         text = "The code is correct. No issues found."
@@ -34,9 +94,10 @@ class TestHasActionableFindings:
         text = "### Recommended\n- Consider using a context manager"
         assert has_actionable_findings(text) is True
 
-    def test_explicit_no_actionable_findings(self) -> None:
+    def test_findings_header_takes_precedence(self) -> None:
+        # Even if "no actionable findings" appears, the header means findings exist
         text = "### Action Required\nNo actionable findings in this round."
-        assert has_actionable_findings(text) is False
+        assert has_actionable_findings(text) is True
 
     def test_looks_solid(self) -> None:
         text = "Architecture looks solid. No concerns."
@@ -44,3 +105,17 @@ class TestHasActionableFindings:
 
     def test_empty_text(self) -> None:
         assert has_actionable_findings("") is False
+
+    def test_findings_with_summary_containing_praise(self) -> None:
+        """Findings should not be suppressed by praise phrases in summary."""
+        text = (
+            "### Action Required\n"
+            "- Bug at line 42\n\n"
+            "### Summary\n"
+            "The code is correct except for the above issue."
+        )
+        assert has_actionable_findings(text) is True
+
+    def test_no_findings_phrase_without_headers(self) -> None:
+        text = "No issues found. Everything looks good."
+        assert has_actionable_findings(text) is False

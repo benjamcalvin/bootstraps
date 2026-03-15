@@ -65,9 +65,8 @@ async def run_agent(
     """
     # Enforce limits before starting
     if run_context:
-        run_context.check_depth()
         run_context.check_cost()
-        run_context.enter_depth()
+        run_context.enter_depth()  # enter_depth() calls check_depth() internally
 
     try:
         return await _run_agent_inner(

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from implement_cli.prompts import load_prompt
 from implement_cli.sdk import AgentResult, run_agent
-from implement_cli.tracking import RunContext
+from implement_cli.tracking import CostLimitError, RecursionLimitError, RunContext
 from implement_cli.types import Phase
 
 logger = logging.getLogger(__name__)
@@ -42,6 +42,11 @@ async def run_reviewer(
     Returns:
         The AgentResult from the reviewer.
     """
+    if reviewer not in REVIEWER_NAMES:
+        raise ValueError(
+            f"Unknown reviewer {reviewer!r}. Valid reviewers: {REVIEWER_NAMES}"
+        )
+
     prompt = load_prompt(
         reviewer,
         PR_NUMBER=str(pr_number),
@@ -101,9 +106,26 @@ async def run_parallel_reviewers(
     }
 
     results: dict[str, AgentResult] = {}
+    cost_error: CostLimitError | None = None
     for reviewer, task in tasks.items():
         try:
             results[reviewer] = await task
+        except (CostLimitError, RecursionLimitError) as e:
+            logger.error("Reviewer %s hit limit: %s — cancelling remaining tasks", reviewer, e)
+            # Cancel remaining tasks that haven't been awaited yet
+            for other_reviewer, other_task in tasks.items():
+                if other_reviewer not in results and other_reviewer != reviewer:
+                    other_task.cancel()
+            results[reviewer] = AgentResult(
+                text=f"Reviewer {reviewer} hit limit: {e}",
+                session_id="",
+                is_error=True,
+            )
+            if isinstance(e, CostLimitError):
+                cost_error = e
+            else:
+                raise
+            break
         except Exception:
             logger.exception("Reviewer %s failed", reviewer)
             results[reviewer] = AgentResult(
@@ -111,5 +133,8 @@ async def run_parallel_reviewers(
                 session_id="",
                 is_error=True,
             )
+
+    if cost_error is not None:
+        raise cost_error
 
     return results
