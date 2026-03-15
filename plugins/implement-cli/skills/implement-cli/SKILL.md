@@ -8,7 +8,7 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "1.1.1"
+  version: "1.1.2"
   tags: ["implement", "cli", "agent-sdk", "multi-provider", "lifecycle"]
   author: benjamcalvin
 ---
@@ -34,15 +34,13 @@ You are the **orchestrator**. You drive the lifecycle, make referee decisions, a
 
 All commands output JSON with a `tracking` section containing session IDs, costs, token usage, and the `run_dir` — a unique directory for each invocation that holds all artifacts (findings files, run context). This prevents collisions between concurrent runs.
 
-Resolve the wrapper script path first — it lives at `run.sh` in the plugin root:
+Resolve the wrapper script path first — it lives at `run.sh` in the plugin root.
+
+Use the Glob tool to find `**/implement-cli/run.sh`, then set:
 
 ```bash
-# Find the plugin directory (two levels up from this SKILL.md)
-PLUGIN_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-CLI="$PLUGIN_DIR/run.sh"
+CLI="<path returned by Glob>"
 ```
-
-If the plugin is installed via the marketplace, the path will be in the plugin cache. Use `find` or the known cache path to locate it.
 
 ```bash
 # Run a single agent with a prompt

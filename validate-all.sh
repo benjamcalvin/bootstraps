@@ -2,6 +2,9 @@
 # Validates all plugins in the marketplace
 set -euo pipefail
 
+# Always run from the repository root (where this script lives)
+cd "$(dirname "${BASH_SOURCE[0]}")"
+
 ERRORS=0
 WARNINGS=0
 
