@@ -60,6 +60,9 @@ If the plugin is installed via the marketplace, the path will be in the plugin c
 "$CLI" run-reviewers --pr 45 --round 1 --cwd "$(pwd)" \
   [--reviewers review-correctness review-security]
 
+# Print a human-readable summary of a completed run
+"$CLI" summary <run_dir>/run_context.json
+
 # Debug: list sessions from a run
 "$CLI" debug sessions <run_dir>/run_context.json
 
@@ -263,7 +266,7 @@ Every CLI invocation returns a `tracking` section:
 
 **Run directory isolation:** Each invocation creates a unique directory (shown in `run_dir`) for all artifacts — findings files, prompts, run context. This prevents collisions between concurrent runs. The `run_context.json` file inside the run directory has the full session history for debugging.
 
-Monitor `total_cost_usd` throughout the lifecycle. If costs are unexpectedly high, investigate using `debug sessions` and `debug session` commands.
+Monitor `total_cost_usd` throughout the lifecycle. For a human-readable overview of a completed run, use `summary <run_context.json>`. If costs are unexpectedly high, investigate using `debug sessions` and `debug session` commands.
 
 ---
 
