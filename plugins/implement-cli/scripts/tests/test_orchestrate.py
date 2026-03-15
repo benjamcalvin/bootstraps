@@ -99,7 +99,7 @@ class TestHasActionableFindings:
         text = "### Action Required\nNo actionable findings in this round."
         assert has_actionable_findings(text) is True
 
-    def test_looks_solid(self) -> None:
+    def test_plain_text_without_findings_headers(self) -> None:
         text = "Architecture looks solid. No concerns."
         assert has_actionable_findings(text) is False
 
@@ -118,4 +118,9 @@ class TestHasActionableFindings:
 
     def test_no_findings_phrase_without_headers(self) -> None:
         text = "No issues found. Everything looks good."
+        assert has_actionable_findings(text) is False
+
+    def test_minor_heading_not_treated_as_findings(self) -> None:
+        """### Minor alone does not trigger actionable findings."""
+        text = "### Minor\n- Consider renaming the variable"
         assert has_actionable_findings(text) is False

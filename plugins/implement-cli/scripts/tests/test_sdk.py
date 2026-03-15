@@ -176,6 +176,9 @@ class TestRunAgent:
         ))
         # Depth should return to 0 after run_agent completes
         assert ctx.current_depth == 0
+        # Session was recorded at depth 1 (during the call)
+        assert len(ctx.sessions) == 1
+        assert ctx.sessions[0].depth == 1
 
     @patch("implement_cli.sdk.query")
     def test_session_recorded(self, mock_query) -> None:
@@ -197,6 +200,9 @@ class TestRunAgent:
         assert len(ctx.sessions) == 1
         assert ctx.sessions[0].session_id == "recorded-sess"
         assert ctx.sessions[0].role == "test-reviewer"
+        assert ctx.sessions[0].cost_usd == 0.5
+        assert ctx.sessions[0].input_tokens == 100
+        assert ctx.sessions[0].output_tokens == 50
 
     @patch("implement_cli.sdk.query")
     def test_context_files_appended(self, mock_query) -> None:

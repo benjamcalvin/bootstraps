@@ -17,12 +17,27 @@ class Phase(Enum):
     MERGE = "merge"
 
 
+# All valid reviewer names (used as an allowlist for input validation).
+VALID_REVIEWERS: list[str] = [
+    "review-correctness",
+    "review-security",
+    "review-architecture",
+    "review-testing",
+    "review-docs",
+]
+
+# The default subset invoked when no --reviewers flag is provided.
+# review-docs is excluded because it runs in the separate docs compliance gate.
 DEFAULT_REVIEWERS: list[str] = [
     "review-correctness",
     "review-security",
     "review-architecture",
     "review-testing",
 ]
+
+assert set(DEFAULT_REVIEWERS) <= set(VALID_REVIEWERS), (
+    "DEFAULT_REVIEWERS must be a subset of VALID_REVIEWERS"
+)
 
 
 class Severity(Enum):

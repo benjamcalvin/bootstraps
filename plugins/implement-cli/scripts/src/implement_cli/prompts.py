@@ -22,7 +22,9 @@ def load_prompt(name: str, **variables: str) -> str:
     Raises:
         FileNotFoundError: If the prompt template does not exist.
     """
-    path = PROMPTS_DIR / f"{name}.md"
+    path = (PROMPTS_DIR / f"{name}.md").resolve()
+    if not path.is_relative_to(PROMPTS_DIR):
+        raise ValueError(f"Prompt name {name!r} resolves outside prompts directory")
     template = path.read_text()
     for key, value in variables.items():
         template = template.replace(f"${key}", value)

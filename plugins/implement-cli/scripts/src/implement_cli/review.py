@@ -9,17 +9,9 @@ from pathlib import Path
 from implement_cli.prompts import load_prompt
 from implement_cli.sdk import AgentResult, run_agent
 from implement_cli.tracking import CostLimitError, RecursionLimitError, RunContext
-from implement_cli.types import Phase
+from implement_cli.types import Phase, VALID_REVIEWERS
 
 logger = logging.getLogger(__name__)
-
-REVIEWER_NAMES = [
-    "review-correctness",
-    "review-security",
-    "review-architecture",
-    "review-testing",
-    "review-docs",
-]
 
 
 async def run_reviewer(
@@ -42,9 +34,9 @@ async def run_reviewer(
     Returns:
         The AgentResult from the reviewer.
     """
-    if reviewer not in REVIEWER_NAMES:
+    if reviewer not in VALID_REVIEWERS:
         raise ValueError(
-            f"Unknown reviewer {reviewer!r}. Valid reviewers: {REVIEWER_NAMES}"
+            f"Unknown reviewer {reviewer!r}. Valid reviewers: {VALID_REVIEWERS}"
         )
 
     prompt = load_prompt(
@@ -121,6 +113,13 @@ async def run_parallel_reviewers(
                 session_id="",
                 is_error=True,
             )
+            # Await cancelled tasks to suppress asyncio warnings
+            cancelled = [
+                t for r, t in tasks.items()
+                if r not in results and r != reviewer
+            ]
+            if cancelled:
+                await asyncio.gather(*cancelled, return_exceptions=True)
             if isinstance(e, CostLimitError):
                 cost_error = e
             else:
