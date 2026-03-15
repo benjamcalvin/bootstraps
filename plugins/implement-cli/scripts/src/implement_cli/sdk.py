@@ -115,6 +115,7 @@ async def _run_agent_inner(
         allowed_tools=tools,
         cwd=str(cwd),
         permission_mode=permission_mode,
+        env={"CLAUDECODE": ""},
     )
 
     if session_id:

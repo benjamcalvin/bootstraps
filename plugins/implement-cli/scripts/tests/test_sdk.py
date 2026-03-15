@@ -227,6 +227,27 @@ class TestRunAgent:
         assert "/tmp/b.md" in prompt
 
     @patch("implement_cli.sdk.query")
+    def test_claudecode_env_unset(self, mock_query) -> None:
+        """Verify CLAUDECODE is cleared so subprocesses don't refuse to start."""
+        result_msg = _make_result_message()
+
+        async def mock_stream(*args, **kwargs):
+            yield result_msg
+
+        mock_query.return_value = mock_stream()
+
+        asyncio.run(run_agent(
+            "test prompt",
+            phase=Phase.REVIEW,
+            role="test",
+            cwd="/tmp",
+        ))
+
+        call_kwargs = mock_query.call_args
+        options = call_kwargs.kwargs.get("options")
+        assert options.env == {"CLAUDECODE": ""}
+
+    @patch("implement_cli.sdk.query")
     def test_depth_limit_raises(self, mock_query) -> None:
         ctx = RunContext(max_depth=1)
         ctx.current_depth = 1  # Already at limit

@@ -8,7 +8,7 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "1.1.0"
+  version: "1.1.1"
   tags: ["implement", "cli", "agent-sdk", "multi-provider", "lifecycle"]
   author: benjamcalvin
 ---
