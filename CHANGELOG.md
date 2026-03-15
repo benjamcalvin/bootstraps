@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## implement-cli [1.1.4] - 2026-03-15
+
+### Added
+
+- `--version` global flag that reads version from `plugin.json` at runtime
+- Validation for `--max-cost` (must be positive and finite) and `--max-depth` (must be >= 1)
+- Unit tests for version flag, argument validation, NaN/inf edge cases, and fallback paths
+
 ## implement-cli [1.1.2] - 2026-03-15
 
 ### Fixed
