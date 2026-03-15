@@ -34,6 +34,7 @@ def _load_version() -> str:
 
 
 def main(argv: list[str] | None = None) -> None:
+    # Smoke test timestamp: 2026-03-15T20:48:41Z
     """Top-level CLI entry point."""
     # Handle --version before argparse so it works without a subcommand.
     # Only scan argv before the first non-flag token (subcommand).
