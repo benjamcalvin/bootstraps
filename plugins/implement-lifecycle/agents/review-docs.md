@@ -37,7 +37,8 @@ For each changed code file, determine whether the change affects documented beha
 - Search `docs/` for files that reference the changed modules, functions, APIs, or configuration
 - Flag when a code change contradicts what existing documentation describes (e.g., a renamed flag, changed default, removed feature)
 - Flag when a PR introduces a new public-facing entity (API endpoint, CLI command, configuration option, plugin) that has no corresponding documentation
-- If the PR is purely internal (refactoring, test changes, implementation details with no user-facing impact), explicitly state: **"No documentation updates needed — changes are implementation-only with no docs impact."**
+- Flag when a PR changes internal architecture, patterns, conventions, or system design that is described in existing documentation (AGENTS.md, ADRs, design docs, developer guides, internal references) — these must stay accurate even for "internal" changes
+- If the PR is purely mechanical (renaming a local variable, fixing a typo in code, adding a unit test for existing behavior) with no impact on any documented behavior, architecture, or conventions, explicitly state: **"No documentation updates needed — changes are purely mechanical with no docs impact."**
 
 ### Frontmatter Compliance
 
@@ -77,7 +78,7 @@ Check the round number from your prompt. If this is round 2 or later, read the P
 
 ## Anti-Patterns (Avoid)
 
-- **Demanding docs for trivial changes** — Internal refactors, test additions, minor bug fixes, and implementation details do not need documentation. Only flag when user-facing behavior changes.
+- **Demanding docs for purely mechanical changes** — Local variable renames, code formatting, typo fixes in code, and unit tests for existing behavior do not need documentation. But DO flag internal changes that affect documented architecture, conventions, patterns, or developer-facing knowledge (AGENTS.md, ADRs, design docs, developer guides). The bar is "does this change affect anyone's understanding of how the system works?" not just "does this change affect end users?"
 - **Unreferenced preferences** — Every finding must trace to a concrete project standard found in AGENTS.md, CLAUDE.md, or established patterns in `docs/`. Do not invent standards.
 - **Treating docs as a changelog** — Documentation describes current behavior, not a history of changes. Do not demand changelog-style entries unless the project explicitly maintains one.
 - **Scope creep** — Review only documentation affected by the PR's changes. Do not audit the entire docs directory or flag pre-existing issues.
