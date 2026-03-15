@@ -8,7 +8,7 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "1.1.3"
+  version: "1.1.4"
   tags: ["implement", "cli", "agent-sdk", "multi-provider", "lifecycle"]
   author: benjamcalvin
 ---
@@ -71,9 +71,10 @@ CLI="<path returned by Glob>"
 "$CLI" debug resume <session-id> "What happened with the null check?" --cwd "$(pwd)"
 
 # Global flags (must come BEFORE the subcommand)
+# --version            Print version and exit
 # --dry-run            Print resolved config without running agents
-# --max-depth 5       Maximum recursion depth (default: 5)
-# --max-cost 50.0     Maximum cumulative cost in USD (default: 50.0)
+# --max-depth 5       Maximum recursion depth (default: 5, must be >= 1)
+# --max-cost 50.0     Maximum cumulative cost in USD (default: 50.0, must be > 0)
 # --verbose / -v       Verbose logging
 ```
 
