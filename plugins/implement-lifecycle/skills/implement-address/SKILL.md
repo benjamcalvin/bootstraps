@@ -6,7 +6,7 @@ agent: general-purpose
 argument-hint: <pr-number> <round-number> <findings-file-path>
 license: MIT
 metadata:
-  version: "2.0.0"
+  version: "2.0.1"
   tags: ["implement", "address", "subagent"]
   author: benjamcalvin
 ---
