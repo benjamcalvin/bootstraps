@@ -59,6 +59,61 @@ class TestResolvePrompt:
             _resolve_prompt(args)
 
 
+class TestDryRun:
+    """Tests for --dry-run flag behaviour."""
+
+    def test_run_agent_dry_run(self, capsys) -> None:
+        """Verify dry-run prints config and prompt without spawning agents."""
+        main(["--dry-run", "run-agent", "--phase", "implement", "--role", "implementer", "Do the thing"])
+        captured = capsys.readouterr()
+        output = captured.out
+
+        assert "=== DRY RUN: run-agent ===" in output
+        assert "Phase: implement" in output
+        assert "Role: implementer" in output
+        assert "Model: (default)" in output
+        # Check tools from DEFAULT_TOOLS for implement phase
+        assert "Read" in output
+        assert "Write" in output
+        assert "Edit" in output
+        assert "--- Prompt ---" in output
+        assert "Do the thing" in output
+        # Should NOT contain JSON tracking output (no agents ran)
+        assert '"tracking"' not in output
+
+    def test_run_reviewers_dry_run(self, capsys, tmp_path, monkeypatch) -> None:
+        """Verify dry-run prints each reviewer's config without spawning agents."""
+        # Create fake prompt templates for reviewers
+        prompts_dir = tmp_path / "prompts"
+        prompts_dir.mkdir()
+        for reviewer in ("review-correctness", "review-security", "review-architecture", "review-testing"):
+            (prompts_dir / f"{reviewer}.md").write_text(
+                f"Review PR #$PR_NUMBER (round $ROUND_NUMBER) as {reviewer}"
+            )
+        monkeypatch.setattr("implement_cli.prompts.PROMPTS_DIR", prompts_dir)
+
+        main(["--dry-run", "run-reviewers", "--pr", "45", "--round", "2"])
+        captured = capsys.readouterr()
+        output = captured.out
+
+        assert "=== DRY RUN: run-reviewers ===" in output
+        assert "PR: #45" in output
+        assert "Round: 2" in output
+        assert "--- Reviewer: review-correctness ---" in output
+        assert "Review PR #45 (round 2) as review-correctness" in output
+        assert "--- Reviewer: review-security ---" in output
+        # Should NOT contain JSON tracking output
+        assert '"tracking"' not in output
+
+    def test_dry_run_does_not_create_run_context(self, capsys) -> None:
+        """Verify no tracking output — no agents ran."""
+        main(["--dry-run", "run-agent", "Hello world"])
+        captured = capsys.readouterr()
+        # No JSON output at all — dry-run returns before the tracking epilogue
+        assert '"tracking"' not in captured.out
+        assert '"success"' not in captured.out
+
+
 class TestDebugSessions:
     def test_missing_file(self, tmp_path, capsys) -> None:
         main(["debug", "sessions", str(tmp_path / "nonexistent.json")])

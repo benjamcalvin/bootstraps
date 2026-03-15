@@ -45,6 +45,11 @@ def main(argv: list[str] | None = None) -> None:
         default=50.0,
         help="Maximum cumulative cost in USD before aborting (default: 50.0)",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print resolved configuration without running agents",
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -213,6 +218,17 @@ def main(argv: list[str] | None = None) -> None:
         _cmd_summary(args)
         return
 
+    # Dry-run mode: print resolved config without running agents
+    if args.dry_run:
+        if args.command == "run-agent":
+            _dry_run_agent(args)
+        elif args.command == "run-reviewers":
+            _dry_run_reviewers(args)
+        else:
+            print(f"--dry-run is not supported for '{args.command}'", file=sys.stderr)
+            sys.exit(1)
+        return
+
     run_context = RunContext(
         max_depth=args.max_depth,
         max_cost_usd=args.max_cost,
@@ -277,6 +293,52 @@ def _resolve_prompt(args: argparse.Namespace) -> str:
         return sys.stdin.read()
     logger.error("No prompt provided (use argument, --prompt-file, or pipe to stdin)")
     sys.exit(1)
+
+
+def _dry_run_agent(args: argparse.Namespace) -> None:
+    """Print resolved run-agent configuration without spawning agents."""
+    from implement_cli.sdk import DEFAULT_TOOLS
+    from implement_cli.types import Phase
+
+    prompt = _resolve_prompt(args)
+    phase = Phase(args.phase)
+    tools = args.tools or DEFAULT_TOOLS.get(phase, [])
+    cwd = Path(args.cwd).resolve()
+    model = args.model or "(default)"
+
+    print("=== DRY RUN: run-agent ===")
+    print(f"Phase: {phase.value}")
+    print(f"Role: {args.role}")
+    print(f"CWD: {cwd}")
+    print(f"Model: {model}")
+    print(f"Tools: {', '.join(tools)}")
+    print()
+    print("--- Prompt ---")
+    print(prompt)
+
+
+def _dry_run_reviewers(args: argparse.Namespace) -> None:
+    """Print resolved run-reviewers configuration without spawning agents."""
+    from implement_cli.prompts import load_prompt
+    from implement_cli.types import DEFAULT_REVIEWERS
+
+    reviewers = args.reviewers or list(DEFAULT_REVIEWERS)
+    cwd = Path(args.cwd).resolve()
+
+    print("=== DRY RUN: run-reviewers ===")
+    print(f"PR: #{args.pr}")
+    print(f"Round: {args.round}")
+    print(f"CWD: {cwd}")
+
+    for reviewer in reviewers:
+        prompt = load_prompt(
+            reviewer,
+            PR_NUMBER=str(args.pr),
+            ROUND_NUMBER=str(args.round),
+        )
+        print()
+        print(f"--- Reviewer: {reviewer} ---")
+        print(prompt)
 
 
 async def _cmd_run_agent(args: argparse.Namespace, run_context: RunContext) -> dict:
