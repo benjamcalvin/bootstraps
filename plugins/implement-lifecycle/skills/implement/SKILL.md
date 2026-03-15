@@ -7,7 +7,7 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "2.2.0"
+  version: "2.3.0"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -26,7 +26,7 @@ Orchestrate the full implementation lifecycle for: $ARGUMENTS
 
 You are a **lean orchestrator**. Your job is to coordinate — not to implement, review, or address findings yourself. You invoke forked skills for all heavy work and referee review findings.
 
-**Drive forward autonomously.** When you have a plan (from the user, an issue, or Phase 1), execute all phases without pausing for approval between them. Do not ask "shall I proceed to the next phase?" — just proceed. Only stop to ask the user when you hit a genuine ambiguity, a blocking decision outside the task's scope, or an escalation condition listed below.
+**Drive forward autonomously.** When you have a plan (from the user or an issue), execute all phases without pausing for approval between them. Do not ask "shall I proceed to the next phase?" — just proceed. Only stop to ask the user when you hit a genuine ambiguity, a blocking decision outside the task's scope, or an escalation condition listed below.
 
 **You MUST use the Task tools** (`TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`) throughout.
 
@@ -58,42 +58,30 @@ Any text after the leading token is **instructions that control what you do**. T
 | "just review" / "review only" | Run specialist reviewers only. Post findings. Stop. |
 | "address the review feedback" | Run the addresser only against existing review findings. |
 | "review and address" | Run review/address loop but don't merge. |
-| "skip planning" / "just implement" | Skip Phase 1, go straight to Phase 2–3. |
+| "skip planning" / "just implement" | Pass "skip planning" to implement-code so it skips codebase exploration and plan formulation. |
 | Any other specific direction | Use judgment — execute the phases that match the intent, skip the rest. |
 
 The table above is illustrative, not exhaustive. Interpret the user's intent and execute accordingly. When in doubt, do more rather than less — the default full lifecycle is always safe.
 
 ---
 
-### Phase 1: Plan (Optional)
+### Phase 1–3: Plan, Implement & Create PR
 
-Decide whether the task needs a dedicated planner:
-- **Skip** if the task is clear and scoped (e.g., "fix the typo in config.go", "add a field to struct X")
-- **Invoke** if the task is ambiguous, touches multiple modules, requires reading specs, or has unclear acceptance criteria
+Planning is handled internally by `implement-code`. Do **not** invoke a separate planning step — this eliminates the seam where the orchestrator might pause for approval between planning and coding.
 
-To invoke the planner:
+Decide whether the task needs planning and pass appropriate instructions:
+- **Needs planning** (ambiguous, touches multiple modules, unclear acceptance criteria): pass the task description without "skip planning"
+- **Skip planning** (clear, scoped tasks like "fix the typo in config.go"): include "skip planning" in the instructions
 
-```
-Skill tool → skill: "implement-plan", args: "<full task description and optional instructions>"
-```
-
-The planner will explore the codebase, define acceptance criteria, identify test cases, and return a structured plan.
-
-If you skip the planner, briefly define acceptance criteria and a plan yourself (a few bullets — don't explore the codebase in depth).
-
----
-
-### Phase 2–3: Implement & Create PR
-
-Invoke the implementer to do all coding, testing, and PR creation:
+Invoke the implementer:
 
 ```
-Skill tool → skill: "implement-code", args: "<issue-number-or-0> <task description, plan, acceptance criteria, and optional instructions>"
+Skill tool → skill: "implement-code", args: "<issue-number-or-0> <task description, acceptance criteria, and optional instructions>"
 ```
 
-Pass the full context: task description, acceptance criteria, plan (from Phase 1 if the planner ran), and any optional user instructions. If there's a linked issue, pass the issue number as the first arg; otherwise pass `0`.
+Pass the full context: task description, acceptance criteria from the issue (if any), and any optional user instructions. If there's a linked issue, pass the issue number as the first arg; otherwise pass `0`.
 
-The implementer will return the **PR number** and a summary. Record the PR number for Phase 4.
+The implementer will plan internally (if needed), write code, write tests, and return the **PR number** and a summary. Record the PR number for Phase 4.
 
 **Update linked issues.** If the original task was a GitHub issue, post a progress comment:
 ```

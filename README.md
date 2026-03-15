@@ -92,7 +92,7 @@ Some skills accept arguments:
 
 ### implement-lifecycle
 
-Provides 8 skills and 4 reviewer agents for the complete implementation lifecycle:
+Provides 7 skills and 4 reviewer agents for the complete implementation lifecycle:
 
 **Skills:**
 
@@ -107,8 +107,7 @@ Provides 8 skills and 4 reviewer agents for the complete implementation lifecycl
 
 | Skill | Description |
 |-------|-------------|
-| `implement-plan` | Explore codebase and produce acceptance criteria, test cases, and implementation plan. |
-| `implement-code` | Write tests first, implement, self-review, commit, and create PR. |
+| `implement-code` | Explore codebase, plan, write tests first, implement, self-review, commit, and create PR. |
 | `implement-address` | Address filtered review findings from the referee's action plan. |
 | `verify` | End-to-end verification — exercises the real running system, checks downstream effects, regression tests existing flows. |
 
