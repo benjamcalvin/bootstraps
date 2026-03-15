@@ -70,6 +70,11 @@ def test_load_prompt_missing_template() -> None:
         load_prompt("nonexistent-template")
 
 
+def test_load_prompt_rejects_path_traversal() -> None:
+    with pytest.raises(ValueError, match="resolves outside prompts directory"):
+        load_prompt("../../etc/passwd")
+
+
 def test_load_prompt_no_variables() -> None:
     result = load_prompt("plan")
     assert "$TASK_DESCRIPTION" in result  # Variable not replaced without kwarg

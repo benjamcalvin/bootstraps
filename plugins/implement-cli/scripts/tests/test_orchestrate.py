@@ -54,6 +54,14 @@ class TestBuildConfig:
         config = build_config(self._make_args(task="#abc not a number"))
         assert config.issue_number is None
 
+    def test_bare_hash_does_not_crash(self) -> None:
+        config = build_config(self._make_args(task="#"))
+        assert config.issue_number is None
+
+    def test_hash_with_spaces_does_not_crash(self) -> None:
+        config = build_config(self._make_args(task="# "))
+        assert config.issue_number is None
+
     def test_pr_number_from_args(self) -> None:
         config = build_config(self._make_args(pr=99))
         assert config.pr_number == 99

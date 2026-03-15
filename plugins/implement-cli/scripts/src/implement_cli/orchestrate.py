@@ -48,7 +48,7 @@ def build_config(args: argparse.Namespace) -> OrchestratorConfig:
     if task.startswith("#"):
         try:
             issue_number = int(task.lstrip("#").split()[0])
-        except ValueError:
+        except (ValueError, IndexError):
             pass
 
     reviewers = args.reviewers or list(DEFAULT_REVIEWERS)
