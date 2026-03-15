@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from implement_cli.types import Phase
 
-# Display order for phases
-_PHASE_ORDER = ["plan", "implement", "review", "address", "docs", "verify", "merge"]
+# Display order derived from the Phase enum to prevent drift
+_PHASE_ORDER = [p.value for p in Phase]
 
 
 def format_summary(data: dict) -> str:

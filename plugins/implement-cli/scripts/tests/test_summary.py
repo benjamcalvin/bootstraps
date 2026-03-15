@@ -155,6 +155,44 @@ class TestFormatSummary:
         assert phase_lines[1].startswith("implement")
         assert phase_lines[2].startswith("merge")
 
+    def test_none_cost_and_duration(self):
+        """None cost/duration should be treated as zero."""
+        data = _make_run_context([{
+            "session_id": "s1",
+            "phase": "plan",
+            "role": "planner",
+            "cost_usd": None,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "duration_ms": None,
+            "is_error": False,
+            "depth": 1,
+        }])
+        result = format_summary(data)
+
+        assert "$0.00" in result
+        assert "0s" in result
+        assert "ALL PHASES PASSED" in result
+
+    def test_unknown_phase_names(self):
+        """Unknown phases should appear after canonical phases."""
+        data = _make_run_context([
+            _session("plan", "planner"),
+            _session("custom-phase", "custom-role"),
+            _session("another-phase", "another-role"),
+        ])
+        result = format_summary(data)
+        lines = result.split("\n")
+
+        phase_lines = [l for l in lines if any(
+            l.startswith(p) for p in ["plan", "custom-phase", "another-phase"]
+        )]
+        assert len(phase_lines) == 3
+        assert phase_lines[0].startswith("plan")
+        # Unknown phases come after canonical ones, sorted alphabetically
+        assert phase_lines[1].startswith("another-phase")
+        assert phase_lines[2].startswith("custom-phase")
+
 
 class TestSummarySubcommand:
     def test_help_includes_summary(self, capsys):
@@ -195,3 +233,6 @@ class TestSummarySubcommand:
         assert "plan" in captured.out
         assert "implement" in captured.out
         assert "ALL PHASES PASSED" in captured.out
+        # No JSON blob should be appended to stdout
+        assert '"success"' not in captured.out
+        assert '"tracking"' not in captured.out

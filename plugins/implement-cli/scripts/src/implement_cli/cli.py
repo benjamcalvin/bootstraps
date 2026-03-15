@@ -208,6 +208,11 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
     _configure_logging(args.verbose)
 
+    # Read-only commands bypass RunContext creation and the tracking epilogue
+    if args.command == "summary":
+        _cmd_summary(args)
+        return
+
     run_context = RunContext(
         max_depth=args.max_depth,
         max_cost_usd=args.max_cost,
@@ -220,8 +225,6 @@ def main(argv: list[str] | None = None) -> None:
             result = asyncio.run(_cmd_run_reviewers(args, run_context))
         elif args.command == "orchestrate":
             result = asyncio.run(_cmd_orchestrate(args, run_context))
-        elif args.command == "summary":
-            result = _cmd_summary(args)
         elif args.command == "debug":
             result = _cmd_debug(args, run_context)
         else:
@@ -351,7 +354,7 @@ async def _cmd_orchestrate(args: argparse.Namespace, run_context: RunContext) ->
     }
 
 
-def _cmd_summary(args: argparse.Namespace) -> dict:
+def _cmd_summary(args: argparse.Namespace) -> None:
     """Print a human-readable summary of a completed run."""
     from implement_cli.summary import format_summary
 
@@ -367,7 +370,6 @@ def _cmd_summary(args: argparse.Namespace) -> dict:
         sys.exit(1)
 
     print(format_summary(data))
-    return {"success": True}
 
 
 def _cmd_debug(args: argparse.Namespace, run_context: RunContext) -> dict:
