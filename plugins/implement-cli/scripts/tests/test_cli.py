@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from implement_cli.cli import _resolve_prompt, main
+from implement_cli.cli import _load_version, _resolve_prompt, main
 
 
 class TestCliHelp:
@@ -178,3 +178,113 @@ class TestDebugSessions:
         assert output["total_cost_usd"] == 1.23
         assert len(output["sessions"]) == 1
         assert output["sessions"][0]["session_id"] == "s1"
+
+
+class TestVersion:
+    """Tests for the --version flag."""
+
+    def test_version_flag_exits_zero(self) -> None:
+        with pytest.raises(SystemExit) as exc_info:
+            main(["--version"])
+        assert exc_info.value.code == 0
+
+    def test_version_flag_prints_version(self, capsys) -> None:
+        with pytest.raises(SystemExit):
+            main(["--version"])
+        captured = capsys.readouterr()
+        assert captured.out.startswith("implement-cli ")
+        # Version should be a semver-like string
+        version = captured.out.strip().split(" ", 1)[1]
+        parts = version.split(".")
+        assert len(parts) == 3
+        assert all(p.isdigit() for p in parts)
+
+    def test_version_flag_with_subcommand(self) -> None:
+        """--version before a subcommand should still print version and exit 0."""
+        with pytest.raises(SystemExit) as exc_info:
+            main(["--version", "run-agent", "hello"])
+        assert exc_info.value.code == 0
+
+    def test_version_flag_after_subcommand_is_ignored(self) -> None:
+        """--version after a subcommand should NOT trigger version output."""
+        # After the subcommand token, --version is just a positional arg
+        # This should fail because 'run-agent' expects a prompt, not --version handling
+        with pytest.raises(SystemExit) as exc_info:
+            main(["run-agent", "--version"])
+        # argparse will treat --version as unrecognised or the prompt;
+        # either way it should NOT exit 0 with version text
+        assert exc_info.value.code != 0
+
+    def test_load_version_returns_string(self) -> None:
+        version = _load_version()
+        assert isinstance(version, str)
+        assert version != "unknown"
+        assert "." in version
+
+    def test_load_version_returns_unknown_when_missing(self, monkeypatch) -> None:
+        """_load_version() returns 'unknown' when plugin.json does not exist."""
+        import implement_cli.cli as cli_module
+
+        # Make __file__ resolve to a nonexistent directory so plugin.json won't be found
+        monkeypatch.setattr(cli_module, "__file__", "/nonexistent/a/b/c/cli.py")
+        assert _load_version() == "unknown"
+
+
+class TestArgValidation:
+    """Tests for numeric argument validation (--max-cost, --max-depth)."""
+
+    def test_max_cost_zero_exits_2(self, capsys) -> None:
+        with pytest.raises(SystemExit) as exc_info:
+            main(["--max-cost", "0", "run-agent", "hello"])
+        assert exc_info.value.code == 2
+        captured = capsys.readouterr()
+        assert "--max-cost must be a positive number" in captured.err
+
+    def test_max_cost_negative_exits_2(self, capsys) -> None:
+        with pytest.raises(SystemExit) as exc_info:
+            main(["--max-cost", "-5", "run-agent", "hello"])
+        assert exc_info.value.code == 2
+        captured = capsys.readouterr()
+        assert "--max-cost must be a positive number" in captured.err
+        assert "-5" in captured.err
+
+    def test_max_depth_zero_exits_2(self, capsys) -> None:
+        with pytest.raises(SystemExit) as exc_info:
+            main(["--max-depth", "0", "run-agent", "hello"])
+        assert exc_info.value.code == 2
+        captured = capsys.readouterr()
+        assert "--max-depth must be >= 1" in captured.err
+
+    def test_max_depth_negative_exits_2(self, capsys) -> None:
+        with pytest.raises(SystemExit) as exc_info:
+            main(["--max-depth", "-3", "run-agent", "hello"])
+        assert exc_info.value.code == 2
+        captured = capsys.readouterr()
+        assert "--max-depth must be >= 1" in captured.err
+        assert "-3" in captured.err
+
+    def test_max_cost_nan_exits_2(self, capsys) -> None:
+        with pytest.raises(SystemExit) as exc_info:
+            main(["--max-cost", "nan", "run-agent", "hello"])
+        assert exc_info.value.code == 2
+        captured = capsys.readouterr()
+        assert "--max-cost must be a positive number" in captured.err
+
+    def test_max_cost_inf_exits_2(self, capsys) -> None:
+        with pytest.raises(SystemExit) as exc_info:
+            main(["--max-cost", "inf", "run-agent", "hello"])
+        assert exc_info.value.code == 2
+        captured = capsys.readouterr()
+        assert "--max-cost must be a positive number" in captured.err
+
+    def test_valid_max_cost_accepted(self, capsys) -> None:
+        """A small positive --max-cost should pass validation (dry-run avoids agents)."""
+        main(["--max-cost", "0.01", "--dry-run", "run-agent", "hello"])
+        captured = capsys.readouterr()
+        assert "=== DRY RUN: run-agent ===" in captured.out
+
+    def test_valid_max_depth_accepted(self, capsys) -> None:
+        """--max-depth 1 should pass validation (dry-run avoids agents)."""
+        main(["--max-depth", "1", "--dry-run", "run-agent", "hello"])
+        captured = capsys.readouterr()
+        assert "=== DRY RUN: run-agent ===" in captured.out

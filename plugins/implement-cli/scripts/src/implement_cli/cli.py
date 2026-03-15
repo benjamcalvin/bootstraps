@@ -14,6 +14,7 @@ import argparse
 import asyncio
 import json
 import logging
+import math
 import sys
 from pathlib import Path
 
@@ -22,8 +23,28 @@ from implement_cli.tracking import CostLimitError, RecursionLimitError, RunConte
 logger = logging.getLogger(__name__)
 
 
+def _load_version() -> str:
+    """Read the version string from plugin.json."""
+    plugin_json = Path(__file__).resolve().parent.parent.parent.parent / ".claude-plugin" / "plugin.json"
+    try:
+        data = json.loads(plugin_json.read_text())
+        return data["version"]
+    except (OSError, KeyError, json.JSONDecodeError):
+        return "unknown"
+
+
 def main(argv: list[str] | None = None) -> None:
     """Top-level CLI entry point."""
+    # Handle --version before argparse so it works without a subcommand.
+    # Only scan argv before the first non-flag token (subcommand).
+    args_to_parse = argv if argv is not None else sys.argv[1:]
+    for arg in args_to_parse:
+        if not arg.startswith("--"):
+            break
+        if arg == "--version":
+            print(f"implement-cli {_load_version()}")
+            sys.exit(0)
+
     parser = argparse.ArgumentParser(
         prog="implement-cli",
         description="CLI-based implementation lifecycle orchestrator",
@@ -212,6 +233,20 @@ def main(argv: list[str] | None = None) -> None:
 
     args = parser.parse_args(argv)
     _configure_logging(args.verbose)
+
+    # Validate numeric arguments
+    if not math.isfinite(args.max_cost) or args.max_cost <= 0:
+        print(
+            f"Error: --max-cost must be a positive number, got: {args.max_cost}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    if args.max_depth < 1:
+        print(
+            f"Error: --max-depth must be >= 1, got: {args.max_depth}",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
     # Read-only commands bypass RunContext creation and the tracking epilogue
     if args.command == "summary":
