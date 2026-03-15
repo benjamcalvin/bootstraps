@@ -9,6 +9,7 @@ from implement_cli.tracking import (
     RecursionLimitError,
     RunContext,
     SessionRecord,
+    create_run_dir,
 )
 
 
@@ -132,6 +133,57 @@ class TestRunContext:
     def test_check_cost_within_limit(self) -> None:
         ctx = RunContext(max_cost_usd=10.0)
         ctx.check_cost()  # Should not raise
+
+
+class TestRunDir:
+    def test_create_run_dir_unique(self) -> None:
+        dir1 = create_run_dir()
+        dir2 = create_run_dir()
+        assert dir1 != dir2
+        assert dir1.exists()
+        assert dir2.exists()
+
+    def test_create_run_dir_prefix(self) -> None:
+        d = create_run_dir(prefix="test-prefix")
+        assert "test-prefix" in d.name
+
+    def test_run_context_has_run_dir(self) -> None:
+        ctx = RunContext()
+        assert ctx.run_dir.exists()
+        assert ctx.run_dir.is_dir()
+
+    def test_artifact_path(self) -> None:
+        ctx = RunContext()
+        path = ctx.artifact_path("findings-round-1.md")
+        assert path.parent == ctx.run_dir
+        assert path.name == "findings-round-1.md"
+
+    def test_artifact_path_no_collision(self) -> None:
+        ctx1 = RunContext()
+        ctx2 = RunContext()
+        p1 = ctx1.artifact_path("findings.md")
+        p2 = ctx2.artifact_path("findings.md")
+        assert p1 != p2
+
+    def test_summary_includes_run_dir(self) -> None:
+        ctx = RunContext()
+        summary = ctx.summary()
+        assert "run_dir" in summary
+        assert summary["run_dir"] == str(ctx.run_dir)
+
+    def test_save_defaults_to_run_dir(self) -> None:
+        ctx = RunContext()
+        ctx.record_session(SessionRecord(
+            session_id="s1",
+            phase="review",
+            role="reviewer",
+            cost_usd=0.1,
+        ))
+        saved_path = ctx.save()
+        assert saved_path == ctx.run_dir / "run_context.json"
+        assert saved_path.exists()
+        data = json.loads(saved_path.read_text())
+        assert data["total_sessions"] == 1
 
 
 class TestSessionRecord:

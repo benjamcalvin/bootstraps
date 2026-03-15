@@ -13,7 +13,6 @@ from __future__ import annotations
 import argparse
 import logging
 import re
-import tempfile
 from pathlib import Path
 
 from implement_cli.address import run_addresser
@@ -217,7 +216,7 @@ async def _run_review_loop(
                 summary=f"Review loop completed in {round_num} round(s) with no actionable findings.",
             )
 
-        findings_path = Path(tempfile.gettempdir()) / f"implement-findings-pr-{pr_number}-round-{round_num}.md"
+        findings_path = ctx.artifact_path(f"findings-pr-{pr_number}-round-{round_num}.md")
         findings_path.write_text(all_text)
 
         await run_addresser(
@@ -276,7 +275,7 @@ async def _run_docs_gate(
                 summary=f"Docs compliance gate passed in {round_num} round(s).",
             )
 
-        findings_path = Path(tempfile.gettempdir()) / f"implement-docs-findings-pr-{pr_number}-round-{round_num}.md"
+        findings_path = ctx.artifact_path(f"docs-findings-pr-{pr_number}-round-{round_num}.md")
         findings_path.write_text(docs_result.text)
 
         await run_addresser(

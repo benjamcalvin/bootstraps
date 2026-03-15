@@ -32,36 +32,42 @@ You are the **orchestrator**. You drive the lifecycle, make referee decisions, a
 
 ### CLI Reference
 
-The `implement-cli` tool lives in `<plugin-dir>/scripts/`. All commands output JSON with a `tracking` section containing session IDs, costs, and token usage. Always inspect the tracking section to monitor costs and identify sessions for debugging.
+All commands output JSON with a `tracking` section containing session IDs, costs, token usage, and the `run_dir` — a unique directory for each invocation that holds all artifacts (findings files, run context). This prevents collisions between concurrent runs.
+
+Resolve the wrapper script path first — it lives at `run.sh` in the plugin root:
 
 ```bash
-SCRIPTS_DIR="<plugin-scripts-dir>"
+# Find the plugin directory (two levels up from this SKILL.md)
+PLUGIN_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+CLI="$PLUGIN_DIR/run.sh"
+```
 
+If the plugin is installed via the marketplace, the path will be in the plugin cache. Use `find` or the known cache path to locate it.
+
+```bash
 # Run a single agent with a prompt
-uv run --directory "$SCRIPTS_DIR" implement-cli run-agent "prompt" \
+"$CLI" run-agent "prompt" \
   --phase implement --role implementer --cwd "$(pwd)" \
   [--context-files file1.md file2.md] \
   [--session-id <resume-id>] \
   [--model <model>] [--tools Read Write Bash]
 
 # Run a single agent with prompt from a file
-uv run --directory "$SCRIPTS_DIR" implement-cli run-agent \
-  --prompt-file /tmp/task-description.md \
+"$CLI" run-agent --prompt-file /tmp/task-description.md \
   --phase implement --role implementer --cwd "$(pwd)"
 
 # Run parallel reviewers
-uv run --directory "$SCRIPTS_DIR" implement-cli run-reviewers \
-  --pr 45 --round 1 --cwd "$(pwd)" \
+"$CLI" run-reviewers --pr 45 --round 1 --cwd "$(pwd)" \
   [--reviewers review-correctness review-security]
 
 # Debug: list sessions from a run
-uv run --directory "$SCRIPTS_DIR" implement-cli debug sessions /tmp/implement-cli-run-*.json
+"$CLI" debug sessions <run_dir>/run_context.json
 
 # Debug: inspect a specific session
-uv run --directory "$SCRIPTS_DIR" implement-cli debug session <session-id> --cwd "$(pwd)"
+"$CLI" debug session <session-id> --cwd "$(pwd)"
 
 # Debug: resume a session with follow-up
-uv run --directory "$SCRIPTS_DIR" implement-cli debug resume <session-id> "What happened with the null check?" --cwd "$(pwd)"
+"$CLI" debug resume <session-id> "What happened with the null check?" --cwd "$(pwd)"
 
 # Global flags (apply to all commands)
 # --max-depth 5       Maximum recursion depth (default: 5)
@@ -94,10 +100,11 @@ Parse `$ARGUMENTS` to determine **what to work on** and **what to do**.
 
 ### Phase 1-3: Plan, Implement & Create PR
 
-Write the full task description (with acceptance criteria from the issue, if any) to a temp file:
+Write the full task description to a file. Use a unique run directory to prevent collisions with concurrent runs:
 
 ```bash
-cat > /tmp/implement-task.md <<'TASK'
+RUN_DIR=$(mktemp -d -t implement-cli-XXXXXX)
+cat > "$RUN_DIR/implement-task.md" <<'TASK'
 <task description with acceptance criteria>
 TASK
 ```
@@ -105,8 +112,8 @@ TASK
 Invoke the implementer:
 
 ```bash
-uv run --directory "$SCRIPTS_DIR" implement-cli run-agent \
-  --prompt-file /tmp/implement-task.md \
+"$CLI" run-agent \
+  --prompt-file "$RUN_DIR/implement-task.md" \
   --phase implement --role implementer --cwd "$(pwd)" -v
 ```
 
@@ -131,7 +138,7 @@ gh issue comment <N> --body "Implementation PR created: #<pr-number>. Entering r
 Invoke parallel reviewers:
 
 ```bash
-uv run --directory "$SCRIPTS_DIR" implement-cli run-reviewers \
+"$CLI" run-reviewers \
   --pr <PR> --round <N> --cwd "$(pwd)" -v
 ```
 
@@ -156,15 +163,21 @@ If zero findings survive, post `"Review Round <N>: no actionable findings"` and 
 
 #### Step C: Post Decisions & Write Findings
 
-Post referee decisions to GitHub. Write filtered findings to a temp file.
+Post referee decisions to GitHub. Write filtered findings to a file in the run directory:
+
+```bash
+cat > "$RUN_DIR/findings-round-<N>.md" <<'EOF'
+<filtered findings table>
+EOF
+```
 
 #### Step D: Invoke Addresser
 
 ```bash
-uv run --directory "$SCRIPTS_DIR" implement-cli run-agent \
-  --prompt-file /tmp/address-prompt.md \
+"$CLI" run-agent \
+  --prompt-file "$RUN_DIR/address-prompt.md" \
   --phase address --role addresser --cwd "$(pwd)" \
-  --context-files /tmp/implement-findings-pr-<PR>-round-<N>.md -v
+  --context-files "$RUN_DIR/findings-round-<N>.md" -v
 ```
 
 #### Step E: Next Round or Exit
@@ -177,10 +190,10 @@ If a reviewer or addresser produces unexpected results, use the debug commands:
 
 ```bash
 # See what happened in the session
-uv run --directory "$SCRIPTS_DIR" implement-cli debug session <session-id>
+"$CLI" debug session <session-id>
 
 # Ask a follow-up
-uv run --directory "$SCRIPTS_DIR" implement-cli debug resume <session-id> \
+"$CLI" debug resume <session-id> \
   "Why did you flag the null check as a bug? It's guarded by the validator." \
   --cwd "$(pwd)"
 ```
@@ -192,7 +205,7 @@ uv run --directory "$SCRIPTS_DIR" implement-cli debug resume <session-id> \
 Same pattern as Phase 4, but only `review-docs`:
 
 ```bash
-uv run --directory "$SCRIPTS_DIR" implement-cli run-reviewers \
+"$CLI" run-reviewers \
   --pr <PR> --round 1 --reviewers review-docs --cwd "$(pwd)" -v
 ```
 
@@ -201,8 +214,8 @@ uv run --directory "$SCRIPTS_DIR" implement-cli run-reviewers \
 ### Phase 5: Verification
 
 ```bash
-uv run --directory "$SCRIPTS_DIR" implement-cli run-agent \
-  --prompt-file /tmp/verify-prompt.md \
+"$CLI" run-agent \
+  --prompt-file "$RUN_DIR/verify-prompt.md" \
   --phase verify --role verifier --cwd "$(pwd)" -v
 ```
 
@@ -211,8 +224,7 @@ uv run --directory "$SCRIPTS_DIR" implement-cli run-agent \
 ### Phase 6: Merge
 
 ```bash
-uv run --directory "$SCRIPTS_DIR" implement-cli run-agent \
-  --prompt-file /tmp/merge-prompt.md \
+"$CLI" run-agent --prompt-file "$RUN_DIR/merge-prompt.md" \
   --phase merge --role merger --cwd "$(pwd)" -v
 ```
 
@@ -225,6 +237,7 @@ Every CLI invocation returns a `tracking` section:
 ```json
 {
   "tracking": {
+    "run_dir": "/tmp/implement-cli-abc123",
     "total_cost_usd": 2.34,
     "total_input_tokens": 150000,
     "total_output_tokens": 25000,
@@ -245,9 +258,9 @@ Every CLI invocation returns a `tracking` section:
 }
 ```
 
-Monitor `total_cost_usd` throughout the lifecycle. If costs are unexpectedly high, investigate using `debug sessions` and `debug session` commands.
+**Run directory isolation:** Each invocation creates a unique directory (shown in `run_dir`) for all artifacts — findings files, prompts, run context. This prevents collisions between concurrent runs. The `run_context.json` file inside the run directory has the full session history for debugging.
 
-Run context is also saved to `/tmp/implement-cli-run-<timestamp>.json` for later inspection.
+Monitor `total_cost_usd` throughout the lifecycle. If costs are unexpectedly high, investigate using `debug sessions` and `debug session` commands.
 
 ---
 

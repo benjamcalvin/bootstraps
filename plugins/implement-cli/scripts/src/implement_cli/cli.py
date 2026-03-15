@@ -227,9 +227,8 @@ def main(argv: list[str] | None = None) -> None:
 
     print(json.dumps(result, indent=2))
 
-    # Save run context for later debugging
-    context_path = Path("/tmp") / f"implement-cli-run-{int(run_context._start_time)}.json"
-    run_context.save(context_path)
+    # Save run context inside the run directory for later debugging
+    run_context.save()
 
     if isinstance(result, dict) and not result.get("success", True):
         sys.exit(1)
