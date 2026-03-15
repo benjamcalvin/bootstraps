@@ -7,7 +7,7 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "2.3.1"
+  version: "2.5.0"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -156,17 +156,16 @@ For each finding, decide:
 
 | Decision | When to use | Effect |
 |----------|-------------|--------|
-| **Accept** | Finding is valid — you verified by reading the code | Include in addresser action plan at reviewer's severity |
-| **Downgrade** | Finding has merit but severity is overstated | Include at lower severity with your reasoning |
-| **Reject** | Finding is incorrect, irrelevant, or pure style preference | Exclude from action plan; record your reasoning |
+| **Accept** (default) | Finding has merit — you verified by reading the code | Include in addresser action plan at the reviewer's original severity |
+| **Reject** | Finding is incorrect, irrelevant, or ill-considered | Exclude from action plan; record your reasoning |
 
 **Default postures** (err on the side of accepting):
-- **Action Required findings:** Accept unless you can demonstrate the code is correct by reading it.
+- Default to **accept** unless you can demonstrate the finding is wrong by reading the code.
 - **Security findings:** Accept by default. Reject only with concrete evidence that the concern does not apply.
-- **Convention findings:** Accept if the code violates a documented project standard. Reject if it is personal preference not backed by a standard.
-- **Vague "consider" / "might" language:** Downgrade to Minor unless you independently agree it matters.
+- **Convention findings:** Accept if the code violates a documented standard. Reject if purely stylistic preference with no backing standard.
+- **Vague "consider" / "might" language:** Accept if you independently agree it matters. Reject if not.
 
-Produce a **filtered action plan** containing only Accepted and Downgraded findings.
+Produce a **filtered action plan** containing only accepted findings.
 
 **Referee mindset:** Think like a principal engineer. Good review isn't just about catching bugs — it's about raising the bar. When the reviewer identifies a legitimate improvement (consolidating duplication, using a more idiomatic API, improving test structure), accept it if it's in scope and doesn't incur technical debt. "Recommended" doesn't mean "optional" — it means "the code would be better for it." Embrace going the extra mile on quality; reject only what is truly out of scope, incorrect, or adds unnecessary complexity.
 
@@ -182,7 +181,7 @@ gh pr comment <number> --body "$(cat <<'EOF'
 
 | # | Finding | Reviewer Severity | Decision | Reasoning |
 |---|---------|-------------------|----------|-----------|
-| 1 | <brief description> | Action Required / Recommended / Minor | Accept / Downgrade to X / Reject | <why> |
+| 1 | <brief description> | Action Required / Recommended / Minor | Accept / Reject | <why> |
 | ... | ... | ... | ... | ... |
 
 **Findings forwarded to addresser:** <count>
@@ -190,7 +189,7 @@ EOF
 )"
 ```
 
-Write the filtered findings (accepted + downgraded only) to a temp file for the addresser:
+Write the filtered findings (accepted only) to a temp file for the addresser:
 
 ```bash
 cat > /tmp/implement-findings-pr-<PR>-round-<N>.md <<'EOF'
@@ -253,12 +252,11 @@ The docs reviewer fetches PR context, loads project documentation standards, and
 
 #### Step B: Referee Evaluation
 
-Apply the same accept/downgrade/reject evaluation as Phase 4. Read the relevant docs and code yourself.
+Apply the same accept/reject evaluation as Phase 4. Read the relevant docs and code yourself.
 
 | Decision | When to use | Effect |
 |----------|-------------|--------|
-| **Accept** | Finding is valid — you verified by reading the docs/code | Include in addresser action plan at reviewer's severity |
-| **Downgrade** | Finding has merit but severity is overstated | Include at lower severity with your reasoning |
+| **Accept** (default) | Finding has merit — you verified by reading the docs/code | Include in addresser action plan at the reviewer's original severity |
 | **Reject** | Finding is incorrect, irrelevant, or demands docs for trivial changes | Exclude from action plan; record your reasoning |
 
 **If zero findings survive filtering**, post a brief PR comment — `"Docs Compliance Gate: no actionable findings — proceeding to verification."` — then skip to Phase 5.
@@ -273,7 +271,7 @@ gh pr comment <number> --body "$(cat <<'EOF'
 
 | # | Finding | Reviewer Severity | Decision | Reasoning |
 |---|---------|-------------------|----------|-----------|
-| 1 | <brief description> | Action Required / Recommended / Minor | Accept / Downgrade to X / Reject | <why> |
+| 1 | <brief description> | Action Required / Recommended / Minor | Accept / Reject | <why> |
 | ... | ... | ... | ... | ... |
 
 **Findings forwarded to addresser:** <count>

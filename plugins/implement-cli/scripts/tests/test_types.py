@@ -28,6 +28,11 @@ def test_severity_values() -> None:
     assert Severity.MINOR.value == "Minor"
 
 
+def test_finding_decision_values() -> None:
+    assert FindingDecision.ACCEPT.value == "Accept"
+    assert FindingDecision.REJECT.value == "Reject"
+
+
 def test_finding_creation() -> None:
     finding = Finding(
         description="Missing null check",
@@ -63,12 +68,27 @@ def test_referee_decision() -> None:
     )
     decision = RefereeDecision(
         finding=finding,
-        decision=FindingDecision.DOWNGRADE,
-        reasoning="Severity overstated",
-        adjusted_severity=Severity.MINOR,
+        decision=FindingDecision.REJECT,
+        reasoning="Finding is incorrect",
     )
-    assert decision.decision == FindingDecision.DOWNGRADE
-    assert decision.adjusted_severity == Severity.MINOR
+    assert decision.decision == FindingDecision.REJECT
+    assert decision.reasoning == "Finding is incorrect"
+
+
+def test_referee_decision_accept() -> None:
+    finding = Finding(
+        description="Missing error handling",
+        severity=Severity.RECOMMENDED,
+        reviewer="review-correctness",
+    )
+    decision = RefereeDecision(
+        finding=finding,
+        decision=FindingDecision.ACCEPT,
+        reasoning="Valid finding that should be addressed",
+    )
+    assert decision.finding == finding
+    assert decision.decision == FindingDecision.ACCEPT
+    assert decision.reasoning == "Valid finding that should be addressed"
 
 
 def test_review_round_result_defaults() -> None:

@@ -6,7 +6,7 @@ agent: general-purpose
 argument-hint: <pr-number> <round-number> <findings-file-path>
 license: MIT
 metadata:
-  version: "2.0.0"
+  version: "2.0.1"
   tags: ["implement", "address", "subagent"]
   author: benjamcalvin
 ---
@@ -22,7 +22,7 @@ Address filtered review findings on PR #$0, round $1.
 
 ## Instructions
 
-You are the **addresser** for the `/implement` workflow. You fix issues identified by the review, run tests, and push fixes. The filtered findings above contain only findings the referee accepted or downgraded — address these and only these.
+You are the **addresser** for the `/implement` workflow. You fix issues identified by the review, run tests, and push fixes. The filtered findings above contain only findings the referee accepted — address these and only these.
 
 **Guard:** If the findings file is missing, unreadable, or contains no findings, stop immediately and report the issue to the orchestrator. Do not proceed with an empty or absent findings list.
 
