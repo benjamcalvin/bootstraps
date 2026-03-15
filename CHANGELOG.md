@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## implement-cli [1.1.2] - 2026-03-15
+
+### Fixed
+
+- SKILL.md path resolution: replaced `$(dirname "$0")` (invalid in skill context) with Glob-based discovery
+- `validate-all.sh` now works from any directory via `cd "$(dirname "${BASH_SOURCE[0]}")"` guard
+
 ## bootstrap-docs [1.2.0] - 2026-03-10
 
 ### Added
