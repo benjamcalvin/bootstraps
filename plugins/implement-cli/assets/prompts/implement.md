@@ -6,6 +6,10 @@ Implement the following task. Linked issue number: $ISSUE_NUMBER (0 = none).
 
 $TASK_DESCRIPTION
 
+## Plan
+
+$PLAN
+
 ## Instructions
 
 Read project-level instructions (AGENTS.md, CLAUDE.md) for critical invariants.

@@ -250,6 +250,9 @@ Every CLI invocation returns a `tracking` section:
         "phase": "review",
         "role": "review-correctness",
         "cost_usd": 0.45,
+        "input_tokens": 30000,
+        "output_tokens": 5000,
+        "duration_ms": 36000,
         "is_error": false,
         "depth": 1
       }

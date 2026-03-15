@@ -38,12 +38,8 @@ async def run_implementer(
     variables: dict[str, str] = {
         "TASK_DESCRIPTION": task_description,
         "ISSUE_NUMBER": str(issue_number or 0),
+        "PLAN": plan or "No plan provided. Explore the codebase and plan your approach.",
     }
-
-    if plan:
-        variables["PLAN"] = plan
-    if skip_planning:
-        variables["SKIP_PLANNING"] = "true"
 
     prompt = load_prompt("implement", **variables)
 
