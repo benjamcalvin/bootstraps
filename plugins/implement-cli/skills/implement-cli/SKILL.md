@@ -8,7 +8,7 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "1.1.4"
+  version: "1.2.0"
   tags: ["implement", "cli", "agent-sdk", "multi-provider", "lifecycle"]
   author: benjamcalvin
 ---
@@ -158,9 +158,8 @@ Parse JSON output — each reviewer's result is in `reviewers.<name>`:
 
 | Decision | When to use |
 |----------|-------------|
-| **Accept** | Valid — you verified by reading the code |
-| **Downgrade** | Has merit but severity is overstated |
-| **Reject** | Incorrect, irrelevant, or pure style preference |
+| **Accept** (default) | Finding has merit — you verified by reading the code |
+| **Reject** | Incorrect, irrelevant, or ill-considered |
 
 If zero findings survive, post `"Review Round <N>: no actionable findings"` and skip to Phase 4.5.
 

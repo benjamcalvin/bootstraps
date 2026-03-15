@@ -63,12 +63,10 @@ def test_referee_decision() -> None:
     )
     decision = RefereeDecision(
         finding=finding,
-        decision=FindingDecision.DOWNGRADE,
-        reasoning="Severity overstated",
-        adjusted_severity=Severity.MINOR,
+        decision=FindingDecision.REJECT,
+        reasoning="Finding is incorrect",
     )
-    assert decision.decision == FindingDecision.DOWNGRADE
-    assert decision.adjusted_severity == Severity.MINOR
+    assert decision.decision == FindingDecision.REJECT
 
 
 def test_review_round_result_defaults() -> None:

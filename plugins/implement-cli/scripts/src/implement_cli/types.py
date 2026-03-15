@@ -48,7 +48,6 @@ class Severity(Enum):
 
 class FindingDecision(Enum):
     ACCEPT = "Accept"
-    DOWNGRADE = "Downgrade"
     REJECT = "Reject"
 
 
@@ -71,7 +70,6 @@ class RefereeDecision:
     finding: Finding
     decision: FindingDecision
     reasoning: str
-    adjusted_severity: Severity | None = None
 
 
 @dataclass

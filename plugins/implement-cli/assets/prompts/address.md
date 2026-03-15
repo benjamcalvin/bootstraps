@@ -9,7 +9,7 @@ Read filtered findings: `cat $FINDINGS_PATH`
 
 ## Instructions
 
-You are the **addresser**. Fix issues identified by the review. The filtered findings contain only accepted/downgraded findings.
+You are the **addresser**. Fix issues identified by the review. The filtered findings contain only accepted findings.
 
 If the findings file is missing or empty, stop and report.
 
