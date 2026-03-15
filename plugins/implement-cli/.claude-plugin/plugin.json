@@ -1,7 +1,7 @@
 {
   "name": "implement-cli",
   "description": "CLI-based multi-provider implementation lifecycle using the Python Agent SDK for subprocess orchestration",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "author": {
     "name": "benjamcalvin"
   },
