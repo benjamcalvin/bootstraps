@@ -4,6 +4,7 @@ Subcommands:
     run-agent      Run a single agent with a prompt (from arg, file, or stdin).
     run-reviewers  Run specialist reviewers in parallel for a PR.
     orchestrate    Run the full lifecycle orchestrator.
+    summary        Print a human-readable summary of a completed run.
     debug          Inspect sessions from a previous run.
 """
 
@@ -148,6 +149,16 @@ def main(argv: list[str] | None = None) -> None:
     orch_parser.add_argument("--phases", nargs="*", default=None)
     orch_parser.add_argument("--pr", type=int, default=None)
 
+    # --- summary ---
+    summary_parser = subparsers.add_parser(
+        "summary",
+        help="Print a human-readable summary of a completed run",
+    )
+    summary_parser.add_argument(
+        "run_context_file",
+        help="Path to the run_context.json file",
+    )
+
     # --- debug ---
     debug_parser = subparsers.add_parser(
         "debug",
@@ -196,6 +207,11 @@ def main(argv: list[str] | None = None) -> None:
 
     args = parser.parse_args(argv)
     _configure_logging(args.verbose)
+
+    # Read-only commands bypass RunContext creation and the tracking epilogue
+    if args.command == "summary":
+        _cmd_summary(args)
+        return
 
     run_context = RunContext(
         max_depth=args.max_depth,
@@ -336,6 +352,24 @@ async def _cmd_orchestrate(args: argparse.Namespace, run_context: RunContext) ->
         ],
         "pr_number": next((r.pr_number for r in results if r.pr_number), None),
     }
+
+
+def _cmd_summary(args: argparse.Namespace) -> None:
+    """Print a human-readable summary of a completed run."""
+    from implement_cli.summary import format_summary
+
+    path = Path(args.run_context_file)
+    if not path.exists():
+        print(f"Error: file not found: {path}", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError as e:
+        print(f"Error: invalid JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    print(format_summary(data))
 
 
 def _cmd_debug(args: argparse.Namespace, run_context: RunContext) -> dict:
