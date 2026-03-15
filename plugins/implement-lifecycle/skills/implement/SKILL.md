@@ -213,9 +213,9 @@ The addresser will fix issues, run tests, commit, push, and return a summary.
 
 #### Step E: Next Round
 
-The addresser has pushed fixes. **Increment the round counter and return to Step A.**
+The addresser has pushed fixes. Check the escalation limit, then continue.
 
-Before returning, check the escalation limit: if the round counter has reached 10, escalate instead of continuing:
+1. **Check escalation limit:** If this was round 10 or higher, escalate — do **not** continue to another round:
 
 ```
 gh pr comment <number> --body "$(cat <<'EOF'
@@ -233,7 +233,7 @@ EOF
 
 Then stop and inform the user directly.
 
-**Otherwise, re-fetch the changed files summary and return to Step A immediately.** Do not pause, do not ask for confirmation, do not evaluate whether to continue — the loop continues unconditionally until a clean exit in Step B or the escalation limit here.
+2. **Continue:** Re-fetch the changed files summary, increment the round counter, and **return to Step A immediately.** Do not pause, do not ask for confirmation, do not evaluate whether to continue — the loop continues unconditionally until a clean exit in Step B or the escalation limit above.
 
 ---
 
