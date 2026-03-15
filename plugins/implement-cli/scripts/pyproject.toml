@@ -9,7 +9,7 @@ dependencies = [
 ]
 
 [project.scripts]
-implement-cli = "implement_cli.orchestrate:main"
+implement-cli = "implement_cli.cli:main"
 
 [dependency-groups]
 dev = [

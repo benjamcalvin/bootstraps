@@ -54,6 +54,9 @@ class TestAgentResult:
         result = AgentResult(text="test", session_id="s1")
         assert result.cost_usd is None
         assert result.is_error is False
+        assert result.input_tokens == 0
+        assert result.output_tokens == 0
+        assert result.duration_ms == 0
 
     def test_repr(self) -> None:
         result = AgentResult(text="short", session_id="s1")
@@ -68,3 +71,31 @@ class TestAgentResult:
             is_error=True,
         )
         assert result.is_error is True
+
+    def test_to_dict(self) -> None:
+        result = AgentResult(
+            text="output",
+            session_id="s1",
+            cost_usd=0.5,
+            input_tokens=1000,
+            output_tokens=500,
+            duration_ms=5000,
+        )
+        d = result.to_dict()
+        assert d["session_id"] == "s1"
+        assert d["cost_usd"] == 0.5
+        assert d["input_tokens"] == 1000
+        assert d["output_tokens"] == 500
+        assert d["duration_ms"] == 5000
+        assert d["text"] == "output"
+
+    def test_to_dict_with_tokens(self) -> None:
+        result = AgentResult(
+            text="test",
+            session_id="s1",
+            input_tokens=2000,
+            output_tokens=1000,
+        )
+        d = result.to_dict()
+        assert d["input_tokens"] == 2000
+        assert d["output_tokens"] == 1000

@@ -1,17 +1,18 @@
-"""Main orchestrator for the implement-cli lifecycle.
+"""Full lifecycle orchestrator.
 
 Coordinates all phases: plan, implement, review/address loop, docs gate,
 verify, and merge — delegating heavy work to claude-agent-sdk subprocesses.
+
+This module retains the end-to-end orchestration capability for future
+experimentation. The SKILL.md orchestrator should call targeted subcommands
+(run-agent, run-reviewers) rather than this full pipeline.
 """
 
 from __future__ import annotations
 
 import argparse
-import asyncio
-import json
 import logging
 import re
-import sys
 import tempfile
 from pathlib import Path
 
@@ -20,70 +21,11 @@ from implement_cli.implement import run_implementer
 from implement_cli.merge import run_merger
 from implement_cli.plan import run_planner
 from implement_cli.review import run_parallel_reviewers
+from implement_cli.tracking import RunContext
 from implement_cli.types import OrchestratorConfig, Phase, PhaseResult
 from implement_cli.verify import run_verifier
 
 logger = logging.getLogger(__name__)
-
-
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    """Parse command-line arguments."""
-    parser = argparse.ArgumentParser(description="implement-cli orchestrator")
-    parser.add_argument(
-        "task",
-        help="Task description, issue number (#N), or PR number",
-    )
-    parser.add_argument(
-        "--cwd",
-        default=".",
-        help="Working directory (default: current directory)",
-    )
-    parser.add_argument(
-        "--skip-planning",
-        action="store_true",
-        help="Skip the planning phase",
-    )
-    parser.add_argument(
-        "--reviewers",
-        nargs="*",
-        default=None,
-        help="Reviewer names to invoke (default: all four code reviewers)",
-    )
-    parser.add_argument(
-        "--max-rounds",
-        type=int,
-        default=10,
-        help="Maximum review/address rounds before escalation (default: 10)",
-    )
-    parser.add_argument(
-        "--phases",
-        nargs="*",
-        default=None,
-        help="Phases to run (default: all). Options: plan, implement, review, docs, verify, merge",
-    )
-    parser.add_argument(
-        "--pr",
-        type=int,
-        default=None,
-        help="Existing PR number (skip plan+implement, start at review)",
-    )
-    parser.add_argument(
-        "--verbose",
-        "-v",
-        action="store_true",
-        help="Enable verbose logging",
-    )
-    return parser.parse_args(argv)
-
-
-def configure_logging(verbose: bool) -> None:
-    """Configure logging for the orchestrator."""
-    level = logging.DEBUG if verbose else logging.INFO
-    logging.basicConfig(
-        level=level,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
 
 
 def parse_pr_number(text: str) -> int | None:
@@ -128,15 +70,21 @@ def build_config(args: argparse.Namespace) -> OrchestratorConfig:
     )
 
 
-async def run_lifecycle(config: OrchestratorConfig) -> list[PhaseResult]:
+async def run_lifecycle(
+    config: OrchestratorConfig,
+    *,
+    run_context: RunContext | None = None,
+) -> list[PhaseResult]:
     """Run the full implementation lifecycle.
 
     Args:
         config: Orchestrator configuration.
+        run_context: Optional RunContext for tracking costs and enforcing limits.
 
     Returns:
         A list of PhaseResult for each completed phase.
     """
+    ctx = run_context or RunContext()
     results: list[PhaseResult] = []
     pr_number = config.pr_number
 
@@ -146,6 +94,7 @@ async def run_lifecycle(config: OrchestratorConfig) -> list[PhaseResult]:
         plan_result = await run_planner(
             task_description=config.task_description,
             cwd=config.cwd,
+            run_context=ctx,
         )
         results.append(
             PhaseResult(
@@ -168,6 +117,7 @@ async def run_lifecycle(config: OrchestratorConfig) -> list[PhaseResult]:
             issue_number=config.issue_number,
             skip_planning=config.skip_planning,
             cwd=config.cwd,
+            run_context=ctx,
         )
 
         pr_number = parse_pr_number(impl_result.text)
@@ -188,7 +138,7 @@ async def run_lifecycle(config: OrchestratorConfig) -> list[PhaseResult]:
 
     # Phase 4: Review/Address Loop
     logger.info("=== Phase 4: Review/Address Loop ===")
-    review_phase = await _run_review_loop(config, pr_number)
+    review_phase = await _run_review_loop(config, pr_number, ctx)
     results.append(review_phase)
 
     if not review_phase.success:
@@ -197,7 +147,7 @@ async def run_lifecycle(config: OrchestratorConfig) -> list[PhaseResult]:
 
     # Phase 4.5: Docs Compliance Gate
     logger.info("=== Phase 4.5: Docs Compliance Gate ===")
-    docs_phase = await _run_docs_gate(config, pr_number)
+    docs_phase = await _run_docs_gate(config, pr_number, ctx)
     results.append(docs_phase)
 
     if not docs_phase.success:
@@ -206,7 +156,7 @@ async def run_lifecycle(config: OrchestratorConfig) -> list[PhaseResult]:
 
     # Phase 5: Verification
     logger.info("=== Phase 5: Verification ===")
-    verify_result = await run_verifier(pr_number=pr_number, cwd=config.cwd)
+    verify_result = await run_verifier(pr_number=pr_number, cwd=config.cwd, run_context=ctx)
     results.append(
         PhaseResult(
             phase=Phase.VERIFY,
@@ -223,7 +173,7 @@ async def run_lifecycle(config: OrchestratorConfig) -> list[PhaseResult]:
 
     # Phase 6: Merge
     logger.info("=== Phase 6: Merge ===")
-    merge_result = await run_merger(pr_number=pr_number, cwd=config.cwd)
+    merge_result = await run_merger(pr_number=pr_number, cwd=config.cwd, run_context=ctx)
     results.append(
         PhaseResult(
             phase=Phase.MERGE,
@@ -240,39 +190,25 @@ async def run_lifecycle(config: OrchestratorConfig) -> list[PhaseResult]:
 async def _run_review_loop(
     config: OrchestratorConfig,
     pr_number: int,
+    ctx: RunContext,
 ) -> PhaseResult:
-    """Run the review/address loop until clean or escalation.
-
-    Returns a PhaseResult indicating success (clean exit) or failure (escalation).
-    """
-    session_ids: dict[str, str] = {}
-
+    """Run the review/address loop until clean or escalation."""
     for round_num in range(1, config.max_review_rounds + 1):
         logger.info("--- Review Round %d ---", round_num)
 
-        # Step A: Run reviewers in parallel
         reviewer_results = await run_parallel_reviewers(
             config.reviewers,
             pr_number=pr_number,
             round_number=round_num,
             cwd=config.cwd,
+            run_context=ctx,
         )
 
-        # Collect session IDs
-        for name, result in reviewer_results.items():
-            if result.session_id:
-                session_ids[f"{name}-round-{round_num}"] = result.session_id
-
-        # Step B: Check if any findings exist
-        # The orchestrator (SKILL.md) does the actual refereeing. Here we just
-        # pass the raw reviewer output back for the orchestrator to evaluate.
         all_text = "\n\n".join(
             f"## {name}\n{result.text}" for name, result in reviewer_results.items()
         )
 
-        has_findings = _has_actionable_findings(all_text)
-
-        if not has_findings:
+        if not has_actionable_findings(all_text):
             logger.info("Round %d: no actionable findings — review loop complete", round_num)
             return PhaseResult(
                 phase=Phase.REVIEW,
@@ -281,21 +217,17 @@ async def _run_review_loop(
                 summary=f"Review loop completed in {round_num} round(s) with no actionable findings.",
             )
 
-        # Step C-D: Write findings and run addresser
         findings_path = Path(tempfile.gettempdir()) / f"implement-findings-pr-{pr_number}-round-{round_num}.md"
         findings_path.write_text(all_text)
 
-        address_result = await run_addresser(
+        await run_addresser(
             pr_number=pr_number,
             round_number=round_num,
             findings_path=findings_path,
             cwd=config.cwd,
+            run_context=ctx,
         )
 
-        if address_result.session_id:
-            session_ids[f"addresser-round-{round_num}"] = address_result.session_id
-
-    # Escalation
     logger.warning(
         "Review loop did not converge after %d rounds — escalating",
         config.max_review_rounds,
@@ -312,11 +244,9 @@ async def _run_review_loop(
 async def _run_docs_gate(
     config: OrchestratorConfig,
     pr_number: int,
+    ctx: RunContext,
 ) -> PhaseResult:
-    """Run the docs compliance gate loop.
-
-    Same pattern as the review loop but only the docs reviewer.
-    """
+    """Run the docs compliance gate loop."""
     for round_num in range(1, config.max_review_rounds + 1):
         logger.info("--- Docs Gate Round %d ---", round_num)
 
@@ -325,6 +255,7 @@ async def _run_docs_gate(
             pr_number=pr_number,
             round_number=round_num,
             cwd=config.cwd,
+            run_context=ctx,
         )
 
         docs_result = reviewer_results.get("review-docs")
@@ -336,7 +267,7 @@ async def _run_docs_gate(
                 error="Docs reviewer failed to run.",
             )
 
-        if not _has_actionable_findings(docs_result.text):
+        if not has_actionable_findings(docs_result.text):
             logger.info("Docs gate round %d: no actionable findings — gate passed", round_num)
             return PhaseResult(
                 phase=Phase.DOCS,
@@ -353,6 +284,7 @@ async def _run_docs_gate(
             round_number=round_num,
             findings_path=findings_path,
             cwd=config.cwd,
+            run_context=ctx,
         )
 
     return PhaseResult(
@@ -363,10 +295,9 @@ async def _run_docs_gate(
     )
 
 
-def _has_actionable_findings(text: str) -> bool:
+def has_actionable_findings(text: str) -> bool:
     """Heuristic: check if reviewer output contains actionable findings."""
     lower = text.lower()
-    # If reviewers explicitly say no findings / code is correct
     no_findings_phrases = [
         "no actionable findings",
         "no findings",
@@ -380,45 +311,8 @@ def _has_actionable_findings(text: str) -> bool:
     ]
     has_no_findings = any(phrase in lower for phrase in no_findings_phrases)
 
-    # Check for finding sections
     has_findings_section = bool(
         re.search(r"###\s*(action required|recommended)", lower)
     )
 
     return has_findings_section and not has_no_findings
-
-
-def main(argv: list[str] | None = None) -> None:
-    """Entry point for the orchestrator CLI."""
-    args = parse_args(argv)
-    configure_logging(args.verbose)
-
-    config = build_config(args)
-
-    logger.info("Starting implement-cli lifecycle")
-    logger.info("Task: %s", config.task_description[:200])
-    logger.info("CWD: %s", config.cwd)
-
-    results = asyncio.run(run_lifecycle(config))
-
-    # Output results as JSON
-    output = {
-        "phases": [
-            {
-                "phase": r.phase.value,
-                "success": r.success,
-                "pr_number": r.pr_number,
-                "session_id": r.session_id,
-                "summary": r.summary,
-                "error": r.error,
-            }
-            for r in results
-        ],
-        "overall_success": all(r.success for r in results),
-        "pr_number": next((r.pr_number for r in results if r.pr_number), None),
-    }
-
-    print(json.dumps(output, indent=2))
-
-    if not output["overall_success"]:
-        sys.exit(1)

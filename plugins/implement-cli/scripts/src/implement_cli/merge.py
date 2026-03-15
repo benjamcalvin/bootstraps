@@ -7,6 +7,7 @@ from pathlib import Path
 
 from implement_cli.prompts import load_prompt
 from implement_cli.sdk import AgentResult, run_agent
+from implement_cli.tracking import RunContext
 from implement_cli.types import Phase
 
 logger = logging.getLogger(__name__)
@@ -16,12 +17,14 @@ async def run_merger(
     *,
     pr_number: int,
     cwd: str | Path,
+    run_context: RunContext | None = None,
 ) -> AgentResult:
     """Run the merge agent to squash-merge the PR.
 
     Args:
         pr_number: The PR number to merge.
         cwd: Working directory.
+        run_context: Optional RunContext for tracking.
 
     Returns:
         The AgentResult containing merge status and issue updates.
@@ -33,12 +36,15 @@ async def run_merger(
     result = await run_agent(
         prompt,
         phase=Phase.MERGE,
+        role="merger",
         cwd=cwd,
+        run_context=run_context,
     )
 
     logger.info(
-        "Merger completed (session=%s, error=%s)",
+        "Merger completed (session=%s, cost=$%.4f, error=%s)",
         result.session_id,
+        result.cost_usd or 0,
         result.is_error,
     )
     return result
