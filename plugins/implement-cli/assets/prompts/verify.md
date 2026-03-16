@@ -5,6 +5,7 @@ Verify PR #$PR_NUMBER works in the real, running system.
 ## PR Context
 
 Fetch: `gh pr view $PR_NUMBER`
+Comments: `gh pr view $PR_NUMBER --comments`
 Changed files: `gh pr view $PR_NUMBER --json files --jq '.files[] | "\(.path) (+\(.additions)/-\(.deletions))"'`
 
 ## Instructions

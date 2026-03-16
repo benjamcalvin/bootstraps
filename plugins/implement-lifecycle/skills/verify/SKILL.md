@@ -21,6 +21,7 @@ Verify PR #$ARGUMENTS works in the real, running system — not in isolation.
 ## PR Context
 
 - PR metadata: !`gh pr view $ARGUMENTS`
+- PR comments: !`gh pr view $ARGUMENTS --comments 2>/dev/null || echo "NO_COMMENTS"`
 - Changed files: !`gh pr view $ARGUMENTS --json files --jq '.files[] | "\(.path) (+\(.additions)/-\(.deletions))"'`
 
 ## Instructions

@@ -8,7 +8,7 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "1.2.1"
+  version: "1.2.2"
   tags: ["implement", "cli", "agent-sdk", "multi-provider", "lifecycle"]
   author: benjamcalvin
 ---
@@ -86,7 +86,7 @@ Parse `$ARGUMENTS` to determine **what to work on** and **what to do**.
 
 **Step 1 — Identify the target** from the leading token:
 
-1. **`#N` (issue number):** Fetch with `gh issue view N` and extract task description.
+1. **`#N` (issue number):** Fetch with `gh issue view N --comments` and extract task description and comment context.
 2. **Bare number:** Check if it's a PR with `gh pr view N`. If so, record the PR number.
 3. **Freeform text:** Use the entire text as the task description.
 

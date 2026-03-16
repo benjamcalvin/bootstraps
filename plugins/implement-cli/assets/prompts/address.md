@@ -5,6 +5,7 @@ Address filtered review findings on PR #$PR_NUMBER, round $ROUND_NUMBER.
 ## PR Context
 
 Fetch PR metadata: `gh pr view $PR_NUMBER`
+Fetch PR comments: `gh pr view $PR_NUMBER --comments`
 Read filtered findings: `cat $FINDINGS_PATH`
 
 ## Instructions

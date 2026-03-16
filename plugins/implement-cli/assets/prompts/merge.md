@@ -5,6 +5,7 @@ Merge PR #$PR_NUMBER and update all linked GitHub issues.
 ## PR Context
 
 Fetch: `gh pr view $PR_NUMBER --json number,title,body,state,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,headRefName,baseRefName`
+Comments: `gh pr view $PR_NUMBER --comments`
 Checks: `gh pr checks $PR_NUMBER 2>/dev/null || echo "NO_CHECKS"`
 
 ## Instructions

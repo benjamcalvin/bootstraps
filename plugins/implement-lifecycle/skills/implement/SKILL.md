@@ -124,6 +124,7 @@ Then fetch a lightweight PR summary for your own reference:
 ```bash
 gh pr view <number>
 gh pr view <number> --json files --jq '.files[] | "\(.path) (+\(.additions)/-\(.deletions))"'
+gh pr view <number> --comments
 ```
 
 Do **NOT** fetch the full diff — it fills the context window. Read specific files when you need to spot-check during refereeing.

@@ -18,6 +18,7 @@ Clean up GitHub issue: $ARGUMENTS
 ## Context
 
 - Issue: !`gh issue view $0 --json number,title,body,labels,state --jq '{number, title, body, labels: [.labels[].name], state}'`
+- Issue comments: !`gh issue view $0 --comments 2>/dev/null || echo "NO_COMMENTS"`
 - Issue template patterns: !`gh issue list --limit 5 --json number,title --jq '.[] | "#\(.number) \(.title)"'`
 
 ## Instructions

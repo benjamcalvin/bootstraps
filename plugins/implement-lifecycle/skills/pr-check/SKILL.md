@@ -20,6 +20,7 @@ Pre-flight validation for PRs.
 
 - Current branch: !`git branch --show-current`
 - PR data: !`gh pr view $ARGUMENTS --json title,body,additions,deletions,changedFiles,commits,baseRefName,number 2>/dev/null || echo "NO_PR_FOUND"`
+- PR comments: !`gh pr view $ARGUMENTS --comments 2>/dev/null || echo "NO_COMMENTS"`
 - Commits since main: !`git log --oneline main..HEAD`
 
 ## Instructions

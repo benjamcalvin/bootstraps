@@ -18,6 +18,7 @@ Address filtered review findings on PR #$0, round $1.
 ## PR Context
 
 - PR metadata: !`gh pr view $0`
+- PR comments: !`gh pr view $0 --comments 2>/dev/null || echo "NO_COMMENTS"`
 - Filtered findings: !`cat $2`
 
 ## Instructions

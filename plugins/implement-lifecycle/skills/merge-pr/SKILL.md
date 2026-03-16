@@ -19,6 +19,7 @@ Merge PR #$ARGUMENTS and update all linked GitHub issues with what was delivered
 ## PR Context
 
 - PR metadata: !`gh pr view $ARGUMENTS --json number,title,body,state,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,headRefName,baseRefName,additions,deletions,changedFiles`
+- PR comments: !`gh pr view $ARGUMENTS --comments 2>/dev/null || echo "NO_COMMENTS"`
 - PR checks: !`gh pr checks $ARGUMENTS 2>/dev/null || echo "NO_CHECKS"`
 
 ## Instructions
