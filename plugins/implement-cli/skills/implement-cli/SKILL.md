@@ -8,7 +8,7 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "1.2.0"
+  version: "1.2.1"
   tags: ["implement", "cli", "agent-sdk", "multi-provider", "lifecycle"]
   author: benjamcalvin
 ---
@@ -204,12 +204,16 @@ If a reviewer or addresser produces unexpected results, use the debug commands:
 
 ### Phase 4.5: Docs Compliance Gate
 
-Same pattern as Phase 4, but only `review-docs`:
+After the code review/address loop converges, run a documentation curation check. The docs reviewer doesn't just check docs that were changed — it proactively identifies where documentation is missing, outdated, or contradicted by the final state of the code (including all review fixes). This catches gaps like new CLI commands without usage docs, changed defaults that contradict existing guides, or architectural decisions that need ADRs.
+
+**Do NOT include `review-docs` in the Phase 4 reviewer pool.** It runs only here, after the code review loop is complete.
 
 ```bash
 "$CLI" --verbose run-reviewers \
   --pr <PR> --round 1 --reviewers review-docs --cwd "$(pwd)"
 ```
+
+Apply the same referee evaluation and address loop as Phase 4. The round counter starts from 1 (independent of Phase 4 rounds). Same 10-round escalation limit.
 
 ---
 
