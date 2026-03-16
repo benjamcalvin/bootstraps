@@ -7,7 +7,7 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "2.5.0"
+  version: "3.0.0"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -238,9 +238,9 @@ Then stop and inform the user directly.
 
 ### Phase 4.5: Docs Compliance Gate
 
-After the code review/address loop converges, run a documentation compliance check to ensure docs reflect the final state of the code (including all review fixes).
+After the code review/address loop converges, run the docs curation gate. **This gate is mandatory even if the PR contains no documentation file changes.** The docs reviewer is a curator, not a diff checker — it proactively identifies where documentation is missing, outdated, or contradicted by the code changes. A PR that adds a new CLI command, changes a default, or restructures internals may need docs updates even though no `.md` files were touched.
 
-**Do NOT include `review-docs` in the Phase 4 reviewer pool.** It runs only here, after the code review loop is complete.
+**Do NOT include `review-docs` in the Phase 4 reviewer pool.** It runs only here, after the code review loop is complete. **Do NOT skip this phase** based on the file list — the reviewer itself will determine if no docs updates are needed.
 
 #### Step A: Invoke Docs Reviewer
 
@@ -248,7 +248,7 @@ After the code review/address loop converges, run a documentation compliance che
 Agent tool → agent: "review-docs", prompt: "Review PR #<pr-number> for documentation compliance, round <round-number>"
 ```
 
-The docs reviewer fetches PR context, loads project documentation standards, and returns findings.
+The docs reviewer fetches PR context, maps code changes to existing documentation, and identifies gaps — not just inaccuracies in changed docs, but missing docs for new behavior and stale docs contradicted by code changes.
 
 #### Step B: Referee Evaluation
 

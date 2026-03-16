@@ -1,0 +1,10 @@
+{
+  "name": "issue-management",
+  "description": "Draft, clean up, and refine GitHub issues — optimized for AI agent consumption",
+  "version": "1.0.0",
+  "author": {
+    "name": "benjamcalvin"
+  },
+  "license": "MIT",
+  "keywords": ["issue", "draft", "cleanup", "refine", "planning"]
+}

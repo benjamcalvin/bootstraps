@@ -1,10 +1,10 @@
 {
   "name": "implement-lifecycle",
   "description": "Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, merge",
-  "version": "2.5.0",
+  "version": "3.0.1",
   "author": {
     "name": "benjamcalvin"
   },
   "license": "MIT",
-  "keywords": ["implement", "review", "pr", "lifecycle", "adversarial", "tdd", "merge", "issue"]
+  "keywords": ["implement", "review", "pr", "lifecycle", "adversarial", "tdd", "merge"]
 }

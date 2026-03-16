@@ -24,9 +24,9 @@
       "name": "implement-lifecycle",
       "source": "./plugins/implement-lifecycle",
       "description": "Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, merge",
-      "version": "2.5.0",
+      "version": "3.0.1",
       "category": "productivity",
-      "tags": ["implement", "review", "pr", "lifecycle", "adversarial", "tdd", "merge", "issue"],
+      "tags": ["implement", "review", "pr", "lifecycle", "adversarial", "tdd", "merge"],
       "author": {
         "name": "benjamcalvin"
       },
@@ -39,6 +39,18 @@
       "version": "1.0.0",
       "category": "productivity",
       "tags": ["worktree", "isolation", "docker", "compose", "ports", "hooks"],
+      "author": {
+        "name": "benjamcalvin"
+      },
+      "license": "MIT"
+    },
+    {
+      "name": "issue-management",
+      "source": "./plugins/issue-management",
+      "description": "Draft, clean up, and refine GitHub issues — optimized for AI agent consumption",
+      "version": "1.0.0",
+      "category": "productivity",
+      "tags": ["issue", "draft", "cleanup", "refine", "planning"],
       "author": {
         "name": "benjamcalvin"
       },
