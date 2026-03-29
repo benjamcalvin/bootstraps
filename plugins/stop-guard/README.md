@@ -13,6 +13,8 @@ Check transcript for activation marker  →  not found → allow stop
         ↓ found
 Check continuation counter  →  max reached → allow stop
         ↓ under limit
+Check task list  →  all tasks completed → allow stop (fast-path)
+        ↓ has pending/in-progress tasks (or no task list)
 Call Gemini CLI to evaluate completion
         ↓
 Gemini reads transcript + task list + final message
@@ -66,14 +68,14 @@ Create `~/.config/stop-guard/config.json` (optional — sensible defaults are us
 
 ```json
 {
-  "max_continuations": 3,
+  "max_continuations": 5,
   "model": "gemini-3-flash-preview"
 }
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `max_continuations` | `3` | Maximum times the hook will block a stop per session before giving up |
+| `max_continuations` | `5` | Maximum times the hook will block a stop per session before giving up |
 | `model` | `gemini-3-flash-preview` | Gemini model for evaluation |
 
 ## Safety mechanisms
@@ -81,8 +83,8 @@ Create `~/.config/stop-guard/config.json` (optional — sensible defaults are us
 | Mechanism | Description |
 |-----------|-------------|
 | **Activation marker** | Hook is inert unless `<!-- stop-guard:active -->` appears in the transcript |
-| **Continuation counter** | Hard cap (default 3) per session — prevents infinite loops |
-| **Fail-open** | Any error (Gemini timeout, parse failure, missing tools) allows the stop |
+| **Continuation counter** | Hard cap (default 5) per session — prevents infinite loops |
+| **Fail-open** | Hard errors (Gemini timeout, missing tools, parse failure) allow the stop. Empty Gemini responses (≤5 output tokens) are treated as evaluation failures and block within the continuation budget |
 | **60s timeout** | Claude Code kills the hook process if it exceeds the timeout |
 
 ## What the evaluator sees
@@ -101,16 +103,16 @@ The evaluator runs in yolo mode (`-y`) with auto-approved tool calls so it can r
 All hook activity is logged to `~/.claude/logs/stop-guard.log`:
 
 ```
-[2026-03-29T14:33:20Z] === Stop hook fired (pid=12232) ===
+[2026-03-29T14:33:20Z] === Stop hook fired (pid=12232 session=8e82687e-3d55-4e4f-a22f-1815843dc8ef) ===
 [2026-03-29T14:33:20Z] input received (335 bytes)
 [2026-03-29T14:33:20Z] activation marker found
-[2026-03-29T14:33:20Z] continuation 0/3
-[2026-03-29T14:33:20Z] calling gemini (model=gemini-3-flash-preview)...
+[2026-03-29T14:33:20Z] continuation 0/5
+[2026-03-29T14:33:20Z] calling gemini (model=gemini-3-flash-preview, prompt_bytes=12847)...
 [2026-03-29T14:33:50Z] gemini response received (1024 bytes)
 [2026-03-29T14:33:50Z] tokens: in=33581 out=290 latency=58702ms
 [2026-03-29T14:33:50Z] decision=block
 [2026-03-29T14:33:50Z] reason=4 pending tasks not completed
-[2026-03-29T14:33:50Z] blocking stop (continuation 1/3)
+[2026-03-29T14:33:50Z] blocking stop (continuation 1/5)
 ```
 
 The log includes token usage and API latency for each evaluation. Log file auto-rotates at ~64 KB.
