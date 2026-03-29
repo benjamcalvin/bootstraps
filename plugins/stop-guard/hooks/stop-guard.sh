@@ -234,8 +234,17 @@ OUTPUT_TOKENS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".tokens.candidates 
 LATENCY_MS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".api.totalLatencyMs // 0" 2>/dev/null) || LATENCY_MS=0
 dbg "tokens: in=$INPUT_TOKENS out=$OUTPUT_TOKENS latency=${LATENCY_MS}ms"
 
-DECISION=$(echo "$INNER" | jq -r '.decision // ""' 2>/dev/null) || DECISION=""
-REASON=$(echo "$INNER" | jq -r '.reason // ""' 2>/dev/null) || REASON=""
+# Gemini may return commentary before/after the JSON — extract just the JSON object
+JSON_BLOCK=$(echo "$INNER" | grep -o '{[^}]*"decision"[^}]*}' 2>/dev/null | head -1) || JSON_BLOCK=""
+if [ -z "$JSON_BLOCK" ]; then
+  # No decision block found — treat as allow
+  dbg "no decision JSON found in response, allowing stop"
+  DECISION=""
+  REASON=""
+else
+  DECISION=$(echo "$JSON_BLOCK" | jq -r '.decision // ""' 2>/dev/null) || DECISION=""
+  REASON=$(echo "$JSON_BLOCK" | jq -r '.reason // ""' 2>/dev/null) || REASON=""
+fi
 
 dbg "decision=$DECISION"
 dbg "reason=$REASON"
@@ -243,8 +252,8 @@ dbg "reason=$REASON"
 if [ "$DECISION" = "block" ]; then
   echo $((COUNT + 1)) > "$COUNTER_FILE"
   dbg "blocking stop (continuation $((COUNT + 1))/$MAX_CONT)"
-  # Pass through the stop control JSON directly
-  echo "$INNER"
+  # Pass through the extracted stop control JSON
+  echo "$JSON_BLOCK"
   exit 0
 fi
 

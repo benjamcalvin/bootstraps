@@ -237,8 +237,15 @@ INPUT_TOKENS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".tokens.input // 0" 
 OUTPUT_TOKENS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".tokens.candidates // 0" 2>/dev/null) || OUTPUT_TOKENS=0
 LATENCY_MS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".api.totalLatencyMs // 0" 2>/dev/null) || LATENCY_MS=0
 
-DECISION=$(echo "$INNER" | jq -r '.decision // "(allow)"' 2>/dev/null) || DECISION="(parse error)"
-REASON=$(echo "$INNER" | jq -r '.reason // "(none)"' 2>/dev/null) || REASON="(parse error)"
+# Gemini may return commentary before/after the JSON — extract just the JSON object
+JSON_BLOCK=$(echo "$INNER" | grep -o '{[^}]*"decision"[^}]*}' 2>/dev/null | head -1) || JSON_BLOCK=""
+if [ -n "$JSON_BLOCK" ]; then
+  DECISION=$(echo "$JSON_BLOCK" | jq -r '.decision // "(allow)"' 2>/dev/null) || DECISION="(parse error)"
+  REASON=$(echo "$JSON_BLOCK" | jq -r '.reason // "(none)"' 2>/dev/null) || REASON="(parse error)"
+else
+  DECISION="(allow)"
+  REASON="(none)"
+fi
 
 echo "=== Result ==="
 echo ""
@@ -251,5 +258,10 @@ echo "Tokens out:  $OUTPUT_TOKENS"
 echo "Latency:     ${LATENCY_MS}ms"
 echo "Wall time:   $((END_TIME - START_TIME))s"
 echo ""
-echo "--- Raw JSON ---"
-echo "$INNER" | jq . 2>/dev/null || echo "$INNER"
+if [ -n "$JSON_BLOCK" ]; then
+  echo "--- Extracted JSON ---"
+  echo "$JSON_BLOCK" | jq . 2>/dev/null || echo "$JSON_BLOCK"
+fi
+echo ""
+echo "--- Raw Response ---"
+echo "$INNER"
