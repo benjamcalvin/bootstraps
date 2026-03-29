@@ -138,7 +138,8 @@ $TASK_CONTEXT
 fi
 
 dbg "calling gemini (model=$MODEL)..."
-RAW=$(echo "$EVAL_PROMPT" | timeout 12 gemini -p - -o json -y -m "$MODEL" 2>/dev/null) || {
+# No `timeout` on macOS — rely on Claude Code's 15s hook timeout instead
+RAW=$(echo "$EVAL_PROMPT" | gemini -p - -o json -y -m "$MODEL" 2>/dev/null) || {
   dbg "gemini call failed or timed out, allowing stop"
   exit 0
 }

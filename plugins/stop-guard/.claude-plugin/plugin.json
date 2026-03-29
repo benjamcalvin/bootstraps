@@ -1,7 +1,7 @@
 {
   "name": "stop-guard",
   "description": "Stop hook that evaluates task completion via Gemini CLI and blocks premature stops",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "author": {
     "name": "benjamcalvin"
   },
