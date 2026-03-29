@@ -278,6 +278,7 @@ else
       dbg "parsed via legacy verdict format"
     else
       dbg "no decision found in response, allowing stop"
+      dbg "raw response: $(echo "$INNER" | head -c 500)"
     fi
   fi
 fi
