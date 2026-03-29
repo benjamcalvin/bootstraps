@@ -14,7 +14,7 @@ set -euo pipefail
 # otherwise uses sensible defaults.
 
 log()  { echo "$*" >&2; }
-die()  { log "error: $*"; exit 0; }  # fail-open: errors allow stop
+die()  { _HOOK_STAGE="done"; log "error: $*"; exit 0; }  # fail-open: errors allow stop
 
 # Persistent file log
 _LOG_DIR="$HOME/.claude/logs"
@@ -29,8 +29,11 @@ dbg() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" >> "$_LOG_FILE" 2>/dev/null |
 # Trap handler — log unexpected exits
 # ---------------------------------------------------------------------------
 _HOOK_STAGE="init"
+_TRAP_FIRED=""
 _trap_handler() {
   local sig="$1"
+  [ -n "$_TRAP_FIRED" ] && return  # avoid double-logging (TERM/INT + EXIT)
+  _TRAP_FIRED=1
   if [ "$_HOOK_STAGE" != "done" ]; then
     dbg "interrupted during $_HOOK_STAGE (signal=$sig, pid=$$)"
   fi
