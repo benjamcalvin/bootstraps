@@ -25,7 +25,19 @@ if [ -f "$_LOG_FILE" ] && [ "$(wc -c < "$_LOG_FILE")" -gt 65536 ]; then
 fi
 dbg() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" >> "$_LOG_FILE" 2>/dev/null || true; }
 
-dbg "=== Stop hook fired (pid=$$) ==="
+# ---------------------------------------------------------------------------
+# Trap handler — log unexpected exits
+# ---------------------------------------------------------------------------
+_HOOK_STAGE="init"
+_trap_handler() {
+  local sig="$1"
+  if [ "$_HOOK_STAGE" != "done" ]; then
+    dbg "interrupted during $_HOOK_STAGE (signal=$sig, pid=$$)"
+  fi
+}
+trap '_trap_handler EXIT' EXIT
+trap '_trap_handler TERM' TERM
+trap '_trap_handler INT' INT
 
 command -v jq >/dev/null 2>&1 || die "jq is required but not found in PATH"
 command -v gemini >/dev/null 2>&1 || die "gemini CLI is required but not found in PATH"
@@ -36,22 +48,27 @@ command -v gemini >/dev/null 2>&1 || die "gemini CLI is required but not found i
 if ! IFS= read -r -t 5 INPUT; then
   [ -n "${INPUT:-}" ] || die "timed out or received no data on stdin"
 fi
-dbg "input received (${#INPUT} bytes)"
 
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // ""')
 LAST_MSG=$(echo "$INPUT" | jq -r '.last_assistant_message // ""')
 TRANSCRIPT=$(echo "$INPUT" | jq -r '.transcript_path // ""')
 
+dbg "=== Stop hook fired (pid=$$ session=$SESSION_ID) ==="
+dbg "input received (${#INPUT} bytes)"
+
 # ---------------------------------------------------------------------------
 # 2. Activation check — transcript must contain marker
 # ---------------------------------------------------------------------------
+_HOOK_STAGE="activation check"
 if [ -z "$TRANSCRIPT" ] || [ ! -f "$TRANSCRIPT" ]; then
   dbg "no transcript file, allowing stop"
+  _HOOK_STAGE="done"
   exit 0
 fi
 
 if ! grep -q '<!-- stop-guard:active -->' "$TRANSCRIPT" 2>/dev/null; then
   dbg "activation marker not found in transcript, allowing stop"
+  _HOOK_STAGE="done"
   exit 0
 fi
 dbg "activation marker found"
@@ -74,10 +91,12 @@ COUNT=$(cat "$COUNTER_FILE" 2>/dev/null || echo 0)
 if [ "$COUNT" -ge "$MAX_CONT" ]; then
   dbg "max continuations ($MAX_CONT) reached, allowing stop"
   rm -f "$COUNTER_FILE"
+  _HOOK_STAGE="done"
   exit 0
 fi
 dbg "continuation $COUNT/$MAX_CONT"
 
+_HOOK_STAGE="building context"
 # ---------------------------------------------------------------------------
 # 5. Build evaluator context
 # ---------------------------------------------------------------------------
@@ -99,6 +118,18 @@ if [ -n "$TASK_DIR" ]; then
     [ -f "$f" ] && jq -r '"\(.status)\t#\(.id) \(.subject)"' "$f" 2>/dev/null
   done | sort)
   dbg "task dir found: $TASK_DIR ($(echo "$TASK_SUMMARY" | wc -l | tr -d ' ') tasks)"
+
+  # Fast-path: if all tasks are completed, allow stop without calling Gemini
+  if [ -n "$TASK_SUMMARY" ]; then
+    PENDING_OR_ACTIVE=$(for f in "$TASK_DIR"/*.json; do
+      [ -f "$f" ] && jq -r '.status' "$f" 2>/dev/null
+    done | grep -cE '^(pending|in_progress)$' || true)
+    if [ "$PENDING_OR_ACTIVE" -eq 0 ]; then
+      dbg "all tasks completed, allowing stop (fast-path)"
+      _HOOK_STAGE="done"
+      exit 0
+    fi
+  fi
 fi
 
 # ---------------------------------------------------------------------------
@@ -219,13 +250,16 @@ $TASK_CONTEXT
 </task_context>"
 fi
 
-dbg "calling gemini (model=$MODEL)..."
+dbg "calling gemini (model=$MODEL, prompt_bytes=${#EVAL_PROMPT})..."
+_HOOK_STAGE="gemini call"
 # Yolo mode: auto-approve tool calls (file reads, GitHub lookups)
 # The prompt instructs read-only behavior; Claude Code's 60s hook timeout is the safety net
 RAW=$(echo "$EVAL_PROMPT" | gemini -p - -o json -y -m "$MODEL" 2>/dev/null) || {
   dbg "gemini call failed or timed out, allowing stop"
+  _HOOK_STAGE="done"
   exit 0
 }
+_HOOK_STAGE="response parsing"
 dbg "gemini response received (${#RAW} bytes)"
 
 # ---------------------------------------------------------------------------
@@ -234,6 +268,7 @@ dbg "gemini response received (${#RAW} bytes)"
 # gemini -o json wraps output in {"session_id": "...", "response": "...", "stats": {...}}
 INNER=$(echo "$RAW" | jq -r '.response // ""' 2>/dev/null) || {
   dbg "failed to parse gemini envelope, allowing stop"
+  _HOOK_STAGE="done"
   exit 0
 }
 
@@ -242,6 +277,22 @@ INPUT_TOKENS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".tokens.input // 0" 
 OUTPUT_TOKENS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".tokens.candidates // 0" 2>/dev/null) || OUTPUT_TOKENS=0
 LATENCY_MS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".api.totalLatencyMs // 0" 2>/dev/null) || LATENCY_MS=0
 dbg "tokens: in=$INPUT_TOKENS out=$OUTPUT_TOKENS latency=${LATENCY_MS}ms"
+
+# Detect empty/near-empty responses (Gemini returned {} with very few tokens)
+if [ "$OUTPUT_TOKENS" -le 5 ] && { [ -z "$INNER" ] || [ "$INNER" = "{}" ] || [ "$INNER" = "" ]; }; then
+  dbg "empty gemini response detected (output_tokens=$OUTPUT_TOKENS, response_bytes=${#INNER}, model=$MODEL, input_bytes=${#EVAL_PROMPT})"
+  if [ "$COUNT" -lt "$((MAX_CONT - 1))" ]; then
+    echo $((COUNT + 1)) > "$COUNTER_FILE"
+    dbg "treating as evaluation failure, blocking stop (continuation $((COUNT + 1))/$MAX_CONT)"
+    jq -n '{"decision":"block","reason":"Stop-guard evaluation failed — retrying"}'
+    _HOOK_STAGE="done"
+    exit 0
+  else
+    dbg "evaluation failure but at continuation limit, allowing stop"
+    _HOOK_STAGE="done"
+    exit 0
+  fi
+fi
 
 # Extract decision from gemini's response. Try multiple strategies:
 # 1. Direct jq parse (response is valid JSON)
@@ -277,7 +328,7 @@ else
       REASON=$(echo "$INNER" | jq -r '.reason // ""' 2>/dev/null) || REASON=""
       dbg "parsed via legacy verdict format"
     else
-      dbg "no decision found in response, allowing stop"
+      dbg "no decision found in response, allowing stop (model=$MODEL, input_bytes=${#EVAL_PROMPT}, response_bytes=${#INNER}, output_tokens=$OUTPUT_TOKENS)"
       dbg "raw response: $(echo "$INNER" | head -c 500)"
     fi
   fi
@@ -290,8 +341,10 @@ if [ "$DECISION" = "block" ]; then
   echo $((COUNT + 1)) > "$COUNTER_FILE"
   dbg "blocking stop (continuation $((COUNT + 1))/$MAX_CONT)"
   jq -n --arg reason "$REASON" '{"decision":"block","reason":$reason}'
+  _HOOK_STAGE="done"
   exit 0
 fi
 
 dbg "allowing stop"
+_HOOK_STAGE="done"
 exit 0
