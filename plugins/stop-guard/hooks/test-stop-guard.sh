@@ -59,20 +59,27 @@ MODEL=$(jq -r '.model // "gemini-3-flash-preview"' "$CONFIG" 2>/dev/null || echo
 echo "Model:       $MODEL"
 
 # ---------------------------------------------------------------------------
-# Check for task list
+# Check for task list (individual JSON files: 1.json, 2.json, etc.)
 # ---------------------------------------------------------------------------
-TASK_LIST_FILE=""
-if [ -n "${CLAUDE_CODE_TASK_LIST_ID:-}" ]; then
-  TASK_LIST_FILE="$HOME/.claude/tasks/${CLAUDE_CODE_TASK_LIST_ID}/tasks.json"
+TASK_DIR=""
+TASK_SUMMARY=""
+if [ -n "${CLAUDE_CODE_TASK_LIST_ID:-}" ] && [ -d "$HOME/.claude/tasks/${CLAUDE_CODE_TASK_LIST_ID}" ]; then
+  TASK_DIR="$HOME/.claude/tasks/${CLAUDE_CODE_TASK_LIST_ID}"
 elif [ -d "$HOME/.claude/tasks/$SESSION_ID" ]; then
-  TASK_LIST_FILE="$HOME/.claude/tasks/${SESSION_ID}/tasks.json"
+  TASK_DIR="$HOME/.claude/tasks/$SESSION_ID"
 fi
 
-if [ -n "$TASK_LIST_FILE" ] && [ -f "$TASK_LIST_FILE" ]; then
-  echo "Task list:   $TASK_LIST_FILE"
+if [ -n "$TASK_DIR" ]; then
+  TASK_SUMMARY=$(for f in "$TASK_DIR"/*.json; do
+    [ -f "$f" ] && jq -r '"\(.status)\t#\(.id) \(.subject)"' "$f" 2>/dev/null
+  done | sort)
+  TASK_COUNT=$(echo "$TASK_SUMMARY" | wc -l | tr -d ' ')
+  PENDING=$(echo "$TASK_SUMMARY" | grep -c "^pending" || true)
+  IN_PROGRESS=$(echo "$TASK_SUMMARY" | grep -c "^in_progress" || true)
+  echo "Task list:   $TASK_DIR ($TASK_COUNT tasks: $PENDING pending, $IN_PROGRESS in progress)"
+  echo "$TASK_SUMMARY" | while IFS= read -r line; do echo "             $line"; done
 else
   echo "Task list:   (none found)"
-  TASK_LIST_FILE=""
 fi
 
 # ---------------------------------------------------------------------------
@@ -184,15 +191,16 @@ $TRANSCRIPT
 Read the transcript file above to understand the full session. Start from
 the end and work backwards to find what was requested and what was done."
 
-if [ -n "$TASK_LIST_FILE" ]; then
+if [ -n "$TASK_SUMMARY" ]; then
   EVAL_PROMPT="$EVAL_PROMPT
 
-<task_list_path>
-$TASK_LIST_FILE
-</task_list_path>
+<task_list>
+$TASK_SUMMARY
+</task_list>
 
-Read the task list file above. Any tasks with status 'pending' or
-'in_progress' are strong evidence that work is incomplete."
+IMPORTANT: The task list above shows Claude's tracked tasks for this session.
+Any tasks with status 'pending' or 'in_progress' are strong evidence that
+work is NOT complete. You should block if there are unfinished tasks."
 fi
 
 EVAL_PROMPT="$EVAL_PROMPT
