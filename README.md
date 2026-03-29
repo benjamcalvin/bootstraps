@@ -93,6 +93,7 @@ Some skills accept arguments:
 | **bootstrap-docs** | Set up a comprehensive, AI-readable documentation strategy in any project. Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates. |
 | **implement-lifecycle** | Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, merge. |
 | **issue-management** | Draft, clean up, and refine GitHub issues — optimized for AI agent consumption. |
+| **stop-guard** | Stop hook that evaluates task completion via Gemini CLI and blocks premature stops. Opt-in per session via activation marker. |
 
 ### implement-lifecycle
 
@@ -132,6 +133,36 @@ Provides 3 skills for GitHub issue quality:
 | `/draft-issue` | Create well-structured GitHub issues with testable acceptance criteria, optimized for `/implement` consumption. |
 | `/cleanup-issue` | Fix formatting, fill missing sections, and clarify ambiguity in existing issues. |
 | `/refine-issue` | Deepen an issue with codebase research — sharpen acceptance criteria, add implementation hints, decompose into sub-tasks. |
+
+### stop-guard
+
+A Stop hook — no skills to invoke. Once installed, it activates when any session transcript contains `<!-- stop-guard:active -->`.
+
+**Requires:** [Gemini CLI](https://github.com/google-gemini/gemini-cli) (`npm install -g @google/gemini-cli`), [jq](https://jqlang.github.io/jq/)
+
+**How it works:** When Claude tries to stop, the hook calls Gemini to independently evaluate whether the task is complete. If incomplete, it blocks the stop and tells Claude what to finish. If complete (or if human input is needed), it allows the stop.
+
+**Activation:** Include `<!-- stop-guard:active -->` in a skill's output or type it directly in conversation. Optionally provide context:
+
+```
+<!-- stop-guard:context {"task": "implement feature X", "criteria": ["tests pass"]} -->
+```
+
+**Safety:** Opt-in per session, max 3 continuations (configurable), fail-open on any error, 60s timeout.
+
+**Configuration** (optional): `~/.config/stop-guard/config.json`
+
+```json
+{"max_continuations": 3, "model": "gemini-3-flash-preview"}
+```
+
+**Testing:** Run the evaluator against any session without triggering the hook:
+
+```
+./plugins/stop-guard/hooks/test-stop-guard.sh ~/.claude/projects/<project>/<session>.jsonl
+```
+
+See [stop-guard/README.md](plugins/stop-guard/README.md) for full documentation.
 
 ## License
 
