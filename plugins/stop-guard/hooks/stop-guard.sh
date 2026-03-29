@@ -84,12 +84,18 @@ dbg "continuation $COUNT/$MAX_CONT"
 TASK_CONTEXT=$(grep -o '<!-- stop-guard:context .* -->' "$TRANSCRIPT" \
   | tail -1 | sed 's/<!-- stop-guard:context //;s/ -->//' 2>/dev/null || echo "")
 
-TRANSCRIPT_TAIL=$(tail -100 "$TRANSCRIPT" 2>/dev/null || echo "")
+# Find task list file if available
+TASK_LIST_FILE=""
+if [ -n "${CLAUDE_CODE_TASK_LIST_ID:-}" ]; then
+  TASK_LIST_FILE="$HOME/.claude/tasks/${CLAUDE_CODE_TASK_LIST_ID}/tasks.json"
+elif [ -d "$HOME/.claude/tasks/$SESSION_ID" ]; then
+  TASK_LIST_FILE="$HOME/.claude/tasks/${SESSION_ID}/tasks.json"
+fi
 
 # ---------------------------------------------------------------------------
 # 6. Call Gemini CLI for evaluation
 # ---------------------------------------------------------------------------
-EVAL_PROMPT=$(cat <<'PROMPT_EOF'
+read -r -d '' EVAL_PROMPT <<'PROMPT_EOF' || true
 # Role
 
 You are a quality gate in an AI coding agent's workflow. You decide whether
@@ -110,14 +116,24 @@ Err on the side of allowing the stop. Blocking is disruptive — only do it
 when there is clear evidence of unfinished work, not just because the
 response could theoretically be better.
 
-# What you're looking at
+# What you have access to
 
-The transcript below is from a Claude Code session — a JSONL file where
-each line is a JSON object representing messages, tool calls, and tool
-results. You'll see role:"user" messages, role:"assistant" messages, and
-tool_use/tool_result blocks (file edits, bash commands, etc.).
+You are running in read-only mode. You CAN read files and access GitHub
+but you CANNOT modify anything. Use these capabilities to gather context.
 
-The <final_message> is Claude's last response before it tried to stop.
+**Session transcript**: A JSONL file (path provided below) where each line
+is a JSON object representing messages, tool calls, and tool results.
+You'll see role:"user" messages, role:"assistant" messages, and
+tool_use/tool_result blocks (file edits, bash commands, etc.). Read this
+file to understand what was requested and what was done. Start from the
+end and work backwards — the most recent activity matters most.
+
+**Task list**: If provided, a JSON file showing Claude's tracked tasks
+with their statuses (pending, in_progress, completed). Tasks still marked
+as pending or in_progress are strong signals of incomplete work.
+
+**Final message**: Claude's last response text before it tried to stop,
+provided inline below for convenience.
 
 # When to block
 
@@ -155,14 +171,30 @@ Make it specific and actionable (e.g., "The tests in auth_test.go failed
 with 3 errors that were not addressed. Fix the failing assertions before
 stopping." not "Work seems incomplete").
 PROMPT_EOF
-)
 
-# Append the actual context
+# Append file paths and inline context
 EVAL_PROMPT="$EVAL_PROMPT
 
-<transcript_tail>
-$TRANSCRIPT_TAIL
-</transcript_tail>
+<transcript_path>
+$TRANSCRIPT
+</transcript_path>
+
+Read the transcript file above to understand the full session. Start from
+the end and work backwards to find what was requested and what was done."
+
+if [ -n "$TASK_LIST_FILE" ] && [ -f "$TASK_LIST_FILE" ]; then
+  EVAL_PROMPT="$EVAL_PROMPT
+
+<task_list_path>
+$TASK_LIST_FILE
+</task_list_path>
+
+Read the task list file above. Any tasks with status 'pending' or
+'in_progress' are strong evidence that work is incomplete."
+  dbg "task list found: $TASK_LIST_FILE"
+fi
+
+EVAL_PROMPT="$EVAL_PROMPT
 
 <final_message>
 $LAST_MSG

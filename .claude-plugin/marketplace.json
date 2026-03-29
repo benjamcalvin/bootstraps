@@ -12,7 +12,7 @@
       "name": "bootstrap-docs",
       "source": "./plugins/bootstrap-docs",
       "description": "Set up a comprehensive, AI-readable documentation strategy in any project",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "category": "productivity",
       "tags": ["docs", "documentation", "strategy", "scaffolding"],
       "author": {
@@ -72,7 +72,7 @@
       "name": "stop-guard",
       "source": "./plugins/stop-guard",
       "description": "Stop hook that evaluates task completion via Gemini CLI and blocks premature stops",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "category": "productivity",
       "tags": ["hook", "stop", "guard", "completion", "evaluator", "gemini"],
       "author": {
