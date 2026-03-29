@@ -60,7 +60,7 @@ dbg "activation marker found"
 # 3. Load config (optional file, defaults inline)
 # ---------------------------------------------------------------------------
 CONFIG="$HOME/.config/stop-guard/config.json"
-MAX_CONT=$(jq -r '.max_continuations // 3' "$CONFIG" 2>/dev/null || echo 3)
+MAX_CONT=$(jq -r '.max_continuations // 5' "$CONFIG" 2>/dev/null || echo 5)
 MODEL=$(jq -r '.model // "gemini-3-flash-preview"' "$CONFIG" 2>/dev/null || echo "gemini-3-flash-preview")
 
 # ---------------------------------------------------------------------------
