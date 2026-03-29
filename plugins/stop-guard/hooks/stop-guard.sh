@@ -170,7 +170,7 @@ if [ "$VERDICT" = "incomplete" ]; then
   echo $((COUNT + 1)) > "$COUNTER_FILE"
   dbg "blocking stop (continuation $((COUNT + 1))/$MAX_CONT)"
   jq -n --arg reason "$REASON" '{"decision":"block","reason":$reason}'
-  exit 2
+  exit 0
 fi
 
 dbg "allowing stop (verdict=$VERDICT)"
