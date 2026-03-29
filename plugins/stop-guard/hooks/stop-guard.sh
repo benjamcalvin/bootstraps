@@ -281,8 +281,10 @@ OUTPUT_TOKENS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".tokens.candidates 
 LATENCY_MS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".api.totalLatencyMs // 0" 2>/dev/null) || LATENCY_MS=0
 dbg "tokens: in=$INPUT_TOKENS out=$OUTPUT_TOKENS latency=${LATENCY_MS}ms"
 
-# Detect empty/near-empty responses (Gemini returned {} with very few tokens)
-if [ "$OUTPUT_TOKENS" -le 5 ] && { [ -z "$INNER" ] || [ "$INNER" = "{}" ] || [ "$INNER" = "" ]; }; then
+# Detect truly empty responses (Gemini returned nothing useful).
+# Note: "{}" is a valid "allow stop" response, not an empty response.
+INNER_TRIMMED=$(echo "$INNER" | tr -d '[:space:]')
+if [ "$OUTPUT_TOKENS" -le 5 ] && { [ -z "$INNER" ] || [ -z "$INNER_TRIMMED" ]; }; then
   dbg "empty gemini response detected (output_tokens=$OUTPUT_TOKENS, response_bytes=${#INNER}, model=$MODEL, input_bytes=${#EVAL_PROMPT})"
   if [ "$COUNT" -lt "$((MAX_CONT - 1))" ]; then
     echo $((COUNT + 1)) > "$COUNTER_FILE"
