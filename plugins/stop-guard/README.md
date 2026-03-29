@@ -87,7 +87,7 @@ Create `~/.config/stop-guard/config.json` (optional — sensible defaults are us
 | **Activation marker** | Hook is inert unless `<!-- stop-guard:active -->` appears in the transcript |
 | **Continuation counter** | Hard cap (default 5) per session — prevents infinite loops |
 | **Fail-open** | Hard errors (Gemini timeout, missing tools, parse failure) allow the stop. Empty Gemini responses (≤5 output tokens) are treated as evaluation failures and block within the continuation budget |
-| **60s timeout** | Claude Code kills the hook process if it exceeds the timeout |
+| **180s timeout** | Claude Code kills the hook process if it exceeds the timeout |
 
 ## What the evaluator sees
 
@@ -110,10 +110,10 @@ All hook activity is logged to `~/.claude/logs/stop-guard.log`:
 [2026-03-29T14:33:20Z] activation marker found
 [2026-03-29T14:33:20Z] continuation 0/5
 [2026-03-29T14:33:20Z] calling gemini (model=gemini-3-flash-preview, prompt_bytes=12847)...
-[2026-03-29T14:33:50Z] gemini response received (1024 bytes)
+[2026-03-29T14:33:50Z] gemini returned after 30s (1024 bytes)
 [2026-03-29T14:33:50Z] tokens: in=33581 out=290 latency=58702ms
-[2026-03-29T14:33:50Z] decision=block
-[2026-03-29T14:33:50Z] reason=4 pending tasks not completed
+[2026-03-29T14:33:50Z] response: {"decision":"block","reason":"4 pending tasks not completed"}
+[2026-03-29T14:33:50Z] decision=block reason=4 pending tasks not completed
 [2026-03-29T14:33:50Z] blocking stop (continuation 1/5)
 ```
 

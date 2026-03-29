@@ -29,13 +29,18 @@ dbg() { echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*" >> "$_LOG_FILE" 2>/dev/null |
 # Trap handler — log unexpected exits
 # ---------------------------------------------------------------------------
 _HOOK_STAGE="init"
+_GEMINI_START=""
 _TRAP_FIRED=""
 _trap_handler() {
   local sig="$1"
   [ -n "$_TRAP_FIRED" ] && return  # avoid double-logging (TERM/INT + EXIT)
   _TRAP_FIRED=1
   if [ "$_HOOK_STAGE" != "done" ]; then
-    dbg "interrupted during $_HOOK_STAGE (signal=$sig, pid=$$)"
+    local elapsed=""
+    if [ -n "$_GEMINI_START" ]; then
+      elapsed=" elapsed=$(( $(date +%s) - _GEMINI_START ))s"
+    fi
+    dbg "interrupted during $_HOOK_STAGE (signal=$sig, pid=$$${elapsed})"
   fi
 }
 trap '_trap_handler EXIT' EXIT
@@ -265,15 +270,17 @@ fi
 
 dbg "calling gemini (model=$MODEL, prompt_bytes=${#EVAL_PROMPT})..."
 _HOOK_STAGE="gemini call"
+_GEMINI_START=$(date +%s)
 # Yolo mode: auto-approve tool calls (file reads, GitHub lookups)
-# The prompt instructs read-only behavior; Claude Code's 60s hook timeout is the safety net
+# The prompt instructs read-only behavior; Claude Code's 180s hook timeout is the safety net
 RAW=$(echo "$EVAL_PROMPT" | gemini -p - -o json -y -m "$MODEL" 2>/dev/null) || {
-  dbg "gemini call failed or timed out, allowing stop"
+  elapsed=$(( $(date +%s) - _GEMINI_START ))
+  dbg "gemini call failed or timed out after ${elapsed}s, allowing stop"
   _HOOK_STAGE="done"
   exit 0
 }
 _HOOK_STAGE="response parsing"
-dbg "gemini response received (${#RAW} bytes)"
+dbg "gemini returned after $(( $(date +%s) - _GEMINI_START ))s (${#RAW} bytes)"
 
 # ---------------------------------------------------------------------------
 # 7. Parse verdict and stats
@@ -309,12 +316,22 @@ if [ "$OUTPUT_TOKENS" -le 5 ] && { [ -z "$INNER" ] || [ -z "$INNER_TRIMMED" ]; }
   fi
 fi
 
+# Log the raw response for diagnostics (always, not just on error)
+dbg "response: $(echo "$INNER" | head -c 500)"
+
 # Extract decision from gemini's response. Try multiple strategies:
 # 1. Direct jq parse (response is valid JSON)
 # 2. Extract JSON block from mixed text+JSON response
 # 3. Handle old verdict format as fallback
 DECISION=""
 REASON=""
+
+# Strategy 0: recognize {} as explicit "allow stop" (no decision key = allow)
+if echo "$INNER" | jq -e 'type == "object" and (keys | length) == 0' >/dev/null 2>&1; then
+  dbg "parsed {} as explicit allow"
+  _HOOK_STAGE="done"
+  exit 0
+fi
 
 # Strategy 1: try parsing the whole response as JSON
 if DECISION=$(echo "$INNER" | jq -r '.decision // empty' 2>/dev/null) && [ -n "$DECISION" ]; then
@@ -343,14 +360,12 @@ else
       REASON=$(echo "$INNER" | jq -r '.reason // ""' 2>/dev/null) || REASON=""
       dbg "parsed via legacy verdict format"
     else
-      dbg "no decision found in response, allowing stop (model=$MODEL, input_bytes=${#EVAL_PROMPT}, response_bytes=${#INNER}, output_tokens=$OUTPUT_TOKENS)"
-      dbg "raw response: $(echo "$INNER" | head -c 500)"
+      dbg "no decision found in response (model=$MODEL, input_bytes=${#EVAL_PROMPT}, response_bytes=${#INNER}, output_tokens=$OUTPUT_TOKENS)"
     fi
   fi
 fi
 
-dbg "decision=$DECISION"
-dbg "reason=$REASON"
+dbg "decision=$DECISION reason=$(echo "$REASON" | head -c 200)"
 
 if [ "$DECISION" = "block" ]; then
   echo $((COUNT + 1)) > "$COUNTER_FILE"
