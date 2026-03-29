@@ -87,7 +87,7 @@ Create `~/.config/stop-guard/config.json` (optional — sensible defaults are us
 | **Activation marker** | Hook is inert unless `<!-- stop-guard:active -->` appears in the transcript |
 | **Continuation counter** | Hard cap (default 5) per session — prevents infinite loops |
 | **Fail-open** | Hard errors (Gemini timeout, missing tools, parse failure) allow the stop. Empty Gemini responses (≤5 output tokens) are treated as evaluation failures and block within the continuation budget |
-| **60s timeout** | Claude Code kills the hook process if it exceeds the timeout |
+| **180s timeout** | Claude Code kills the hook process if it exceeds the timeout |
 
 ## What the evaluator sees
 

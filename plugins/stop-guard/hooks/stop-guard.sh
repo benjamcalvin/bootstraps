@@ -272,7 +272,7 @@ dbg "calling gemini (model=$MODEL, prompt_bytes=${#EVAL_PROMPT})..."
 _HOOK_STAGE="gemini call"
 _GEMINI_START=$(date +%s)
 # Yolo mode: auto-approve tool calls (file reads, GitHub lookups)
-# The prompt instructs read-only behavior; Claude Code's 60s hook timeout is the safety net
+# The prompt instructs read-only behavior; Claude Code's 180s hook timeout is the safety net
 RAW=$(echo "$EVAL_PROMPT" | gemini -p - -o json -y -m "$MODEL" 2>/dev/null) || {
   local elapsed=$(( $(date +%s) - _GEMINI_START ))
   dbg "gemini call failed or timed out after ${elapsed}s, allowing stop"
