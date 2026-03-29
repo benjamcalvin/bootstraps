@@ -64,8 +64,7 @@ Include when relevant:
 ## Summary
 {What this PR does and why.}
 
-{Closes #N — if this PR fully completes the issue}
-{Part of #N — if this PR is one of several addressing the issue}
+{Closes #N | Part of #N — pick one, see Issue Linking below}
 
 ## Test evidence
 {How the change was verified.}
