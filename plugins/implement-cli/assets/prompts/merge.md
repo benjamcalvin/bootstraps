@@ -27,7 +27,7 @@ gh pr merge $PR_NUMBER --squash --delete-branch
 
 ### Step 3: Update Linked Issues
 
-Extract issue references (Closes #N, Fixes #N, Relates to #N) from PR title and body. Post appropriate update comments.
+Extract issue references (Closes #N, Fixes #N, Part of #N, Relates to #N) from PR title and body. Post appropriate update comments.
 
 ### Step 4: Report
 
