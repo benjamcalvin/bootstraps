@@ -77,6 +77,15 @@ fi
 dbg "activation marker found"
 
 # ---------------------------------------------------------------------------
+# 2b. Fast-path: waiting for background agents (no Gemini call, no counter)
+# ---------------------------------------------------------------------------
+if echo "$LAST_MSG" | grep -qiE 'waiting for .*(background|agent|result|task|reviewer)|launched .* in (the )?background|will be notified when .*(complete|finish|done|return)'; then
+  dbg "waiting for background agents, allowing stop (fast-path)"
+  _HOOK_STAGE="done"
+  exit 0
+fi
+
+# ---------------------------------------------------------------------------
 # 3. Load config (optional file, defaults inline)
 # ---------------------------------------------------------------------------
 CONFIG="$HOME/.config/stop-guard/config.json"
