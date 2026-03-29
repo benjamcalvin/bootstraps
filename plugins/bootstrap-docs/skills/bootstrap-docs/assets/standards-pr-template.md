@@ -64,7 +64,8 @@ Include when relevant:
 ## Summary
 {What this PR does and why.}
 
-{Closes #N / Relates to #N}
+{Closes #N — if this PR fully completes the issue}
+{Part of #N — if this PR is one of several addressing the issue}
 
 ## Test evidence
 {How the change was verified.}
@@ -73,9 +74,19 @@ Include when relevant:
 {Where reviewer attention is most valuable.}
 ```
 
-### Referencing
+### Issue Linking
 
-- Reference issues with `Closes #N` or `Relates to #N` in the description body
+Use the correct keyword based on whether this PR **fully completes** the issue or is **one of several** PRs addressing it:
+
+| Keyword | When to use |
+|---------|-------------|
+| `Closes #N` / `Fixes #N` | This single PR **fully completes** the issue. GitHub will auto-close the issue on merge. |
+| `Part of #N` | This PR is **one of several** addressing the issue. The issue stays open for remaining work. |
+
+**Default to `Part of #N`** when in doubt — prematurely closing a tracking issue loses visibility into remaining work. Only use `Closes` when you are certain no further PRs are needed.
+
+### Other References
+
 - Reference related PRs with `Depends on #N` or `See also #N`
 - Link to specs or ADRs when the PR implements a design document
 

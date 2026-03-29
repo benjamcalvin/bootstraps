@@ -10,7 +10,7 @@ agent: general-purpose
 allowed-tools: Read, Glob, Bash(cat *), Bash(find *)
 license: MIT
 metadata:
-  version: "1.3.0"
+  version: "1.4.0"
   tags: ["docs", "documentation", "strategy", "scaffolding"]
   author: benjamcalvin
   standards-sub-types: ["testing", "code", "pr"]
