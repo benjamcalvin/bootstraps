@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash {{SCRIPT_PATH}}/stop-guard.sh",
+            "command": "bash $PLUGIN_DIR/hooks/stop-guard.sh",
             "timeout": 15
           }
         ]
