@@ -110,10 +110,10 @@ All hook activity is logged to `~/.claude/logs/stop-guard.log`:
 [2026-03-29T14:33:20Z] activation marker found
 [2026-03-29T14:33:20Z] continuation 0/5
 [2026-03-29T14:33:20Z] calling gemini (model=gemini-3-flash-preview, prompt_bytes=12847)...
-[2026-03-29T14:33:50Z] gemini response received (1024 bytes)
+[2026-03-29T14:33:50Z] gemini returned after 30s (1024 bytes)
 [2026-03-29T14:33:50Z] tokens: in=33581 out=290 latency=58702ms
-[2026-03-29T14:33:50Z] decision=block
-[2026-03-29T14:33:50Z] reason=4 pending tasks not completed
+[2026-03-29T14:33:50Z] response: {"decision":"block","reason":"4 pending tasks not completed"}
+[2026-03-29T14:33:50Z] decision=block reason=4 pending tasks not completed
 [2026-03-29T14:33:50Z] blocking stop (continuation 1/5)
 ```
 
