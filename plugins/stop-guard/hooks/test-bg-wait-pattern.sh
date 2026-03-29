@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# autotest — self-contained, no external dependencies; run by validate-all.sh
 
 # test-bg-wait-pattern.sh — Regression tests for the background-wait fast-path regex.
 #
@@ -9,7 +10,9 @@ set -euo pipefail
 # Usage:
 #   ./test-bg-wait-pattern.sh
 
-# Extract the pattern from stop-guard.sh so tests stay in sync
+# Extract the pattern from stop-guard.sh so tests stay in sync.
+# NOTE: assumes BG_WAIT_PATTERN is a single-quoted assignment on one line.
+# The empty-check below catches breakage if the format changes.
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BG_WAIT_PATTERN=$(grep "^BG_WAIT_PATTERN=" "$SCRIPT_DIR/stop-guard.sh" | sed "s/^BG_WAIT_PATTERN='//;s/'$//")
 
@@ -59,6 +62,7 @@ expect_nomatch "I am waiting for your feedback on the task before proceeding."
 expect_nomatch "Still waiting for the test results to appear in CI."
 expect_nomatch "You will be notified when the PR checks complete."
 expect_nomatch "The function launched a goroutine in the background."
+expect_nomatch "We launched the cleanup task runner in the background."
 expect_nomatch "You will be notified when the deployment is done."
 expect_nomatch "I have completed the implementation and all tests pass."
 expect_nomatch "Waiting for the API to return the result."

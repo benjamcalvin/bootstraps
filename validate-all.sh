@@ -116,6 +116,20 @@ for plugin_dir in plugins/*/; do
     fi
   fi
 
+  # Run self-contained hook tests (test files that contain "# autotest" marker)
+  for test_file in "$plugin_dir"/hooks/test-*.sh; do
+    [ -f "$test_file" ] || continue
+    test_name=$(basename "$test_file")
+    if head -5 "$test_file" | grep -q '# autotest'; then
+      if bash "$test_file" > /dev/null 2>&1; then
+        echo "  OK: $test_name passed"
+      else
+        echo "  ERROR: $test_name failed"
+        ERRORS=$((ERRORS + 1))
+      fi
+    fi
+  done
+
   # Check .claude-plugin/marketplace.json references this plugin
   if [ -f ".claude-plugin/marketplace.json" ]; then
     if jq -e ".plugins[] | select(.name == \"$plugin_name\")" .claude-plugin/marketplace.json > /dev/null 2>&1; then
