@@ -5,7 +5,7 @@ set -euo pipefail
 #
 # Reads JSON from stdin (fields: session_id, last_assistant_message,
 # transcript_path, etc.). Evaluates task completion via Gemini CLI.
-# Blocks the stop (exit 2) if the task appears incomplete.
+# Blocks the stop via JSON decision if the task appears incomplete.
 #
 # Activation: only fires when the session transcript contains
 # <!-- stop-guard:active -->. Skills opt in by outputting that marker.
@@ -90,31 +90,67 @@ TRANSCRIPT_TAIL=$(tail -100 "$TRANSCRIPT" 2>/dev/null || echo "")
 # 6. Call Gemini CLI for evaluation
 # ---------------------------------------------------------------------------
 EVAL_PROMPT=$(cat <<'PROMPT_EOF'
-You are a task-completion evaluator for an AI coding assistant. Given the
-conversation transcript tail and the assistant's final message, determine
-whether the assistant's task is genuinely complete.
+# Role
 
-Signs of INCOMPLETE work:
-- The original request was only partially addressed
-- Errors occurred that were not resolved
-- The assistant said it would do something but did not finish
-- Tests should have been run but were not
-- Files were mentioned but not created or modified
+You are a quality gate in an AI coding agent's workflow. You decide whether
+the agent (Claude Code) should be allowed to stop or forced to continue.
 
-Signs of COMPLETE work:
-- All requested items were addressed with specifics
-- Verification steps (tests, builds) passed
-- The assistant provided a clear summary of what was done
+# How this works
 
-Signs the task NEEDS HUMAN input:
-- The assistant asked a question and is waiting for an answer
+You are called automatically every time Claude Code is about to end its turn.
+Your verdict has real consequences:
+
+- "incomplete" → Claude is BLOCKED from stopping and forced to continue.
+  Your reason is shown to Claude as the instruction for what to do next.
+  Only use this when work is clearly unfinished.
+- "complete" → Claude is allowed to stop. The conversation ends normally.
+- "needs_human" → Claude is allowed to stop. The user needs to provide
+  input before work can continue.
+
+Err on the side of "complete". Blocking a stop is disruptive — only do it
+when there is clear evidence of unfinished work, not just because the
+response could theoretically be better.
+
+# What you're looking at
+
+The transcript below is from a Claude Code session — a JSONL file where
+each line is a JSON object representing messages, tool calls, and tool
+results. You'll see role:"user" messages, role:"assistant" messages, and
+tool_use/tool_result blocks (file edits, bash commands, etc.).
+
+The <final_message> is Claude's last response before it tried to stop.
+
+# When to return "incomplete"
+
+Return incomplete ONLY when there is concrete evidence such as:
+- The user asked for X and Claude did not do X (not partially — not at all)
+- A command or test failed and Claude did not address the failure
+- Claude explicitly said "I will now do Y" but never did Y
+- An error was thrown that blocks the user's goal and was not resolved
+
+Do NOT return incomplete for:
+- Minor polish, style, or optimization opportunities
+- Missing tests unless the user specifically requested them
+- Claude summarizing what it did (that IS completion)
+- Claude asking the user a question (that's needs_human)
+
+# When to return "needs_human"
+
+- Claude asked a question and is waiting for an answer
 - A decision is needed that only the user can make
-- The assistant explicitly requested user feedback
+- Claude explicitly said it needs user input to proceed
 
-Respond with ONLY a valid JSON object (no markdown fences, no explanation):
-{"verdict": "complete", "reason": "one-line explanation"}
+# Response format
 
-Where verdict is exactly one of: "complete", "incomplete", "needs_human"
+Respond with ONLY a valid JSON object. No markdown fences, no commentary,
+no text before or after. Just the JSON:
+
+{"verdict": "<complete|incomplete|needs_human>", "reason": "<1-3 sentences: what specific evidence led to this verdict>"}
+
+The reason field is critical — when blocking, it becomes Claude's
+instruction for what to work on next. Make it specific and actionable
+(e.g., "The tests in auth_test.go failed with 3 errors that were not
+addressed" not "Work seems incomplete").
 PROMPT_EOF
 )
 
@@ -133,13 +169,16 @@ if [ -n "$TASK_CONTEXT" ]; then
   EVAL_PROMPT="$EVAL_PROMPT
 
 <task_context>
+The skill that activated this guard provided the following context about
+what the task is and what the acceptance criteria are:
 $TASK_CONTEXT
 </task_context>"
 fi
 
 dbg "calling gemini (model=$MODEL)..."
-# No `timeout` on macOS — rely on Claude Code's 15s hook timeout instead
-RAW=$(echo "$EVAL_PROMPT" | gemini -p - -o json -y -m "$MODEL" 2>/dev/null) || {
+# Plan mode: read-only tools (file reads, GitHub) — no writes allowed
+# Claude Code's 15s hook timeout is the safety net
+RAW=$(echo "$EVAL_PROMPT" | gemini -p - -o json --approval-mode plan -m "$MODEL" 2>/dev/null) || {
   dbg "gemini call failed or timed out, allowing stop"
   exit 0
 }
