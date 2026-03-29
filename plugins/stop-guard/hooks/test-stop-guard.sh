@@ -237,31 +237,55 @@ INPUT_TOKENS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".tokens.input // 0" 
 OUTPUT_TOKENS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".tokens.candidates // 0" 2>/dev/null) || OUTPUT_TOKENS=0
 LATENCY_MS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".api.totalLatencyMs // 0" 2>/dev/null) || LATENCY_MS=0
 
-# Gemini may return commentary before/after the JSON — extract just the JSON object
-JSON_BLOCK=$(echo "$INNER" | grep -o '{[^}]*"decision"[^}]*}' 2>/dev/null | head -1) || JSON_BLOCK=""
-if [ -n "$JSON_BLOCK" ]; then
-  DECISION=$(echo "$JSON_BLOCK" | jq -r '.decision // "(allow)"' 2>/dev/null) || DECISION="(parse error)"
-  REASON=$(echo "$JSON_BLOCK" | jq -r '.reason // "(none)"' 2>/dev/null) || REASON="(parse error)"
+# Extract decision — try multiple strategies
+DECISION=""
+REASON=""
+PARSE_METHOD=""
+
+# Strategy 1: direct jq parse
+if DECISION=$(echo "$INNER" | jq -r '.decision // empty' 2>/dev/null) && [ -n "$DECISION" ]; then
+  REASON=$(echo "$INNER" | jq -r '.reason // ""' 2>/dev/null) || REASON=""
+  PARSE_METHOD="direct jq"
 else
-  DECISION="(allow)"
-  REASON="(none)"
+  DECISION=""
+  # Strategy 2: extract JSON from mixed content
+  JSON_BLOCK=""
+  while IFS= read -r candidate; do
+    if echo "$candidate" | jq -e '.decision' >/dev/null 2>&1; then
+      JSON_BLOCK="$candidate"
+    fi
+  done < <(echo "$INNER" | grep -o '{[^{}]*}' 2>/dev/null || true)
+
+  if [ -n "$JSON_BLOCK" ]; then
+    DECISION=$(echo "$JSON_BLOCK" | jq -r '.decision // ""' 2>/dev/null) || DECISION=""
+    REASON=$(echo "$JSON_BLOCK" | jq -r '.reason // ""' 2>/dev/null) || REASON=""
+    PARSE_METHOD="grep+jq extraction"
+  else
+    # Strategy 3: legacy verdict format
+    VERDICT=$(echo "$INNER" | jq -r '.verdict // empty' 2>/dev/null) || VERDICT=""
+    if [ "$VERDICT" = "incomplete" ]; then
+      DECISION="block"
+      REASON=$(echo "$INNER" | jq -r '.reason // ""' 2>/dev/null) || REASON=""
+      PARSE_METHOD="legacy verdict"
+    else
+      DECISION="(allow)"
+      REASON="(none)"
+      PARSE_METHOD="no decision found"
+    fi
+  fi
 fi
 
 echo "=== Result ==="
 echo ""
 echo "Decision:    $DECISION"
 echo "Reason:      $REASON"
+echo "Parsed via:  $PARSE_METHOD"
 echo ""
 echo "--- Stats ---"
 echo "Tokens in:   $INPUT_TOKENS"
 echo "Tokens out:  $OUTPUT_TOKENS"
 echo "Latency:     ${LATENCY_MS}ms"
 echo "Wall time:   $((END_TIME - START_TIME))s"
-echo ""
-if [ -n "$JSON_BLOCK" ]; then
-  echo "--- Extracted JSON ---"
-  echo "$JSON_BLOCK" | jq . 2>/dev/null || echo "$JSON_BLOCK"
-fi
 echo ""
 echo "--- Raw Response ---"
 echo "$INNER"

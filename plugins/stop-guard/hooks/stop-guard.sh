@@ -234,16 +234,43 @@ OUTPUT_TOKENS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".tokens.candidates 
 LATENCY_MS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".api.totalLatencyMs // 0" 2>/dev/null) || LATENCY_MS=0
 dbg "tokens: in=$INPUT_TOKENS out=$OUTPUT_TOKENS latency=${LATENCY_MS}ms"
 
-# Gemini may return commentary before/after the JSON — extract just the JSON object
-JSON_BLOCK=$(echo "$INNER" | grep -o '{[^}]*"decision"[^}]*}' 2>/dev/null | head -1) || JSON_BLOCK=""
-if [ -z "$JSON_BLOCK" ]; then
-  # No decision block found — treat as allow
-  dbg "no decision JSON found in response, allowing stop"
-  DECISION=""
-  REASON=""
+# Extract decision from gemini's response. Try multiple strategies:
+# 1. Direct jq parse (response is valid JSON)
+# 2. Extract JSON block from mixed text+JSON response
+# 3. Handle old verdict format as fallback
+DECISION=""
+REASON=""
+
+# Strategy 1: try parsing the whole response as JSON
+if DECISION=$(echo "$INNER" | jq -r '.decision // empty' 2>/dev/null) && [ -n "$DECISION" ]; then
+  REASON=$(echo "$INNER" | jq -r '.reason // ""' 2>/dev/null) || REASON=""
+  dbg "parsed via direct jq"
 else
-  DECISION=$(echo "$JSON_BLOCK" | jq -r '.decision // ""' 2>/dev/null) || DECISION=""
-  REASON=$(echo "$JSON_BLOCK" | jq -r '.reason // ""' 2>/dev/null) || REASON=""
+  DECISION=""
+  # Strategy 2: extract JSON from mixed content (handles multiline)
+  # Find the last { ... } block containing "decision" using jq to validate
+  JSON_BLOCK=""
+  while IFS= read -r candidate; do
+    if echo "$candidate" | jq -e '.decision' >/dev/null 2>&1; then
+      JSON_BLOCK="$candidate"
+    fi
+  done < <(echo "$INNER" | grep -o '{[^{}]*}' 2>/dev/null || true)
+
+  if [ -n "$JSON_BLOCK" ]; then
+    DECISION=$(echo "$JSON_BLOCK" | jq -r '.decision // ""' 2>/dev/null) || DECISION=""
+    REASON=$(echo "$JSON_BLOCK" | jq -r '.reason // ""' 2>/dev/null) || REASON=""
+    dbg "parsed via grep+jq extraction"
+  else
+    # Strategy 3: handle old verdict format (incomplete → block)
+    VERDICT=$(echo "$INNER" | jq -r '.verdict // empty' 2>/dev/null) || VERDICT=""
+    if [ "$VERDICT" = "incomplete" ]; then
+      DECISION="block"
+      REASON=$(echo "$INNER" | jq -r '.reason // ""' 2>/dev/null) || REASON=""
+      dbg "parsed via legacy verdict format"
+    else
+      dbg "no decision found in response, allowing stop"
+    fi
+  fi
 fi
 
 dbg "decision=$DECISION"
@@ -252,8 +279,7 @@ dbg "reason=$REASON"
 if [ "$DECISION" = "block" ]; then
   echo $((COUNT + 1)) > "$COUNTER_FILE"
   dbg "blocking stop (continuation $((COUNT + 1))/$MAX_CONT)"
-  # Pass through the extracted stop control JSON
-  echo "$JSON_BLOCK"
+  jq -n --arg reason "$REASON" '{"decision":"block","reason":$reason}'
   exit 0
 fi
 
