@@ -146,18 +146,25 @@ RAW=$(echo "$EVAL_PROMPT" | gemini -p - -o json -y -m "$MODEL" 2>/dev/null) || {
 dbg "gemini response received (${#RAW} bytes)"
 
 # ---------------------------------------------------------------------------
-# 7. Parse verdict
+# 7. Parse verdict and stats
 # ---------------------------------------------------------------------------
-# gemini -o json wraps output in {"session_id": "...", "response": "..."}
+# gemini -o json wraps output in {"session_id": "...", "response": "...", "stats": {...}}
 INNER=$(echo "$RAW" | jq -r '.response // ""' 2>/dev/null) || {
   dbg "failed to parse gemini envelope, allowing stop"
   exit 0
 }
 
+# Extract token usage and latency from stats
+INPUT_TOKENS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".tokens.input // 0" 2>/dev/null) || INPUT_TOKENS=0
+OUTPUT_TOKENS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".tokens.candidates // 0" 2>/dev/null) || OUTPUT_TOKENS=0
+LATENCY_MS=$(echo "$RAW" | jq -r ".stats.models.\"$MODEL\".api.totalLatencyMs // 0" 2>/dev/null) || LATENCY_MS=0
+dbg "tokens: in=$INPUT_TOKENS out=$OUTPUT_TOKENS latency=${LATENCY_MS}ms"
+
 VERDICT=$(echo "$INNER" | jq -r '.verdict // "complete"' 2>/dev/null) || VERDICT="complete"
 REASON=$(echo "$INNER" | jq -r '.reason // ""' 2>/dev/null) || REASON=""
 
-dbg "verdict=$VERDICT reason=$REASON"
+dbg "verdict=$VERDICT"
+dbg "reason=$REASON"
 
 if [ "$VERDICT" = "incomplete" ]; then
   echo $((COUNT + 1)) > "$COUNTER_FILE"
