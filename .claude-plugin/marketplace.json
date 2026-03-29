@@ -24,7 +24,7 @@
       "name": "implement-lifecycle",
       "source": "./plugins/implement-lifecycle",
       "description": "Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, merge",
-      "version": "3.0.2",
+      "version": "3.0.3",
       "category": "productivity",
       "tags": ["implement", "review", "pr", "lifecycle", "adversarial", "tdd", "merge"],
       "author": {
@@ -60,7 +60,7 @@
       "name": "implement-cli",
       "source": "./plugins/implement-cli",
       "description": "CLI-based multi-provider implementation lifecycle using the Python Agent SDK for subprocess orchestration",
-      "version": "1.2.2",
+      "version": "1.2.3",
       "category": "productivity",
       "tags": ["implement", "cli", "agent-sdk", "multi-provider", "orchestrator", "review", "lifecycle"],
       "author": {

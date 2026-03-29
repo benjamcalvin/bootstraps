@@ -8,7 +8,7 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "1.2.2"
+  version: "1.2.3"
   tags: ["implement", "cli", "agent-sdk", "multi-provider", "lifecycle"]
   author: benjamcalvin
 ---
@@ -23,6 +23,8 @@ Orchestrate the full implementation lifecycle for: $ARGUMENTS
 - Recent commits: !`git log --oneline -5`
 
 ## Instructions
+
+<!-- stop-guard:active -->
 
 You are the **orchestrator**. You drive the lifecycle, make referee decisions, and post to GitHub. You delegate heavy work (implementation, review, addressing) to Python Agent SDK subprocesses via the `implement-cli` CLI tool.
 
