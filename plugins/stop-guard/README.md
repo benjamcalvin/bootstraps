@@ -11,6 +11,8 @@ Stop hook fires
         ↓
 Check transcript for activation marker  →  not found → allow stop
         ↓ found
+Check last message for background-wait  →  waiting for agents → allow stop (fast-path)
+        ↓ not waiting
 Check continuation counter  →  max reached → allow stop
         ↓ under limit
 Check task list  →  all tasks completed → allow stop (fast-path)
@@ -119,6 +121,18 @@ The log includes token usage and API latency for each evaluation. Log file auto-
 
 ## Testing
 
+### Automated regression tests
+
+Run the background-wait fast-path pattern tests (no external dependencies):
+
+```bash
+./plugins/stop-guard/hooks/test-bg-wait-pattern.sh
+```
+
+These also run automatically as part of `./validate-all.sh`.
+
+### Manual integration test
+
 Test the evaluator against any Claude Code session transcript without triggering the actual hook:
 
 ```bash
@@ -174,11 +188,12 @@ This ensures the stop-guard evaluates completion against the specific task crite
 ```
 plugins/stop-guard/
 ├── .claude-plugin/
-│   └── plugin.json       # Plugin metadata
+│   └── plugin.json              # Plugin metadata
 ├── hooks/
-│   ├── hooks.json         # Stop hook registration
-│   ├── stop-guard.sh      # The hook script
-│   └── test-stop-guard.sh # Test script
+│   ├── hooks.json                # Stop hook registration
+│   ├── stop-guard.sh             # The hook script
+│   ├── test-bg-wait-pattern.sh   # Automated regex regression tests
+│   └── test-stop-guard.sh        # Manual integration test
 └── README.md
 ```
 
