@@ -222,7 +222,7 @@ fi
 # Call Gemini
 # ---------------------------------------------------------------------------
 START_TIME=$(date +%s)
-RAW=$(echo "$EVAL_PROMPT" | gemini -p - -o json --approval-mode plan -m "$MODEL" 2>/dev/null) || {
+RAW=$(echo "$EVAL_PROMPT" | gemini -p - -o json -y -m "$MODEL" 2>/dev/null) || {
   echo "ERROR: gemini call failed"
   exit 1
 }

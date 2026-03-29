@@ -211,9 +211,9 @@ $TASK_CONTEXT
 fi
 
 dbg "calling gemini (model=$MODEL)..."
-# Plan mode: read-only tools (file reads, GitHub) — no writes allowed
-# Claude Code's 15s hook timeout is the safety net
-RAW=$(echo "$EVAL_PROMPT" | gemini -p - -o json --approval-mode plan -m "$MODEL" 2>/dev/null) || {
+# Yolo mode: auto-approve tool calls (file reads, GitHub lookups)
+# The prompt instructs read-only behavior; Claude Code's 60s hook timeout is the safety net
+RAW=$(echo "$EVAL_PROMPT" | gemini -p - -o json -y -m "$MODEL" 2>/dev/null) || {
   dbg "gemini call failed or timed out, allowing stop"
   exit 0
 }
