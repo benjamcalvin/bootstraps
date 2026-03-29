@@ -136,7 +136,9 @@ Push the branch (first push uses `-u` to set upstream):
 git push -u origin HEAD
 ```
 
-Create the PR. If the issue number is not `0`, include a `Closes #N` line after the Summary section.
+Create the PR. If the issue number is not `0`, include an issue reference after the Summary section:
+- Use `Closes #N` only when this single PR **fully completes** the issue
+- Use `Part of #N` when this PR is **one of several** addressing the issue (default to this when unsure)
 
 ```bash
 gh pr create --title "<type>: <imperative summary>" --body "$(cat <<'EOF'

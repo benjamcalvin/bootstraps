@@ -56,7 +56,11 @@ Check additions + deletions (excluding generated code, test fixtures, lock files
 Each commit message should follow `<type>: <summary>` format. No "WIP", "fixup", or "wip" commits.
 
 **7. References**
-If the change relates to a GitHub issue, it should reference it with `Closes #N` or `Relates to #N`. WARN if no references found (not all PRs need them, but flag for awareness).
+If the change relates to a GitHub issue, it should reference it with an appropriate keyword:
+- `Closes #N` / `Fixes #N` — only when this single PR fully completes the issue
+- `Part of #N` — when the PR is one of several addressing the issue
+
+WARN if no references found (not all PRs need them, but flag for awareness). WARN if `Closes #N` is used but the PR appears to be a sub-task of a larger issue (e.g., the issue has multiple acceptance criteria and the PR only addresses some).
 
 ### Output Format
 

@@ -27,7 +27,9 @@ Read project-level instructions (AGENTS.md, CLAUDE.md) for critical invariants.
    gh pr create --title "<type>: <summary>" --body "<body with Summary, Test evidence, Review focus>"
    ```
 
-If issue number is not 0, include `Closes #$ISSUE_NUMBER` in the PR body.
+If issue number is not 0, include an issue reference in the PR body:
+- Use `Closes #$ISSUE_NUMBER` only when this single PR **fully completes** the issue
+- Use `Part of #$ISSUE_NUMBER` when this PR is **one of several** addressing the issue (default when unsure)
 
 ## Output
 

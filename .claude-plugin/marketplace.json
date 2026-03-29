@@ -12,7 +12,7 @@
       "name": "bootstrap-docs",
       "source": "./plugins/bootstrap-docs",
       "description": "Set up a comprehensive, AI-readable documentation strategy in any project",
-      "version": "1.3.0",
+      "version": "1.4.0",
       "category": "productivity",
       "tags": ["docs", "documentation", "strategy", "scaffolding"],
       "author": {
@@ -24,7 +24,7 @@
       "name": "implement-lifecycle",
       "source": "./plugins/implement-lifecycle",
       "description": "Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, merge",
-      "version": "3.0.3",
+      "version": "3.1.0",
       "category": "productivity",
       "tags": ["implement", "review", "pr", "lifecycle", "adversarial", "tdd", "merge"],
       "author": {
@@ -60,7 +60,7 @@
       "name": "implement-cli",
       "source": "./plugins/implement-cli",
       "description": "CLI-based multi-provider implementation lifecycle using the Python Agent SDK for subprocess orchestration",
-      "version": "1.2.3",
+      "version": "1.3.0",
       "category": "productivity",
       "tags": ["implement", "cli", "agent-sdk", "multi-provider", "orchestrator", "review", "lifecycle"],
       "author": {
