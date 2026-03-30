@@ -70,14 +70,14 @@ Create `~/.config/stop-guard/config.json` (optional — sensible defaults are us
 
 ```json
 {
-  "max_continuations": 5,
+  "max_continuations": 10,
   "model": "gemini-3-flash-preview"
 }
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `max_continuations` | `5` | Maximum times the hook will block a stop per session before giving up |
+| `max_continuations` | `10` | Maximum times the hook will block a stop per session before giving up |
 | `model` | `gemini-3-flash-preview` | Gemini model for evaluation |
 
 ## Safety mechanisms
