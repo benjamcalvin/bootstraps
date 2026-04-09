@@ -125,7 +125,7 @@ Before pushing, identify the branch this work should be based on. Use the reposi
 
 ```bash
 BASE_BRANCH=$(gh repo view --json defaultBranchRef --jq -r '.defaultBranchRef.name')
-# For stacked work, replace BASE_BRANCH with the parent feature branch instead.
+# Example for stacked work: BASE_BRANCH="feat/parent-feature"
 git fetch origin "$BASE_BRANCH"
 git rebase "origin/$BASE_BRANCH"
 ```
