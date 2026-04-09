@@ -48,7 +48,7 @@ Do not return the plan to the orchestrator. Proceed directly to Step 1 with the 
 
 ### Step 1: Create a Branch
 
-If you're on `main`, create a feature branch:
+If you're on the shared base branch for this work (for example the repository default branch or a shared integration branch), create a feature branch:
 
 ```bash
 git checkout -b <type>/<short-description>
@@ -56,7 +56,7 @@ git checkout -b <type>/<short-description>
 
 Branch naming: `<type>/<short-description>` where type is `feat`, `fix`, `refactor`, `docs`, `test`, or `chore`. Lowercase, hyphen-separated. No issue numbers in the branch name.
 
-If already on a feature branch, stay on it.
+If already on a feature branch or stacked branch for this work, stay on it.
 
 ### Step 2: Write Tests First
 
@@ -119,13 +119,15 @@ git add <specific files>
 git commit -m "<type>: <summary>"
 ```
 
-### Step 8: Sync with Main, Push, and Create PR
+### Step 8: Sync with the Correct Base Branch, Push, and Create PR
 
-Rebase on main before pushing to catch integration issues early:
+Before pushing, identify the branch this work should be based on. Use the repository's default branch for standalone work, or the parent feature branch for stacked work. Do not assume it is always `main`.
 
 ```bash
-git fetch origin main
-git rebase origin/main
+BASE_BRANCH=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')
+# Example for stacked work: BASE_BRANCH="feat/parent-feature"
+git fetch origin "$BASE_BRANCH"
+git rebase "origin/$BASE_BRANCH"
 ```
 
 If conflicts arise, resolve them and re-run the test suite before continuing.
