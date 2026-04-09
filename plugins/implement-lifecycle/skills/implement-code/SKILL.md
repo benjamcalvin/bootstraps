@@ -124,7 +124,7 @@ git commit -m "<type>: <summary>"
 Before pushing, identify the branch this work should be based on. Use the repository's default branch for standalone work, or the parent feature branch for stacked work. Do not assume it is always `main`.
 
 ```bash
-BASE_BRANCH=$(gh repo view --json defaultBranchRef --jq -r '.defaultBranchRef.name')
+BASE_BRANCH=$(gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name')
 # Example for stacked work: BASE_BRANCH="feat/parent-feature"
 git fetch origin "$BASE_BRANCH"
 git rebase "origin/$BASE_BRANCH"
