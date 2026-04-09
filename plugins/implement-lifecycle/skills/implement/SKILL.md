@@ -112,7 +112,8 @@ There is no other way to exit this loop. Each round: Specialist reviewers → Re
 **Rebase on the PR's current base branch** to ensure the review runs against current code:
 
 ```bash
-BASE_BRANCH=$(gh pr view <number> --json baseRefName --jq -r '.baseRefName')
+PR_NUMBER=<current-pr-number>
+BASE_BRANCH=$(gh pr view "$PR_NUMBER" --json baseRefName --jq -r '.baseRefName')
 git fetch origin "$BASE_BRANCH"
 git rebase "origin/$BASE_BRANCH"
 ```
