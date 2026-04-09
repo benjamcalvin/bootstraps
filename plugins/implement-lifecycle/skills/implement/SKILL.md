@@ -109,11 +109,12 @@ There is no other way to exit this loop. Each round: Specialist reviewers → Re
 
 #### Before Round 1
 
-**Rebase on main** to ensure the review runs against current code:
+**Rebase on the PR's current base branch** to ensure the review runs against current code:
 
 ```bash
-git fetch origin main
-git rebase origin/main
+BASE_BRANCH=$(gh pr view <number> --json baseRefName --jq -r '.baseRefName')
+git fetch origin "$BASE_BRANCH"
+git rebase "origin/$BASE_BRANCH"
 ```
 
 If conflicts arise, resolve them, then run the full test suite to catch integration breakage. Force-push the rebased branch:
