@@ -20,16 +20,30 @@ gh pr view $PR_NUMBER --comments
 - **Type safety** — unsafe type assertions, integer overflow
 - **Control flow** — unreachable code, missing break/return
 
+## Step 1: Seek Out Relevant Project Standards
+
+Actively find correctness-related guidance in the project before judging the PR:
+- AGENTS.md / CLAUDE.md for invariants, edge-case expectations, error-handling rules, and concurrency guidance
+- Specs, ADRs, or design docs for the touched behavior
+- Existing code in the affected modules for established defensive patterns
+
+Review in light of that guidance. If you raise a convention-based finding, tie it to a concrete project standard or clearly-established local pattern. Do not invent rules.
+
 ## How to Review
 
 1. Read each changed file. Understand the full context.
 2. Trace execution paths including error paths.
-3. Check invariants from AGENTS.md or CLAUDE.md.
+3. Check the documented invariants and standards you found.
 4. Verify test coverage for each logic path.
 
 ## Round Context
 
 If round 2+, read PR comments for previous referee decisions. Do NOT repeat addressed or rejected findings.
+
+## Anti-Patterns (Avoid)
+
+- Don't raise convention findings based only on personal preference.
+- Don't report theoretical issues that the code's actual constraints make impossible.
 
 ## Output
 

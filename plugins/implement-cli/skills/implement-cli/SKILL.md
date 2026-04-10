@@ -8,7 +8,7 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "1.3.0"
+  version: "1.3.1"
   tags: ["implement", "cli", "agent-sdk", "multi-provider", "lifecycle"]
   author: benjamcalvin
 ---
@@ -140,11 +140,18 @@ gh issue comment <N> --body "Implementation PR created: #<pr-number>. Entering r
 
 #### Step A: Run Reviewers
 
-Invoke parallel reviewers:
+Choose reviewers judiciously from the PR summary, changed-file list, and issue/spec context. Use the smallest sufficient set for the PR, not the full pool by default:
+- `review-correctness` for production logic changes
+- `review-security` for auth/authz, user input, secrets, external integrations, data handling, or spec-sensitive changes
+- `review-architecture` for multi-module changes, new abstractions, public APIs, dependency shifts, or structural refactors
+- `review-testing` when tests changed, new behavior was added, or regression coverage is a meaningful concern
+
+Skip specialists whose focus clearly does not apply. Then invoke the selected reviewers in parallel:
 
 ```bash
 "$CLI" --verbose run-reviewers \
-  --pr <PR> --round <N> --cwd "$(pwd)"
+  --pr <PR> --round <N> --cwd "$(pwd)" \
+  --reviewers <selected-reviewer>...
 ```
 
 Parse JSON output — each reviewer's result is in `reviewers.<name>`:

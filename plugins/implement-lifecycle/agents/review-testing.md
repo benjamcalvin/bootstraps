@@ -25,6 +25,8 @@ Before reviewing, understand the project's testing patterns. Search for and read
 - Testing standards docs in `docs/` if they exist
 - Existing test files in the affected modules — understand the established patterns (naming, structure, helpers, fixtures)
 
+Actively seek out the testing standards that apply to this PR: required test layers, helper usage, fixture patterns, assertions style, and regression-test expectations. Review in light of that guidance. If you raise a convention-based test finding, anchor it in a project rule or established local pattern rather than personal preference.
+
 ## Step 2: Map Changed Code to Test Coverage
 
 1. **Identify every new or modified code path** in the production code changes. For each:
@@ -83,6 +85,7 @@ Check the round number from your prompt. If this is round 2 or later, read the P
 - **Prescribing specific test frameworks** — Work within whatever testing tools the project already uses.
 - **Scope creep** — Don't review tests for code that wasn't changed by this PR.
 - **Review theater** — Don't report vague concerns like "could use more tests." Be specific about *what* path is untested and *why* it matters.
+- **Unanchored convention findings** — Don't insist on a test style unless the project guidance or local test suite establishes it.
 
 ## Output
 
