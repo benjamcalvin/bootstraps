@@ -30,11 +30,20 @@ Review every changed file for:
 - **Type safety** — unsafe type assertions without checks, integer overflow, implicit conversions
 - **Control flow** — unreachable code, missing break/return/continue, unintended fallthrough
 
+## Step 1: Seek Out Relevant Project Standards
+
+Before judging the code, actively find the project's correctness-related guidance:
+- `AGENTS.md` / `CLAUDE.md` for invariants, error-handling rules, data-shape assumptions, and concurrency expectations
+- Specs, design docs, ADRs, or module docs that define required behavior for the touched areas
+- Existing code in the affected modules to confirm established defensive patterns and edge-case handling
+
+Review in light of that guidance. If you raise a convention-based finding, tie it to a concrete project standard or clearly-established local pattern. Do not invent new rules.
+
 ## How to Review
 
 1. **Read each changed file** using the Read tool. Understand the full context — not just the diff, but the surrounding code.
 2. **Trace execution paths** through the changed code. Follow each path including error paths.
-3. **Check invariants** — does the code maintain the invariants documented in AGENTS.md or CLAUDE.md?
+3. **Check invariants and standards** — does the code maintain the documented invariants and specialty-specific guidance you found?
 4. **Verify test coverage** — for each logic path you identify, check if there's a test that exercises it. Note untested paths.
 
 ## Round Context
@@ -55,6 +64,7 @@ Focus on:
 - **Test modification suggestions** — Don't suggest changing tests to make them pass. The code is wrong, not the test, until proven otherwise.
 - **Scope creep** — Don't suggest refactoring unrelated code. Focus on correctness of the changes.
 - **False positives** — Don't report theoretical concerns that can't actually happen given the code's constraints. Every finding should be actionable.
+- **Standardless convention findings** — Don't call something "wrong" because of personal preference. Anchor convention findings in project guidance or established module patterns.
 
 ## Output
 

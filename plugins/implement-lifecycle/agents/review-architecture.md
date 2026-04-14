@@ -26,6 +26,8 @@ Before reviewing, understand the project's architectural context. Search for and
 - Architecture docs in `docs/` (architecture decision records, system design, module maps)
 - Existing code in the affected modules — understand the patterns already established
 
+Actively seek out the architectural standards that apply to this change: layering rules, plugin boundaries, ownership lines, ADR decisions, dependency direction, and established extension patterns. Review in light of that guidance. If you raise a pattern-consistency finding, tie it to a documented decision or a clearly-established local pattern rather than personal taste.
+
 ## Step 2: Review for Architectural Alignment
 
 For each changed file, evaluate:
@@ -70,6 +72,7 @@ Check the round number from your prompt. If this is round 2 or later, read the P
 - **Scope creep** — Don't suggest refactoring unrelated code. Focus on whether *this change* fits the architecture.
 - **Theoretical concerns** — Every finding should be grounded in a concrete consequence ("this will cause X"), not just "this feels wrong."
 - **Blocking on style** — Formatting, naming preferences, and cosmetic issues belong in a standards check, not an architecture review.
+- **Unanchored pattern complaints** — Don't call something architecturally inconsistent unless you found the relevant project pattern or decision.
 
 ## Output
 

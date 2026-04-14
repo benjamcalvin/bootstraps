@@ -14,6 +14,8 @@ gh pr view $PR_NUMBER --comments
 
 Read AGENTS.md, CLAUDE.md, and testing standards. Look at existing test files for patterns.
 
+Actively seek out the testing standards that apply to this PR: required test layers, helper usage, fixture patterns, assertion style, and regression-test expectations. Review in light of that guidance. If you raise a convention-based test finding, anchor it in project guidance or an established local pattern rather than personal preference.
+
 ## Step 2: Map Changed Code to Test Coverage
 
 1. Identify every new or modified code path. Is there a corresponding test?
@@ -30,6 +32,11 @@ Read AGENTS.md, CLAUDE.md, and testing standards. Look at existing test files fo
 ## Round Context
 
 If round 2+, read PR comments for previous referee decisions. Do NOT repeat addressed or rejected findings.
+
+## Anti-Patterns (Avoid)
+
+- Don't demand test styles the project does not use.
+- Don't raise vague "needs more tests" feedback without naming the missing path and why it matters.
 
 ## Output
 

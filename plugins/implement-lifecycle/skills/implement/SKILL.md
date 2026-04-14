@@ -134,12 +134,19 @@ Do **NOT** fetch the full diff — it fills the context window. Read specific fi
 
 #### Step A: Invoke Reviewers
 
-**Dynamically select** which specialist reviewers to invoke based on the complexity and surface area of the changes. Balance thoroughness with efficiency — invoke the subset that matches the change:
+**Dynamically select** which specialist reviewers to invoke based on the complexity, risk, and surface area of the changes. Be judicious: use the smallest sufficient reviewer set for the PR, not the full pool by default. Balance thoroughness with efficiency — invoke the subset that matches the change:
 
 - `review-correctness` — Logic bugs, edge cases, error handling, race conditions
 - `review-security` — Spec conformance, authZ, PII, injection risks
 - `review-architecture` — Pattern consistency, module boundaries, coupling, forward-looking design
 - `review-testing` — Test coverage, assertion quality, edge cases, test anti-patterns
+
+Use judgment from the PR summary, changed-file list, and issue/spec context:
+- **Always include `review-correctness`** when production logic changed.
+- Include **`review-security`** for auth/authz, user input, secrets, external integrations, data handling, permission boundaries, or whenever requirements/spec conformance is important.
+- Include **`review-architecture`** for multi-module changes, new abstractions, dependency shifts, public APIs, or structural refactors.
+- Include **`review-testing`** when tests changed, new behavior was added, or existing behavior changed without obvious regression coverage.
+- Skip reviewers whose specialty clearly does not apply; do not summon them just for ritual coverage.
 
 **Always invoke selected reviewers in parallel using multiple Agent tool calls in a single response:**
 

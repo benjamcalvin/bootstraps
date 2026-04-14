@@ -14,6 +14,8 @@ gh pr view $PR_NUMBER --comments
 
 Read AGENTS.md, CLAUDE.md, and architecture docs in `docs/`.
 
+Actively seek out the architectural standards that apply to this change: module boundaries, dependency direction, extension patterns, and ADR decisions. Review in light of that guidance. If you raise a pattern-consistency finding, tie it to a documented decision or a clearly-established local pattern rather than personal taste.
+
 ## Step 2: Review
 
 - **Pattern Consistency** — does new code follow established patterns?
@@ -25,6 +27,11 @@ Read AGENTS.md, CLAUDE.md, and architecture docs in `docs/`.
 ## Round Context
 
 If round 2+, read PR comments for previous referee decisions. Do NOT repeat addressed or rejected findings.
+
+## Anti-Patterns (Avoid)
+
+- Don't block on personal style preferences.
+- Don't call something architecturally inconsistent unless you found the relevant project pattern or decision.
 
 ## Output
 
