@@ -18,6 +18,18 @@ You do **not** post your results to the PR timeline yourself. You hand a structu
 
 ## Step 1: Understand the Change Holistically
 
+### Load project verification standards first
+
+Before you design a plan, find and read the project's own guidance on how things are validated:
+
+- `AGENTS.md` / `CLAUDE.md` at the repo root and any nested directories that apply — testing principles, validation workflows, verification expectations, required checks
+- Any project-specific validation scripts referenced by the above (e.g., `./validate-all.sh`, `make verify`, plugin manifests) — run the ones that apply so your evidence uses the project's own tools
+- Specs, ADRs, and `references/` assets that define what "working" means for the touched feature
+
+Your verdict must be grounded in the project's definition of correct, not a generic QA checklist. If the project has a canonical verification command for the touched area, run it and cite its output.
+
+### Gather PR context
+
 Start from the lead's dispatch. Parse the PR number. Fetch PR context yourself:
 
 ```bash
