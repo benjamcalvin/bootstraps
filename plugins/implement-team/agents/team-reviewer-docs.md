@@ -108,30 +108,22 @@ Docs findings frequently overlap with architecture findings (ADR triggers, patte
 
 ## Output
 
-### Post to the shared task list
+You do **not** post to GitHub. The team lead is the sole publisher to the PR timeline — it synthesizes all reviewers' findings, applies accept/reject filtering, and posts one authoritative round-N review. Your job is to hand the lead everything it needs in the shared task list.
 
-For each finding you plan to keep after clarification and dedupe, use `TaskCreate` (or `TaskUpdate` if refining an existing entry) with a descriptive subject so sibling teammates and the lead can see at a glance what you flagged. Use subjects like `[docs] <file>:<line> — <short summary>`. Include the severity tier (Action Required / Recommended / Minor) in the task body.
+### Post each finding to the shared task list
 
-### Post the final filtered findings to the PR
+For each finding you plan to keep after clarification and dedupe, use `TaskCreate` (or `TaskUpdate` if refining an existing entry). The task body is your primary output — make it complete enough that the lead can copy the substance into its synthesis without reading the code again.
 
-After the shared-task-list entries are in place and duplicates are resolved, post the filtered findings to GitHub as a PR review comment (not a top-level PR comment):
+**Subject format:** `[docs] <file>:<line> — <short summary>` (or `[docs] missing — <topic>` for gaps where no docs file exists yet)
 
-```bash
-gh pr review <pr-number> --comment --body "<findings>"
+**Body format** (Markdown):
+
+```
+**Severity:** Action Required | Recommended | Minor
+**File:** <path>:<line-range>  — or  "missing: <expected location>" for gaps
+**Finding:** <1-3 sentence description of the docs concern — inaccuracy, missing coverage, stale content, ADR trigger — with enough detail that the lead can evaluate accept/reject without re-reading the docs or code>
+**Why it matters:** <concrete impact — what a reader would get wrong, what decision is unrecorded, what cross-link is broken>
+**Suggested fix:** <optional: what the docs should say or which file should be created/updated>
 ```
 
-Structure the body exactly like this:
-
-### Action Required
-- **[Docs]** Description with specific file:line and documentation concern
-
-### Recommended
-- **[Docs]** Description with specific file:line and what would be better
-
-### Minor
-- **[Docs]** Description with specific file:line references
-
-### Summary
-<1-2 sentence assessment focused on documentation accuracy and compliance>
-
-Omit any category that has no findings. If documentation is accurate and complete, say so explicitly.
+One task per finding. If you have no findings worth raising after clarification and dedupe, create a single summary task titled `[docs] no findings — round <N>` with a one-line body confirming you reviewed and found nothing actionable. Do not spam the task list with noise; every entry should either name a defect or affirm a clean pass.
