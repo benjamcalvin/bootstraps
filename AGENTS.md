@@ -16,6 +16,7 @@ bootstraps/
 │       │   └── <skill-name>/
 │       │       ├── SKILL.md   # Skill definition (Agent Skills open standard)
 │       │       └── assets/    # Templates, schemas, data files
+│       ├── agents/          # Subagent definitions (Markdown with YAML frontmatter)
 │       ├── hooks/           # Hook configurations (if any)
 │       │   └── hooks.json
 │       └── references/      # On-demand documentation
