@@ -43,6 +43,11 @@ Navigate to the **Discover** tab to browse plugins from this marketplace.
 ```
 /plugin install bootstrap-docs@bootstraps
 /plugin install implement-lifecycle@bootstraps
+/plugin install implement-cli@bootstraps
+/plugin install implement-team@bootstraps
+/plugin install issue-management@bootstraps
+/plugin install bootstrap-worktrees@bootstraps
+/plugin install stop-guard@bootstraps
 ```
 
 Choose a scope when prompted:
@@ -66,7 +71,9 @@ Some skills accept arguments:
 /implement #42
 /implement fix the login bug
 /implement 17 just review
-/review-pr 17
+/implement-cli #42
+/implement-team #42
+/bootstrap-worktrees
 /draft-issue add user avatar support
 /cleanup-issue #42
 /refine-issue #42
@@ -83,7 +90,11 @@ Some skills accept arguments:
 ```
 /plugin uninstall bootstrap-docs@bootstraps
 /plugin uninstall implement-lifecycle@bootstraps
+/plugin uninstall implement-cli@bootstraps
+/plugin uninstall implement-team@bootstraps
 /plugin uninstall issue-management@bootstraps
+/plugin uninstall bootstrap-worktrees@bootstraps
+/plugin uninstall stop-guard@bootstraps
 ```
 
 ## Available Plugins
@@ -91,13 +102,16 @@ Some skills accept arguments:
 | Plugin | Description |
 |--------|-------------|
 | **bootstrap-docs** | Set up a comprehensive, AI-readable documentation strategy in any project. Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates. |
-| **implement-lifecycle** | Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, merge. |
+| **bootstrap-worktrees** | Set up project-agnostic worktree isolation with per-worktree ports, Docker Compose projects, and config files. Discovers services and generates create/remove scripts plus Claude Code hooks. |
+| **implement-lifecycle** | Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, docs gate, verify, merge. |
+| **implement-cli** | CLI-based variant of the implementation lifecycle using the Python Agent SDK to orchestrate review/address subprocesses with native async parallelism. |
+| **implement-team** | Experimental. Implementation lifecycle re-architected around Claude Code agent-teams — long-lived implementer and reviewer teammates with shared task list and mailbox messaging. |
 | **issue-management** | Draft, clean up, and refine GitHub issues — optimized for AI agent consumption. |
 | **stop-guard** | Stop hook that evaluates task completion via Gemini CLI and blocks premature stops. Opt-in per session via activation marker. |
 
 ### implement-lifecycle
 
-Provides 6 skills and 4 reviewer agents for the complete implementation lifecycle:
+Provides 6 skills and 5 reviewer agents for the complete implementation lifecycle:
 
 **Skills:**
 
@@ -123,6 +137,41 @@ Provides 6 skills and 4 reviewer agents for the complete implementation lifecycl
 | `review-security` | AuthZ, injection risks, PII handling, spec conformance |
 | `review-architecture` | Pattern consistency, module boundaries, coupling, forward-looking design |
 | `review-testing` | Test coverage, assertion quality, edge cases, test anti-patterns |
+| `review-docs` | Docs compliance gate (Phase 4.5) — missing docs for new behavior, stale docs contradicted by code changes, frontmatter/cross-link correctness |
+
+### implement-cli
+
+Single-skill plugin that mirrors the `/implement` lifecycle but delegates heavy work to Python Agent SDK subprocesses.
+
+| Skill | Description |
+|-------|-------------|
+| `/implement-cli` | Same 6-phase lifecycle as `/implement` (plan → implement → PR → review loop → docs gate → verify → merge), but the orchestrator runs review/address phases as `claude-agent-sdk` subprocesses with native async parallelism. Accepts the same argument shapes and trailing instructions as `/implement`. |
+
+### implement-team
+
+**Experimental.** Requires Claude Code `>= 2.1.32` and `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. Re-architects the implementation lifecycle around long-lived teammates that share a task list and mailbox instead of forked one-shot subagents.
+
+| Skill | Description |
+|-------|-------------|
+| `/implement-team` | Full implementation lifecycle run by an orchestrator ("lead") that coordinates persistent `team-implementer`, `team-verifier`, and reviewer teammates. Lead is the sole GitHub publisher; reviewers post findings to the shared task list only. Trades higher token cost for fewer speculative findings and cross-reviewer dedupe. |
+
+| Agent | Role |
+|-------|------|
+| `team-implementer` | Long-lived implementer. Acts only on lead direction; refuses reviewer work requests and answers batched factual questions only. |
+| `team-verifier` | Long-lived verifier. Runs end-to-end verification on lead invocation and reports PASS/FAIL/PARTIAL/N/A evidence. |
+| `team-reviewer-correctness` | Correctness specialist — same focus as `review-correctness`, with persistent-team messaging discipline. |
+| `team-reviewer-security` | Security / requirements-conformance specialist. |
+| `team-reviewer-architecture` | Architecture and design specialist. |
+| `team-reviewer-testing` | Test-quality specialist. |
+| `team-reviewer-docs` | Docs compliance specialist (invoked only in the Phase 4.5 gate). |
+
+### bootstrap-worktrees
+
+Single-skill plugin for project-agnostic worktree isolation.
+
+| Skill | Description |
+|-------|-------------|
+| `/bootstrap-worktrees` | Discover services in a project, assign per-worktree port offsets, generate `scripts/create-worktree.sh` and `scripts/remove-worktree.sh`, wire up Docker Compose project isolation, and register Claude Code hooks so new sessions land in isolated environments. |
 
 ### issue-management
 
