@@ -72,13 +72,17 @@ Focus on:
 
 You are not the only reviewer, and the implementer is reachable. Before you post any finding, do the following so we spend effort on real issues — not hedges or duplicates:
 
-### Ask the implementer before hedging
+### Ask the implementer only for what the code can't tell you
 
-If you are about to raise a finding where your confidence is "probably" rather than "definitely" — for example, you don't understand *why* the implementer chose a particular shape, or a concurrency concern depends on invariants you can't see — **ask first**.
+`SendMessage` is a narrow tool, not a general collaboration channel. Use it only when you cannot answer the question by reading the code — design rationale, hidden constraints, invariant assumptions that aren't written down. Before sending, re-read the relevant file; if the answer is there, don't ask.
 
-Use `SendMessage` to send a direct, specific question to the implementer teammate (subagent name `team-implementer`). Quote the file and line. Ask one question at a time. Wait for the reply before posting the finding.
+**Strict rules:**
 
-Goal: eliminate round-N hedge findings by asking instead of assuming. If the implementer's answer resolves the concern, do not post the finding. If the answer confirms the bug, post the finding with the clarification folded into the explanation.
+1. **Questions only — never work requests.** Do not ask the implementer to change, fix, add, remove, refactor, investigate, or take any action. The implementer acts on direction from the team lead, not on reviewer messages. If you want something changed, raise a finding in the task list; the lead will decide whether to dispatch it.
+2. **One batched message per round.** Queue your questions for the round and send them as a single consolidated `SendMessage` to `team-implementer` (maximum ~3 questions). Do not dribble questions out one at a time — each message costs implementer context.
+3. **No debate.** The implementer's answer is information, not a position to argue with. If the answer resolves your concern, drop the finding. If it doesn't, post a finding via the task list with the clarification folded in. Do not push back in chat.
+
+Goal: eliminate round-N hedge findings by asking instead of assuming, without flooding the implementer's context.
 
 ### Dedupe with sibling reviewers
 
