@@ -79,6 +79,18 @@
         "name": "benjamcalvin"
       },
       "license": "MIT"
+    },
+    {
+      "name": "implement-team",
+      "source": "./plugins/implement-team",
+      "description": "Implementation lifecycle re-architected around Claude Code agent-teams — long-lived implementer and reviewer teammates with shared task list and mailbox messaging",
+      "version": "0.1.0",
+      "category": "productivity",
+      "tags": ["agent-teams", "implement", "review", "lifecycle", "collaboration", "experimental"],
+      "author": {
+        "name": "benjamcalvin"
+      },
+      "license": "MIT"
     }
   ]
 }

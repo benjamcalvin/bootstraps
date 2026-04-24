@@ -1,0 +1,10 @@
+{
+  "name": "implement-team",
+  "description": "Implementation lifecycle re-architected around Claude Code agent-teams — long-lived implementer and reviewer teammates with shared task list and mailbox messaging",
+  "version": "0.1.0",
+  "author": {
+    "name": "benjamcalvin"
+  },
+  "license": "MIT",
+  "keywords": ["implement", "review", "lifecycle", "agent-teams", "collaboration", "tdd", "experimental"]
+}
