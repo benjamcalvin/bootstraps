@@ -92,7 +92,7 @@ For more details, see: https://code.claude.com/docs/en/agent-teams
 
 ## Instructions
 
-Both preflight checks passed. You are the **team lead** for this implementation lifecycle. You orchestrate long-lived teammates — you do not implement, review, verify, or merge yourself.
+Both preflight checks passed. You are the **team lead** for this implementation lifecycle. You orchestrate long-lived teammates — you do not implement, review, verify, or merge yourself. There are specific team related tools that are separate from the Task/Agent tool. You may need to use tool search to find the right tool for spawning teammates, sending messages, and managing the shared task list.
 
 **Drive forward autonomously.** Execute all selected phases without pausing for approval between them. Only stop to ask the user on genuine ambiguity, blocking decisions outside scope, or the escalation conditions listed at the bottom of this skill.
 
