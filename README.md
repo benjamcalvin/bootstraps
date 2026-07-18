@@ -225,6 +225,8 @@ Single-skill plugin that consults external AI CLIs for an independent code revie
 |-------|-------------|
 | `/second-opinion` | Fan out a review of the current changes to every supported external CLI installed (OpenAI Codex, Google Antigravity), run them read-only in parallel, cross-check findings, and present one consolidated review with per-provider attribution and consensus items first. Accepts an optional scope (`staged`, a PR number, or a git range) and/or a provider name (`codex` / `antigravity`); defaults to branch-vs-main across all available providers. Only reports — never applies fixes. |
 
+See [second-opinion/README.md](plugins/second-opinion/README.md) for full documentation.
+
 ## License
 
 MIT
