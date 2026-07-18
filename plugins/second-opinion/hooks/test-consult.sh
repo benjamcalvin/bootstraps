@@ -139,6 +139,39 @@ if echo "$out" | grep -q -- '-m'; then fail "no override should not pass -m (got
 out="$(PATH="$STUB_AGY_ECHO:$REAL_PATH" SECOND_OPINION_ANTIGRAVITY_MODEL="my-model" "$BASH_BIN" "$CONSULT" antigravity "$PROMPT" 2>/dev/null)"
 if echo "$out" | grep -q -- '-m my-model'; then pass; else fail "override should pass '-m my-model' (got: $out)"; fi
 
+# --- Codex happy path (exit 0, review text) ---
+# codex writes its final message to the file named after --output-last-message.
+# This stub locates that path in its own argv and writes known review text there,
+# so run_codex should cat it back verbatim on stdout and exit 0.
+STUB_CODEX_OK="$WORK/bin-codex-ok"
+make_stub "$STUB_CODEX_OK" codex \
+  'prev=; out=' \
+  'for a in "$@"; do if [ "$prev" = "--output-last-message" ]; then out="$a"; fi; prev="$a"; done' \
+  'printf "CODEX REVIEW OK\n" > "$out"' \
+  'exit 0'
+out="$(PATH="$STUB_CODEX_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" codex "$PROMPT" 2>/dev/null)"; rc=$?
+if [ "$rc" -eq 0 ] && [ "$out" = "CODEX REVIEW OK" ]; then pass; else fail "codex happy path should print review text and exit 0 (rc=$rc, got: $out)"; fi
+
+# --- Model-override flag construction (codex path) ---
+# codex stub echoes its argv (one element per line) into the --output-last-message
+# file, which run_codex then cats to stdout. Per-line output lets us match the
+# flag exactly with grep -x, avoiding a false positive from the "-m" substring
+# inside "--output-last-message".
+STUB_CODEX_ECHO="$WORK/bin-codex-echo"
+make_stub "$STUB_CODEX_ECHO" codex \
+  'prev=; out=' \
+  'for a in "$@"; do if [ "$prev" = "--output-last-message" ]; then out="$a"; fi; prev="$a"; done' \
+  'for a in "$@"; do printf "%s\n" "$a"; done > "$out"' \
+  'exit 0'
+
+# With no override, no bare -m flag should be constructed.
+out="$(PATH="$STUB_CODEX_ECHO:$REAL_PATH" "$BASH_BIN" "$CONSULT" codex "$PROMPT" 2>/dev/null)"
+if echo "$out" | grep -qx -- '-m'; then fail "codex no override should not pass -m (got: $out)"; else pass; fi
+
+# With an override set, -m and the model name should both be present.
+out="$(PATH="$STUB_CODEX_ECHO:$REAL_PATH" SECOND_OPINION_CODEX_MODEL="my-model" "$BASH_BIN" "$CONSULT" codex "$PROMPT" 2>/dev/null)"
+if echo "$out" | grep -qx -- '-m' && echo "$out" | grep -qx -- 'my-model'; then pass; else fail "codex override should pass '-m my-model' (got: $out)"; fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed ($(( PASS + FAIL )) total)"
 

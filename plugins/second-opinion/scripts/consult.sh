@@ -45,7 +45,11 @@ run_codex() {
   local prompt_file="$1"
   local out
   out=$(mktemp -t second-opinion-codex.XXXXXX)
-  trap 'rm -f "$out"' RETURN
+  # A RETURN trap persists globally and re-fires when later functions (e.g.
+  # main) return, at which point this function's local `out` is out of scope.
+  # Guard with ${out:-} so that spurious re-fire is a harmless no-op under
+  # `set -u` instead of an "unbound variable" abort on the success path.
+  trap 'rm -f "${out:-}"' RETURN
 
   # codex exec: non-interactive mode. Final agent message goes to the
   # --output-last-message file; progress noise stays on stdout/stderr.
@@ -74,6 +78,12 @@ run_antigravity() {
   # large diff would fail with E2BIG. stdin has no such cap, and it still
   # can't hang waiting for approval in a non-TTY context because the prompt
   # file reaches EOF (equivalent to the previous < /dev/null behaviour).
+  #
+  # NOTE: that `agy -p` consumes stdin as the prompt is expected but not yet
+  # verified against a real `agy` install — unlike codex, agy has no documented
+  # explicit stdin marker (codex uses `-`). Do NOT revert to an argv prompt to
+  # "fix" this: stdin is required for the large diffs this plugin exists to
+  # review. Confirm behaviour via maintainer real-machine verification.
   response=$(agy -p \
     ${SECOND_OPINION_ANTIGRAVITY_MODEL:+-m "$SECOND_OPINION_ANTIGRAVITY_MODEL"} \
     < "$prompt_file") || return 3

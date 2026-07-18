@@ -54,6 +54,13 @@ Create a run directory and write one prompt file shared by all providers:
 RUN_DIR=$(mktemp -d -t second-opinion.XXXXXX)
 ```
 
+`$RUN_DIR` holds the full diff (which may contain secrets), so treat its cleanup
+as mandatory on **every** exit path, not just the happy one. If you abort after
+this point for any reason — a provider fails, the diff turns out empty, an
+unexpected error — run `rm -rf "$RUN_DIR"` before returning to the user, mirroring
+the trap-based hygiene `run_codex` uses for its own temp file. The Step 5 cleanup
+below is only the success-path case of this same rule.
+
 Read the template at `$CLAUDE_PLUGIN_ROOT/assets/prompts/review.md` and write
 `$RUN_DIR/prompt.md` with the placeholders filled in:
 
@@ -69,13 +76,18 @@ Read the template at `$CLAUDE_PLUGIN_ROOT/assets/prompts/review.md` and write
 **First, capture a read-only baseline.** The providers are supposed to run
 read-only (codex via `--sandbox read-only`, antigravity via print-mode tool
 denial), but that per-provider guarantee is the load-bearing contract of this
-plugin. Record the repo state *before* launching anything so you can prove
-nothing was mutated:
+plugin. Record the repo state *before* launching anything so you can detect
+in-tree mutations. Use `--ignored` so writes to git-ignored files (e.g. `.env`,
+`*.pem`) — a prime target for a read-only escape — are also caught:
 
 ```bash
-git status --porcelain > "$RUN_DIR/git-status.before"
+git status --porcelain --ignored > "$RUN_DIR/git-status.before"
 git rev-parse HEAD > "$RUN_DIR/git-head.before"
 ```
+
+This check covers tracked and ignored files *inside the worktree* only. Writes
+outside the tree (e.g. `~/.ssh`, `~/.aws/credentials`) are not observable here
+and remain part of maintainer verification against a real install.
 
 Launch every provider as a background Bash task so they run concurrently
 (reviews typically take 1–5 minutes each):
@@ -96,7 +108,7 @@ continue with the others and note the failure in your summary.
 re-capture the repo state and compare:
 
 ```bash
-git status --porcelain > "$RUN_DIR/git-status.after"
+git status --porcelain --ignored > "$RUN_DIR/git-status.after"
 git rev-parse HEAD > "$RUN_DIR/git-head.after"
 diff "$RUN_DIR/git-status.before" "$RUN_DIR/git-status.after"
 diff "$RUN_DIR/git-head.before" "$RUN_DIR/git-head.after"
@@ -106,8 +118,10 @@ If either `diff` shows a difference, the working tree or HEAD changed while the
 providers were running — a provider may have violated the read-only contract.
 **Surface this loudly at the top of your synthesis** (which files changed, and
 which provider run it coincides with) and warn the user to inspect and revert
-before trusting the review. If both diffs are empty, the contract held; note
-that briefly and proceed.
+before trusting the review. If both diffs are empty, note it briefly — but scope
+the claim precisely: state that no tracked or ignored in-tree changes were
+detected, and that writes outside the worktree are not covered by this check and
+remain part of maintainer verification. Then proceed.
 
 ## Step 5: Synthesize
 
