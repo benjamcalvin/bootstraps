@@ -48,6 +48,7 @@ Navigate to the **Discover** tab to browse plugins from this marketplace.
 /plugin install issue-management@bootstraps
 /plugin install bootstrap-worktrees@bootstraps
 /plugin install stop-guard@bootstraps
+/plugin install second-opinion@bootstraps
 ```
 
 Choose a scope when prompted:
@@ -77,6 +78,7 @@ Some skills accept arguments:
 /draft-issue add user avatar support
 /cleanup-issue #42
 /refine-issue #42
+/second-opinion staged
 ```
 
 ## Update Plugins
@@ -95,6 +97,7 @@ Some skills accept arguments:
 /plugin uninstall issue-management@bootstraps
 /plugin uninstall bootstrap-worktrees@bootstraps
 /plugin uninstall stop-guard@bootstraps
+/plugin uninstall second-opinion@bootstraps
 ```
 
 ## Available Plugins
@@ -108,6 +111,7 @@ Some skills accept arguments:
 | **implement-team** | Experimental. Implementation lifecycle re-architected around Claude Code agent-teams — long-lived implementer and reviewer teammates with shared task list and mailbox messaging. |
 | **issue-management** | Draft, clean up, and refine GitHub issues — optimized for AI agent consumption. |
 | **stop-guard** | Stop hook that evaluates task completion via Gemini CLI and blocks premature stops. Opt-in per session via activation marker. |
+| **second-opinion** | Consult external AI CLIs (Codex, Antigravity) headlessly for an independent, read-only second-opinion code review of your changes. |
 
 ### implement-lifecycle
 
@@ -212,6 +216,14 @@ A Stop hook — no skills to invoke. Once installed, it activates when any sessi
 ```
 
 See [stop-guard/README.md](plugins/stop-guard/README.md) for full documentation.
+
+### second-opinion
+
+Single-skill plugin that consults external AI CLIs for an independent code review.
+
+| Skill | Description |
+|-------|-------------|
+| `/second-opinion` | Fan out a review of the current changes to every supported external CLI installed (OpenAI Codex, Google Antigravity), run them read-only in parallel, cross-check findings, and present one consolidated review with per-provider attribution and consensus items first. Accepts an optional scope (`staged`, a PR number, or a git range) and/or a provider name (`codex` / `antigravity`); defaults to branch-vs-main across all available providers. Only reports — never applies fixes. |
 
 ## License
 
