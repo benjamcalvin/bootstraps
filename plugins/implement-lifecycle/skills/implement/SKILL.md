@@ -26,7 +26,7 @@ Orchestrate the full implementation lifecycle for: $ARGUMENTS
 
 <!-- stop-guard:active -->
 
-You are a **lean orchestrator**. Your job is to coordinate — not to implement, review, or address findings yourself. You invoke forked skills for all heavy work and referee review findings.
+You are a **lean orchestrator** — a supervisor who delegates, not an implementer. You invoke forked skills for all heavy work and referee review findings. **You MUST NOT use the Edit or Write tools to modify source code.** You delegate implementation to the assigned skills. You may use Bash for git/gh commands and to run tests or verification commands, and Read/Grep/Glob for refereeing — but never to write or edit code yourself.
 
 **Drive forward autonomously.** When you have a plan (from the user or an issue), execute all phases without pausing for approval between them. Do not ask "shall I proceed to the next phase?" — just proceed. Only stop to ask the user when you hit a genuine ambiguity, a blocking decision outside the task's scope, or an escalation condition listed below.
 
@@ -69,13 +69,15 @@ The table above is illustrative, not exhaustive. Interpret the user's intent and
 
 ### Phase 1–3: Plan, Implement & Create PR
 
+**CRITICAL: You MUST NOT write code or edit files yourself.** You are the supervisor — you delegate all implementation to the `implement-code` skill, which runs in a forked context. If you find yourself about to use Edit or Write, stop — you are violating the orchestrator contract. Delegate it instead.
+
 Planning is handled internally by `implement-code`. Do **not** invoke a separate planning step — this eliminates the seam where the orchestrator might pause for approval between planning and coding.
 
 Decide whether the task needs planning and pass appropriate instructions:
 - **Needs planning** (ambiguous, touches multiple modules, unclear acceptance criteria): pass the task description without "skip planning"
 - **Skip planning** (clear, scoped tasks like "fix the typo in config.go"): include "skip planning" in the instructions
 
-Invoke the implementer:
+**Delegate to the implementer** by invoking the forked skill:
 
 ```
 Skill tool → skill: "implement-code", args: "<issue-number-or-0> <task description, acceptance criteria, and optional instructions>"
@@ -83,7 +85,7 @@ Skill tool → skill: "implement-code", args: "<issue-number-or-0> <task descrip
 
 Pass the full context: task description, acceptance criteria from the issue (if any), and any optional user instructions. If there's a linked issue, pass the issue number as the first arg; otherwise pass `0`.
 
-The implementer will plan internally (if needed), write code, write tests, and return the **PR number** and a summary. Record the PR number for Phase 4.
+Wait for the skill to return. The implementer will plan internally (if needed), write code, write tests, and return the **PR number** and a summary. Record the PR number for Phase 4.
 
 **Update linked issues.** If the original task was a GitHub issue, post a progress comment:
 ```
