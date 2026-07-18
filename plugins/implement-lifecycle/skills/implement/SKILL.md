@@ -26,7 +26,9 @@ Orchestrate the full implementation lifecycle for: $ARGUMENTS
 
 <!-- stop-guard:active -->
 
-You are a **lean orchestrator**. Your job is to coordinate — not to implement, review, or address findings yourself. You invoke forked skills for all heavy work and referee review findings.
+You are a **lean orchestrator** — a supervisor who delegates, not an implementer. You invoke forked skills for all heavy work and referee review findings. **You MUST NOT use the Edit or Write tools to modify source code, tests, or documentation.** You delegate all implementation to the assigned skills. You may use Bash for git/gh commands and to run tests or verification commands, and Read/Grep/Glob for refereeing — but never use Edit or Write to change code yourself.
+
+**Permitted carve-out — orchestration scratch files:** Writing non-source orchestration files (e.g. the `/tmp/implement-findings-*.md` findings files described in Phase 4) via Bash is expected and allowed. The prohibition targets modifying the codebase under review — source, tests, and docs — not writing your own scratch/findings files to `/tmp`.
 
 **Drive forward autonomously.** When you have a plan (from the user or an issue), execute all phases without pausing for approval between them. Do not ask "shall I proceed to the next phase?" — just proceed. Only stop to ask the user when you hit a genuine ambiguity, a blocking decision outside the task's scope, or an escalation condition listed below.
 
@@ -69,13 +71,15 @@ The table above is illustrative, not exhaustive. Interpret the user's intent and
 
 ### Phase 1–3: Plan, Implement & Create PR
 
+**CRITICAL: You MUST NOT write code or edit files yourself.** You are the supervisor — you delegate all implementation to the `implement-code` skill, which runs in a forked context. If you find yourself about to use Edit or Write, stop — you are violating the orchestrator contract. Delegate it instead.
+
 Planning is handled internally by `implement-code`. Do **not** invoke a separate planning step — this eliminates the seam where the orchestrator might pause for approval between planning and coding.
 
 Decide whether the task needs planning and pass appropriate instructions:
 - **Needs planning** (ambiguous, touches multiple modules, unclear acceptance criteria): pass the task description without "skip planning"
 - **Skip planning** (clear, scoped tasks like "fix the typo in config.go"): include "skip planning" in the instructions
 
-Invoke the implementer:
+**Delegate to the implementer** by invoking the forked skill:
 
 ```
 Skill tool → skill: "implement-code", args: "<issue-number-or-0> <task description, acceptance criteria, and optional instructions>"
@@ -83,7 +87,7 @@ Skill tool → skill: "implement-code", args: "<issue-number-or-0> <task descrip
 
 Pass the full context: task description, acceptance criteria from the issue (if any), and any optional user instructions. If there's a linked issue, pass the issue number as the first arg; otherwise pass `0`.
 
-The implementer will plan internally (if needed), write code, write tests, and return the **PR number** and a summary. Record the PR number for Phase 4.
+Wait for the skill to return. The implementer will plan internally (if needed), write code, write tests, and return the **PR number** and a summary. Record the PR number for Phase 4.
 
 **Update linked issues.** If the original task was a GitHub issue, post a progress comment:
 ```
@@ -117,7 +121,7 @@ git fetch origin "$BASE_BRANCH"
 git rebase "origin/$BASE_BRANCH"
 ```
 
-If conflicts arise, resolve them, then run the full test suite to catch integration breakage. Force-push the rebased branch:
+If conflicts arise, resolving them is a **permitted git-mechanical carve-out** to the no-Edit/Write contract: rebase-conflict resolution is part of the git/gh work you already own and cannot be cleanly delegated to a forked skill mid-rebase, so you may edit the conflicted files to complete the rebase. Keep it strictly mechanical — reconcile the two sides of each conflict, do not fold in new implementation. Then run the full test suite to catch integration breakage. Force-push the rebased branch:
 
 ```bash
 git push --force-with-lease
@@ -321,7 +325,28 @@ After the review loop completes, invoke the verification agent to test the PR's 
 Skill tool → skill: "verify", args: "<pr-number>"
 ```
 
-The verification agent will classify the change type, devise a verification plan, execute it, and report structured evidence. If the verdict is **FAIL**, address the issues (invoke the addresser or fix directly) and re-verify. If **PASS** or **N/A**, proceed to Phase 6.
+The verification agent will classify the change type, devise a verification plan, execute it, and report structured evidence. If **PASS** or **N/A**, proceed to Phase 6. If the verdict is **FAIL**, delegate the fixes — do **not** fix the code yourself.
+
+Because `implement-address` reads its findings from a file argument (and aborts if that file is missing or empty), you must **write the verification findings to a temp file first**, reusing the findings-file mechanics of Phase 4 Step C/D (write a temp findings file, then invoke `implement-address` with its path). Unlike Phase 4, there is no referee accept/reject step here: `verify` is a single, self-vetting source rather than several parallel reviewers who can disagree, so its findings pass straight through. The `verify` skill only posts a PR comment; it does not write this file, so the orchestrator must create it:
+
+```bash
+cat > /tmp/implement-verify-findings-pr-<PR>-round-<N>.md <<'EOF'
+# Verification Findings — Round <N>
+
+| # | Finding | Severity | Details |
+|---|---------|----------|---------|
+| 1 | <what failed> | Action Required | <expected vs. actual, file:line if known, how to fix> |
+| ... | ... | ... | ... |
+EOF
+```
+
+Then invoke the addresser with that file path, using a `verify-<round-number>` round token (analogous to Phase 4.5's `docs-<N>`):
+
+```
+Skill tool → skill: "implement-address", args: "<pr-number> verify-<round-number> /tmp/implement-verify-findings-pr-<PR>-round-<N>.md"
+```
+
+The round counter starts from round 1 (independent of Phase 4 rounds) and increments each FAIL → address → re-verify cycle. After the addresser pushes fixes, re-invoke `verify` and repeat until **PASS** or **N/A**, then proceed to Phase 6.
 
 ---
 
