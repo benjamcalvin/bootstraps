@@ -11,7 +11,7 @@ attribution.
 | Provider | Binary | Headless invocation | Read-only mechanism |
 |---|---|---|---|
 | OpenAI Codex CLI | `codex` | `codex exec` | `--sandbox read-only` |
-| Google Antigravity CLI | `agy` | `agy -p` (print mode) | print mode denies non-allowlisted tool calls |
+| Google Antigravity CLI | `agy` | `agy --sandbox -p` (print mode) | `--sandbox` (sandbox with terminal restrictions); `-p` only makes it non-interactive |
 
 > Antigravity CLI replaced Gemini CLI, which stopped serving individual-tier
 > requests on June 18, 2026.
@@ -48,6 +48,34 @@ Providers are detected at runtime — install one or both:
 |---|---|
 | `SECOND_OPINION_CODEX_MODEL` | Override the Codex model |
 | `SECOND_OPINION_ANTIGRAVITY_MODEL` | Override the Antigravity model (see `agy models`) |
+
+## Security / limitations
+
+The sandbox mechanisms (`codex --sandbox read-only`, `agy --sandbox`) restrict
+**writes and terminal access** — they stop a provider from modifying your repo
+or running commands. They do **not** stop the external model from *reading*
+files it has access to and transmitting their contents back to its provider as
+part of the review.
+
+Two consequences to keep in mind:
+
+- **Your filesystem is readable.** Both providers run against your working
+  directory and are told they may read surrounding files for context. If that
+  directory (or its ancestors) holds secrets, credentials, or private data, a
+  provider can read and transmit them. Run second-opinion from repos you are
+  comfortable sharing with the external CLI's provider, and avoid it on trees
+  containing unrelated secrets.
+- **Diffs are attacker-controllable.** The diff is embedded verbatim into the
+  prompt. A hostile diff (e.g. from an untrusted PR) can attempt prompt
+  injection to steer the external agent into reading and exfiltrating files.
+  Do not review untrusted diffs against a filesystem you would not hand to the
+  provider directly. `--sandbox` limits writes/terminal, not reads or disclosure.
+
+Note on Antigravity output: some `agy` versions can return sparse output in
+print mode (a short planning trace instead of findings) if the prompt sends the
+agent off exploring the filesystem. The prompt template treats the embedded diff
+as self-contained to reduce this; if a run still comes back thin, re-run or fall
+back to Codex.
 
 ## Adding a provider
 

@@ -18,9 +18,14 @@ $SCOPE_DESCRIPTION
 
 ## How to Review
 
-1. Study the diff below. It is the authoritative statement of what changed.
-2. Read the surrounding files in the repository for context before judging —
-   a hunk that looks wrong in isolation may be correct in context, and vice versa.
+1. Study the diff below. It is the authoritative, self-contained statement of
+   what changed — everything you need to start reviewing is already in this
+   prompt. Base your review on it directly; do not go exploring the repository
+   before you have read the diff.
+2. Read a surrounding file **only when a specific hunk needs its context** to
+   judge — a hunk that looks wrong in isolation may be correct in context, and
+   vice versa. Open the file that the hunk touches; do not wander the tree. If
+   the diff is self-explanatory, you do not need to open anything.
 3. Only report issues you are reasonably confident about. Do not pad the
    review: a short list of real findings (or none) beats a long list of
    speculation. Do not restate the diff or praise the code.

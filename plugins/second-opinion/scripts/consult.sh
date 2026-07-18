@@ -11,10 +11,13 @@ set -euo pipefail
 #   codex        OpenAI Codex CLI (binary: codex)
 #   antigravity  Google Antigravity CLI (binary: agy)
 #
-# Both providers are invoked read-only: codex via --sandbox read-only,
-# antigravity via print mode, which denies tool calls that lack an allow
-# rule (reads are permitted, writes/commands are not). Run from the repo
-# root you want reviewed — providers inherit the CWD.
+# Both providers are sandboxed: codex via `--sandbox read-only`, antigravity
+# via `agy --sandbox` (a sandbox with terminal restrictions — the direct
+# analogue of codex's read-only sandbox). `-p`/print mode only makes antigravity
+# non-interactive; it does not provide isolation on its own. Neither sandbox is
+# an absolute guarantee — the external model can still read files it has access
+# to and transmit them back to its provider. Run from the repo root you want
+# reviewed — providers inherit the CWD.
 #
 # Model overrides (optional):
 #   SECOND_OPINION_CODEX_MODEL        e.g. "gpt-5-codex"
@@ -73,9 +76,13 @@ run_antigravity() {
   local prompt_file="$1"
   local response
 
-  # agy -p / --print: print mode, runs one prompt non-interactively and exits.
-  # Tool calls without an allow rule are denied in print mode, so the agent can
-  # read the repo but not modify it.
+  # agy --sandbox: run in a sandbox with terminal restrictions enabled (per
+  # `agy --help` on 1.1.4). This is the read-only mechanism — the direct
+  # analogue of codex's `--sandbox read-only`. Verified: `agy --sandbox -p ...`
+  # runs the happy path and returns a response. `-p`/--print only makes the run
+  # non-interactive (one prompt, print, exit); it provides NO isolation by
+  # itself. The sandbox restricts writes/terminal but does not stop the model
+  # from reading files it can access and transmitting them to its provider.
   #
   # `agy -p` takes the prompt as its ARGUMENT VALUE (agy -p "<prompt text>") —
   # verified against real agy 1.1.4. It is NOT a stdin-reading toggle: `agy -p
@@ -96,7 +103,7 @@ run_antigravity() {
     return 3
   fi
 
-  response=$(agy -p "$(cat "$prompt_file")" \
+  response=$(agy --sandbox -p "$(cat "$prompt_file")" \
     ${SECOND_OPINION_ANTIGRAVITY_MODEL:+-m "$SECOND_OPINION_ANTIGRAVITY_MODEL"} \
     < /dev/null) || return 3
 

@@ -141,6 +141,11 @@ out="$(PATH="$STUB_AGY_ECHO:$REAL_PATH" "$BASH_BIN" "$CONSULT" antigravity "$PRO
 if echo "$out" | grep -qx -- 'Review this diff.'; then pass; else fail "prompt text must be passed as an argv element to agy, not on stdin (got: $out)"; fi
 # And the -p/--print flag must be present.
 if echo "$out" | grep -qxE -- '-p|--print'; then pass; else fail "agy must be invoked with -p/--print (got: $out)"; fi
+# Read-only guarantee: agy must always be invoked with --sandbox. This is the
+# antigravity analogue of codex's `--sandbox read-only`; dropping it would
+# silently remove the read-only isolation (regression cover for finding round
+# verify-2 #1/#2).
+if echo "$out" | grep -qx -- '--sandbox'; then pass; else fail "agy must pass --sandbox for read-only isolation (got: $out)"; fi
 
 # A stub that rejects a missing positional prompt (mimicking real agy's "flag
 # needs an argument: -p") must NOT fire — the prompt is always supplied as an
