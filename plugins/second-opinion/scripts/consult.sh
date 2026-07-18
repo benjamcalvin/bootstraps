@@ -73,25 +73,32 @@ run_antigravity() {
   local prompt_file="$1"
   local response
 
-  # agy -p: print mode, runs one prompt non-interactively and exits.
-  # Tool calls without an allow rule are denied in print mode, so the
-  # agent can read the repo but not modify it.
+  # agy -p / --print: print mode, runs one prompt non-interactively and exits.
+  # Tool calls without an allow rule are denied in print mode, so the agent can
+  # read the repo but not modify it.
   #
-  # The prompt is fed on stdin rather than as an argv element. Passing it
-  # as an argument (agy -p "$(cat …)") caps the prompt at the per-argument
-  # limit — on Linux MAX_ARG_STRLEN is 128 KiB regardless of ARG_MAX — so a
-  # large diff would fail with E2BIG. stdin has no such cap, and it still
-  # can't hang waiting for approval in a non-TTY context because the prompt
-  # file reaches EOF (equivalent to the previous < /dev/null behaviour).
+  # `agy -p` takes the prompt as its ARGUMENT VALUE (agy -p "<prompt text>") —
+  # verified against real agy 1.1.4. It is NOT a stdin-reading toggle: `agy -p
+  # < file` fails with "flag needs an argument: -p". There is no documented agy
+  # stdin-prompt mechanism, so we must pass the prompt as an argv element and
+  # read stdin from /dev/null — the /dev/null redirect only prevents hanging on
+  # an approval prompt in a non-TTY context; it is not the prompt source.
   #
-  # NOTE: that `agy -p` consumes stdin as the prompt is expected but not yet
-  # verified against a real `agy` install — unlike codex, agy has no documented
-  # explicit stdin marker (codex uses `-`). Do NOT revert to an argv prompt to
-  # "fix" this: stdin is required for the large diffs this plugin exists to
-  # review. Confirm behaviour via maintainer real-machine verification.
-  response=$(agy -p \
+  # Passing the prompt as an argv element reintroduces the per-argument size cap
+  # (Linux MAX_ARG_STRLEN is ~128 KiB regardless of ARG_MAX). Guard against it
+  # below and fail loudly rather than letting the shell die with a cryptic
+  # E2BIG / "Argument list too long". The SKILL's ~4000-line diff truncation
+  # normally keeps prompts well under this; this guard is the backstop.
+  local size
+  size=$(wc -c < "$prompt_file")
+  if [ "$size" -gt 122880 ]; then
+    log "antigravity prompt is ${size} bytes, over the ~120 KiB limit for agy's argument-based interface; narrow the review scope (fewer files / smaller diff)"
+    return 3
+  fi
+
+  response=$(agy -p "$(cat "$prompt_file")" \
     ${SECOND_OPINION_ANTIGRAVITY_MODEL:+-m "$SECOND_OPINION_ANTIGRAVITY_MODEL"} \
-    < "$prompt_file") || return 3
+    < /dev/null) || return 3
 
   [ -n "$response" ] || { log "antigravity produced an empty response"; return 3; }
   printf '%s\n' "$response"

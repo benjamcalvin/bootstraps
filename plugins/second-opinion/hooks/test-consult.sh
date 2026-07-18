@@ -126,14 +126,42 @@ STUB_AGY_EMPTY="$WORK/bin-agy-empty"
 make_stub "$STUB_AGY_EMPTY" agy "exit 0"
 expect_exit 3 "agy empty response -> exit 3" "$STUB_AGY_EMPTY:$REAL_PATH" -- antigravity "$PROMPT"
 
-# --- Model-override flag construction (antigravity path) ---
-# agy stub echoes its argv one element per line; run_antigravity returns it as
-# the review text. Per-line output lets grep -x match a flag/value exactly and,
-# crucially, prove a multi-word model name survives as a single argv element
-# (not split at spaces).
+# --- Antigravity invocation: prompt passed as an argv element (not stdin) ---
+# Real `agy -p` takes the prompt as its ARGUMENT VALUE, not on stdin; feeding
+# it on stdin fails with "flag needs an argument: -p". This regression test
+# would have caught the round-1 stdin approach: the agy stub echoes its argv
+# one element per line, and run_antigravity returns it as the review text, so
+# the prompt text itself must appear as a captured argv line.
 STUB_AGY_ECHO="$WORK/bin-agy-echo"
 make_stub "$STUB_AGY_ECHO" agy 'for a in "$@"; do printf "%s\n" "$a"; done'
 
+# The prompt CONTENT must reach agy as an argv element (proves it is an argument,
+# not sent on stdin). PROMPT holds "Review this diff." (see above).
+out="$(PATH="$STUB_AGY_ECHO:$REAL_PATH" "$BASH_BIN" "$CONSULT" antigravity "$PROMPT" 2>/dev/null)"
+if echo "$out" | grep -qx -- 'Review this diff.'; then pass; else fail "prompt text must be passed as an argv element to agy, not on stdin (got: $out)"; fi
+# And the -p/--print flag must be present.
+if echo "$out" | grep -qxE -- '-p|--print'; then pass; else fail "agy must be invoked with -p/--print (got: $out)"; fi
+
+# A stub that rejects a missing positional prompt (mimicking real agy's "flag
+# needs an argument: -p") must NOT fire — the prompt is always supplied as an
+# argument, so this stub should succeed and echo the prompt back.
+STUB_AGY_STRICT="$WORK/bin-agy-strict"
+make_stub "$STUB_AGY_STRICT" agy \
+  'has_prompt=0' \
+  'prev=' \
+  'for a in "$@"; do case "$prev" in -p|--print) has_prompt=1;; esac; prev="$a"; done' \
+  'if [ "$has_prompt" -eq 0 ]; then echo "flag needs an argument: -p" >&2; exit 2; fi' \
+  'echo "STRICT AGY OK"'
+out="$(PATH="$STUB_AGY_STRICT:$REAL_PATH" "$BASH_BIN" "$CONSULT" antigravity "$PROMPT" 2>/dev/null)"; rc=$?
+if [ "$rc" -eq 0 ] && [ "$out" = "STRICT AGY OK" ]; then pass; else fail "agy must receive a positional prompt after -p (rc=$rc, got: $out)"; fi
+
+# Prompt-size guard: a prompt over the ~120 KiB argv limit must fail with exit 3
+# rather than letting the shell die with E2BIG. Uses the echo stub (never reached).
+BIG_PROMPT="$WORK/big-prompt.md"
+head -c 130000 /dev/zero | tr '\0' 'x' > "$BIG_PROMPT"
+expect_exit 3 "oversized antigravity prompt -> exit 3" "$STUB_AGY_ECHO:$REAL_PATH" -- antigravity "$BIG_PROMPT"
+
+# --- Model-override flag construction (antigravity path) ---
 # With no override, no -m flag should be constructed.
 out="$(PATH="$STUB_AGY_ECHO:$REAL_PATH" "$BASH_BIN" "$CONSULT" antigravity "$PROMPT" 2>/dev/null)"
 if echo "$out" | grep -qx -- '-m'; then fail "no override should not pass -m (got: $out)"; else pass; fi
