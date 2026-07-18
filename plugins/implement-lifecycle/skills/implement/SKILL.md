@@ -325,7 +325,28 @@ After the review loop completes, invoke the verification agent to test the PR's 
 Skill tool → skill: "verify", args: "<pr-number>"
 ```
 
-The verification agent will classify the change type, devise a verification plan, execute it, and report structured evidence. If the verdict is **FAIL**, delegate the fixes — invoke the addresser (or re-invoke `implement-code`) with the verification findings, consistent with Phases 1–4, then re-verify. Do **not** fix the code yourself. If **PASS** or **N/A**, proceed to Phase 6.
+The verification agent will classify the change type, devise a verification plan, execute it, and report structured evidence. If **PASS** or **N/A**, proceed to Phase 6. If the verdict is **FAIL**, delegate the fixes — do **not** fix the code yourself.
+
+Because `implement-address` reads its findings from a file argument (and aborts if that file is missing or empty), you must **write the verification findings to a temp file first**, exactly as in Phase 4 Step C/D. The `verify` skill only posts a PR comment; it does not write this file, so the orchestrator must create it:
+
+```bash
+cat > /tmp/implement-verify-findings-pr-<PR>.md <<'EOF'
+# Verification Findings — PR <PR>
+
+| # | Finding | Severity | Details |
+|---|---------|----------|---------|
+| 1 | <what failed> | Action Required | <expected vs. actual, file:line if known, how to fix> |
+| ... | ... | ... | ... |
+EOF
+```
+
+Then invoke the addresser with that file path, using a `verify-<round-number>` round token (analogous to Phase 4.5's `docs-<N>`):
+
+```
+Skill tool → skill: "implement-address", args: "<pr-number> verify-<round-number> /tmp/implement-verify-findings-pr-<PR>.md"
+```
+
+After the addresser pushes fixes, re-invoke `verify` and repeat until **PASS** or **N/A**, then proceed to Phase 6.
 
 ---
 
