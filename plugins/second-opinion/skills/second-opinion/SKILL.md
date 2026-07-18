@@ -145,9 +145,11 @@ diff "$RUN_DIR/git-head.before" "$RUN_DIR/git-head.after"
 
 If either `diff` shows a difference, the working tree or HEAD changed while the
 providers were running — a provider may have violated the read-only contract.
-**Surface this loudly at the top of your synthesis** (which files changed, and
-which provider run it coincides with) and warn the user to inspect and revert
-before trusting the review. If both diffs are empty, note it briefly — but do
+**Surface this loudly at the top of your synthesis** (which files changed).
+Because the snapshot brackets both providers running concurrently, the change
+**cannot be attributed to a specific provider** — and unrelated activity in the
+review window can also trip it; say only that the tree changed during the review.
+Warn the user to inspect and revert before trusting the review. If both diffs are empty, note it briefly — but do
 **not** imply the read-only contract was verified. Say only that the tripwire
 found nothing: no changes to tracked files, no new commits, and no new top-level
 ignored paths. Do not claim read-only was confirmed — this tripwire cannot see
