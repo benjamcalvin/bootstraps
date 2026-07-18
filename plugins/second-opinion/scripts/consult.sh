@@ -43,13 +43,12 @@ available() {
 
 run_codex() {
   local prompt_file="$1"
-  local out
+  local out rc=0
   out=$(mktemp -t second-opinion-codex.XXXXXX)
-  # A RETURN trap persists globally and re-fires when later functions (e.g.
-  # main) return, at which point this function's local `out` is out of scope.
-  # Guard with ${out:-} so that spurious re-fire is a harmless no-op under
-  # `set -u` instead of an "unbound variable" abort on the success path.
-  trap 'rm -f "${out:-}"' RETURN
+  # Cleanup is explicit (not a RETURN trap): a RETURN trap persists globally
+  # and would re-fire when later functions (e.g. main) return, so its scope is
+  # ambiguous and fragile if a call is ever added after run_$provider in main.
+  # Removing the temp file on every path here keeps the scope unambiguous.
 
   # codex exec: non-interactive mode. Final agent message goes to the
   # --output-last-message file; progress noise stays on stdout/stderr.
@@ -58,10 +57,16 @@ run_codex() {
     --skip-git-repo-check \
     ${SECOND_OPINION_CODEX_MODEL:+-m "$SECOND_OPINION_CODEX_MODEL"} \
     --output-last-message "$out" \
-    - < "$prompt_file" >&2 || return 3
+    - < "$prompt_file" >&2 || rc=3
 
-  [ -s "$out" ] || { log "codex produced no output"; return 3; }
-  cat "$out"
+  if [ "$rc" -eq 0 ] && [ ! -s "$out" ]; then
+    log "codex produced no output"
+    rc=3
+  fi
+
+  [ "$rc" -eq 0 ] && cat "$out"
+  rm -f "$out"
+  return "$rc"
 }
 
 run_antigravity() {

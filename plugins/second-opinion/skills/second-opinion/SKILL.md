@@ -73,21 +73,36 @@ Read the template at `$CLAUDE_PLUGIN_ROOT/assets/prompts/review.md` and write
 
 ## Step 4: Run Providers in Parallel
 
-**First, capture a read-only baseline.** The providers are supposed to run
-read-only (codex via `--sandbox read-only`, antigravity via print-mode tool
-denial), but that per-provider guarantee is the load-bearing contract of this
-plugin. Record the repo state *before* launching anything so you can detect
-in-tree mutations. Use `--ignored` so writes to git-ignored files (e.g. `.env`,
-`*.pem`) — a prime target for a read-only escape — are also caught:
+**First, capture a best-effort tripwire baseline.** The actual read-only
+guarantee is the provider CLI's own mechanism — codex via `--sandbox
+read-only`, antigravity via print-mode tool denial — backed by the maintainer's
+real-machine verification. The git snapshot below is **NOT** a complete
+read-only check; it is a cheap tripwire that catches *some* obvious violations,
+nothing more. Record the repo state *before* launching anything:
 
 ```bash
 git status --porcelain --ignored > "$RUN_DIR/git-status.before"
 git rev-parse HEAD > "$RUN_DIR/git-head.before"
 ```
 
-This check covers tracked and ignored files *inside the worktree* only. Writes
-outside the tree (e.g. `~/.ssh`, `~/.aws/credentials`) are not observable here
-and remain part of maintainer verification against a real install.
+What this tripwire **does** catch:
+
+- changes to **tracked** files (modified/added/deleted in the working tree)
+- **new commits** — HEAD moved
+- newly-created **top-level ignored paths** (a brand-new ignored file or dir at
+  the repo root shows up in `git status --ignored`)
+
+What it **does NOT** catch (so a clean result is not proof of read-only):
+
+- modifications to an **existing** ignored file — e.g. appending secrets to a
+  pre-existing `.env` — because `git status` does not diff ignored-file contents
+- **new files inside an already-ignored directory** — the parent dir is
+  collapsed to a single already-known entry, so a new child is invisible
+- any write **outside the worktree** — e.g. `~/.ssh`, `~/.aws/credentials` —
+  which git cannot observe at all
+
+For those cases the only real protection is the provider's own sandbox/print
+mode plus maintainer verification against a real install.
 
 Launch every provider as a background Bash task so they run concurrently
 (reviews typically take 1–5 minutes each):
@@ -118,10 +133,13 @@ If either `diff` shows a difference, the working tree or HEAD changed while the
 providers were running — a provider may have violated the read-only contract.
 **Surface this loudly at the top of your synthesis** (which files changed, and
 which provider run it coincides with) and warn the user to inspect and revert
-before trusting the review. If both diffs are empty, note it briefly — but scope
-the claim precisely: state that no tracked or ignored in-tree changes were
-detected, and that writes outside the worktree are not covered by this check and
-remain part of maintainer verification. Then proceed.
+before trusting the review. If both diffs are empty, note it briefly — but do
+**not** imply the read-only contract was verified. Say only that the tripwire
+found nothing: no changes to tracked files, no new commits, and no new top-level
+ignored paths. Do not claim read-only was confirmed — this tripwire cannot see
+appends to existing ignored files, new files inside already-ignored directories,
+or any write outside the worktree; those depend on the provider's own sandbox
+and maintainer verification. Then proceed.
 
 ## Step 5: Synthesize
 

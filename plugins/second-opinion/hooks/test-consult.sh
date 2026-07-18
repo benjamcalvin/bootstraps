@@ -127,17 +127,25 @@ make_stub "$STUB_AGY_EMPTY" agy "exit 0"
 expect_exit 3 "agy empty response -> exit 3" "$STUB_AGY_EMPTY:$REAL_PATH" -- antigravity "$PROMPT"
 
 # --- Model-override flag construction (antigravity path) ---
-# agy stub echoes its argv; run_antigravity returns it as the review text.
+# agy stub echoes its argv one element per line; run_antigravity returns it as
+# the review text. Per-line output lets grep -x match a flag/value exactly and,
+# crucially, prove a multi-word model name survives as a single argv element
+# (not split at spaces).
 STUB_AGY_ECHO="$WORK/bin-agy-echo"
-make_stub "$STUB_AGY_ECHO" agy 'printf "%s\n" "$*"'
+make_stub "$STUB_AGY_ECHO" agy 'for a in "$@"; do printf "%s\n" "$a"; done'
 
 # With no override, no -m flag should be constructed.
 out="$(PATH="$STUB_AGY_ECHO:$REAL_PATH" "$BASH_BIN" "$CONSULT" antigravity "$PROMPT" 2>/dev/null)"
-if echo "$out" | grep -q -- '-m'; then fail "no override should not pass -m (got: $out)"; else pass; fi
+if echo "$out" | grep -qx -- '-m'; then fail "no override should not pass -m (got: $out)"; else pass; fi
 
-# With an override set, -m <model> should be present.
+# With a single-word override, -m and the model name should both be present.
 out="$(PATH="$STUB_AGY_ECHO:$REAL_PATH" SECOND_OPINION_ANTIGRAVITY_MODEL="my-model" "$BASH_BIN" "$CONSULT" antigravity "$PROMPT" 2>/dev/null)"
-if echo "$out" | grep -q -- '-m my-model'; then pass; else fail "override should pass '-m my-model' (got: $out)"; fi
+if echo "$out" | grep -qx -- '-m' && echo "$out" | grep -qx -- 'my-model'; then pass; else fail "override should pass '-m my-model' (got: $out)"; fi
+
+# With a spaced (multi-word) override, the whole value must survive as one argv
+# element — i.e. a line equal to "Gemini 3.1 Pro", not truncated at the space.
+out="$(PATH="$STUB_AGY_ECHO:$REAL_PATH" SECOND_OPINION_ANTIGRAVITY_MODEL="Gemini 3.1 Pro" "$BASH_BIN" "$CONSULT" antigravity "$PROMPT" 2>/dev/null)"
+if echo "$out" | grep -qx -- '-m' && echo "$out" | grep -qx -- 'Gemini 3.1 Pro'; then pass; else fail "spaced override should pass '-m' then intact 'Gemini 3.1 Pro' (got: $out)"; fi
 
 # --- Codex happy path (exit 0, review text) ---
 # codex writes its final message to the file named after --output-last-message.
@@ -168,9 +176,18 @@ make_stub "$STUB_CODEX_ECHO" codex \
 out="$(PATH="$STUB_CODEX_ECHO:$REAL_PATH" "$BASH_BIN" "$CONSULT" codex "$PROMPT" 2>/dev/null)"
 if echo "$out" | grep -qx -- '-m'; then fail "codex no override should not pass -m (got: $out)"; else pass; fi
 
-# With an override set, -m and the model name should both be present.
+# Read-only guarantee: codex must always be invoked with --sandbox read-only.
+# Reuse the argv captured above (per-line, so grep -x matches each element).
+if echo "$out" | grep -qx -- '--sandbox' && echo "$out" | grep -qx -- 'read-only'; then pass; else fail "codex must pass '--sandbox read-only' (got: $out)"; fi
+
+# With a single-word override, -m and the model name should both be present.
 out="$(PATH="$STUB_CODEX_ECHO:$REAL_PATH" SECOND_OPINION_CODEX_MODEL="my-model" "$BASH_BIN" "$CONSULT" codex "$PROMPT" 2>/dev/null)"
 if echo "$out" | grep -qx -- '-m' && echo "$out" | grep -qx -- 'my-model'; then pass; else fail "codex override should pass '-m my-model' (got: $out)"; fi
+
+# With a spaced (multi-word) override, the whole value must survive as one argv
+# element — a line equal to "Gemini 3.1 Pro", not split at the spaces.
+out="$(PATH="$STUB_CODEX_ECHO:$REAL_PATH" SECOND_OPINION_CODEX_MODEL="Gemini 3.1 Pro" "$BASH_BIN" "$CONSULT" codex "$PROMPT" 2>/dev/null)"
+if echo "$out" | grep -qx -- '-m' && echo "$out" | grep -qx -- 'Gemini 3.1 Pro'; then pass; else fail "codex spaced override should pass '-m' then intact 'Gemini 3.1 Pro' (got: $out)"; fi
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed ($(( PASS + FAIL )) total)"
