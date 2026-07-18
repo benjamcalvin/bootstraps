@@ -91,6 +91,18 @@
         "name": "benjamcalvin"
       },
       "license": "MIT"
+    },
+    {
+      "name": "second-opinion",
+      "source": "./plugins/second-opinion",
+      "description": "Consult external AI CLIs (Codex, Antigravity) headlessly for a second-opinion code review of your changes",
+      "version": "1.0.0",
+      "category": "productivity",
+      "tags": ["review", "codex", "antigravity", "second-opinion", "headless", "multi-provider"],
+      "author": {
+        "name": "benjamcalvin"
+      },
+      "license": "MIT"
     }
   ]
 }
