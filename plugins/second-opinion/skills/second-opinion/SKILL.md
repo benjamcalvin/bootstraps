@@ -51,7 +51,7 @@ If the resulting diff is empty, stop and tell the user there is nothing to revie
 Create a run directory and write one prompt file shared by all providers:
 
 ```bash
-RUN_DIR=$(mktemp -d -t second-opinion)
+RUN_DIR=$(mktemp -d -t second-opinion.XXXXXX)
 ```
 
 Read the template at `$CLAUDE_PLUGIN_ROOT/assets/prompts/review.md` and write
@@ -65,6 +65,17 @@ Read the template at `$CLAUDE_PLUGIN_ROOT/assets/prompts/review.md` and write
   hunks, and note that the reviewer should read the listed files for the rest.
 
 ## Step 4: Run Providers in Parallel
+
+**First, capture a read-only baseline.** The providers are supposed to run
+read-only (codex via `--sandbox read-only`, antigravity via print-mode tool
+denial), but that per-provider guarantee is the load-bearing contract of this
+plugin. Record the repo state *before* launching anything so you can prove
+nothing was mutated:
+
+```bash
+git status --porcelain > "$RUN_DIR/git-status.before"
+git rev-parse HEAD > "$RUN_DIR/git-head.before"
+```
 
 Launch every provider as a background Bash task so they run concurrently
 (reviews typically take 1–5 minutes each):
@@ -80,6 +91,23 @@ Launch every provider as a background Bash task so they run concurrently
 Wait for all background tasks to finish. Exit codes: `2` means the CLI is not
 installed, `3` means it ran but failed (check stderr). If one provider fails,
 continue with the others and note the failure in your summary.
+
+**Then, verify the read-only contract held.** After all providers finish,
+re-capture the repo state and compare:
+
+```bash
+git status --porcelain > "$RUN_DIR/git-status.after"
+git rev-parse HEAD > "$RUN_DIR/git-head.after"
+diff "$RUN_DIR/git-status.before" "$RUN_DIR/git-status.after"
+diff "$RUN_DIR/git-head.before" "$RUN_DIR/git-head.after"
+```
+
+If either `diff` shows a difference, the working tree or HEAD changed while the
+providers were running — a provider may have violated the read-only contract.
+**Surface this loudly at the top of your synthesis** (which files changed, and
+which provider run it coincides with) and warn the user to inspect and revert
+before trusting the review. If both diffs are empty, the contract held; note
+that briefly and proceed.
 
 ## Step 5: Synthesize
 
@@ -97,6 +125,14 @@ Read each provider's output file, then present a single consolidated review:
 Keep provider attribution visible throughout (e.g. `[codex]`, `[antigravity]`) so
 the user can judge the sources. Do not act on any finding — this skill only
 reports. Offer next steps (fix, post to PR) and let the user choose.
+
+Once you have read the provider output files and produced the synthesis, remove
+the run directory so runs don't leave temp dirs behind (mirroring the trap-based
+cleanup `run_codex` does for its own temp file):
+
+```bash
+rm -rf "$RUN_DIR"
+```
 
 ## Installation
 

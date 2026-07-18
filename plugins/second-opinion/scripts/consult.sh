@@ -44,7 +44,7 @@ available() {
 run_codex() {
   local prompt_file="$1"
   local out
-  out=$(mktemp -t second-opinion-codex)
+  out=$(mktemp -t second-opinion-codex.XXXXXX)
   trap 'rm -f "$out"' RETURN
 
   # codex exec: non-interactive mode. Final agent message goes to the
@@ -66,14 +66,20 @@ run_antigravity() {
 
   # agy -p: print mode, runs one prompt non-interactively and exits.
   # Tool calls without an allow rule are denied in print mode, so the
-  # agent can read the repo but not modify it. stdin is emptied so the
-  # CLI can never hang waiting for approval in a non-TTY context.
-  response=$(agy -p "$(cat "$prompt_file")" \
+  # agent can read the repo but not modify it.
+  #
+  # The prompt is fed on stdin rather than as an argv element. Passing it
+  # as an argument (agy -p "$(cat …)") caps the prompt at the per-argument
+  # limit — on Linux MAX_ARG_STRLEN is 128 KiB regardless of ARG_MAX — so a
+  # large diff would fail with E2BIG. stdin has no such cap, and it still
+  # can't hang waiting for approval in a non-TTY context because the prompt
+  # file reaches EOF (equivalent to the previous < /dev/null behaviour).
+  response=$(agy -p \
     ${SECOND_OPINION_ANTIGRAVITY_MODEL:+-m "$SECOND_OPINION_ANTIGRAVITY_MODEL"} \
-    < /dev/null) || return 3
+    < "$prompt_file") || return 3
 
   [ -n "$response" ] || { log "antigravity produced an empty response"; return 3; }
-  echo "$response"
+  printf '%s\n' "$response"
 }
 
 main() {
