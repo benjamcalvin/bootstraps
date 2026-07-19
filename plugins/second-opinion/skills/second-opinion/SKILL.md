@@ -7,7 +7,7 @@ description: >-
 argument-hint: "[codex|antigravity|all] [scope: staged | branch | PR number | <git range>]"
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "1.0.1"
   tags: ["review", "codex", "antigravity", "second-opinion", "headless", "multi-provider"]
   author: benjamcalvin
 ---

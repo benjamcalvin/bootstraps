@@ -8,6 +8,9 @@ A plugin marketplace of reusable skills, hooks, and project scaffolds for AI cod
 bootstraps/
 ├── .claude-plugin/
 │   └── marketplace.json   # Plugin marketplace manifest
+├── docs/
+│   └── adr/
+│       └── NNN-short-title.md  # Architecture decision records
 ├── plugins/               # All distributable plugins
 │   └── <plugin>/
 │       ├── .claude-plugin/
