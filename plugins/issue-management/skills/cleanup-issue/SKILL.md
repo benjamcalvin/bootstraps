@@ -6,7 +6,7 @@ description: >-
 argument-hint: <#issue-number>
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   tags: ["issue", "cleanup", "formatting"]
   author: benjamcalvin
 ---
@@ -39,6 +39,7 @@ Read the issue body from Context above. Evaluate it against these quality dimens
 | **Formatting** | Consistent markdown, proper code blocks, readable tables? |
 | **Completeness** | Are key sections missing entirely? (Problem, Acceptance Criteria, Scope) |
 | **Clarity** | Are there vague phrases, ambiguous pronouns, or undefined terms? |
+| **Altitude** | Does each section hold one altitude — Problem in plain domain language, Solution in component and operation terms (endpoint routes count as operation names, not code identifiers), and files/line numbers only in Technical Context? An acceptance criterion may name the contract under test (a function or endpoint) but not its location. Do sentences mix a claim, its mechanism, and a citation? |
 | **Actionability** | Could an AI agent start implementing from this issue without clarifying questions? |
 
 ### Step 3: Fix Issues
@@ -73,6 +74,14 @@ If the issue lacks clear sections, restructure it using the standard template:
 ## Technical Context
 
 - **Key files:** <extracted if present>
+
+## References
+
+<extracted if present>
+
+## History
+
+<extracted provenance, one or two lines — omit if none>
 ```
 
 Preserve all original information. Do not invent new requirements — only reorganize what exists.
@@ -92,7 +101,18 @@ Preserve all original information. Do not invent new requirements — only reorg
 - Flag genuinely ambiguous statements with `<!-- CLARIFICATION NEEDED: ... -->` comments rather than guessing
 - Expand acronyms on first use if they aren't widely known
 
-#### 3d: Acceptance Criteria Polish
+#### 3d: Altitude Fixes
+
+Restore the altitude separation without losing information:
+
+- Move file paths, function names, and line numbers out of Problem and Solution into Technical Context (create the section if missing); leave a plain-language statement of the same fact behind
+- Split sentences that carry a claim, its mechanism, and a citation into one sentence per idea
+- Move citations from mid-clause to the end of their bullet or sentence
+- Move discovery narrative ("as found in review of X", "deferred from Y") into a one-line History section at the bottom (create the section if missing)
+
+This is reorganization, not rewriting — every fact keeps its meaning, it just lands in the layer where its readers look for it.
+
+#### 3e: Acceptance Criteria Polish
 
 If acceptance criteria exist but are weak, strengthen them:
 

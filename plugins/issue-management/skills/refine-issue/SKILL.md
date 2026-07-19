@@ -7,7 +7,7 @@ description: >-
 argument-hint: <#issue-number>
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   tags: ["issue", "refine", "planning", "research"]
   author: benjamcalvin
 ---
@@ -24,9 +24,11 @@ Refine GitHub issue: $ARGUMENTS
 
 ## Instructions
 
-You refine existing GitHub issues by grounding them in codebase reality. Unlike `/cleanup-issue` (which fixes form), you improve **substance** — adding technical context, sharpening acceptance criteria with real code references, and decomposing large tasks.
+You refine existing GitHub issues by grounding them in codebase reality. Unlike `/cleanup-issue` (which fixes form), you improve **substance** — adding technical context, sharpening acceptance criteria, and decomposing large tasks.
 
 The goal: after refinement, an AI agent can implement the issue without any codebase exploration of its own.
+
+Refinement adds depth **at the right altitude, not everywhere**. Issues descend through three layers: Problem stays at behavior altitude (plain domain language, no code identifiers), Solution stays at design altitude (component and operation names, no files/functions/lines), and file paths and line numbers live in Technical Context and PR decomposition tables — with one exception: an acceptance criterion may name the contract under test, but not where to find it. Research findings land in the layer they belong to — grounding an issue in the codebase must not mean pushing `file.go:line` references into Problem or Solution. If the existing issue already mixes altitudes, restore the separation as you refine.
 
 ### Step 1: Parse the Target
 
@@ -70,9 +72,9 @@ Apply refinements based on your research:
 Replace vague criteria with specific, testable ones grounded in actual code:
 
 - Before: "Pagination should work"
-- After: "When `GET /api/users?page=2&limit=10` is called, the response includes `pagination.total_count`, `pagination.page`, and `pagination.per_page` fields, matching the pattern in `handlers/products.go:47-62`"
+- After: "When `GET /api/users?page=2&limit=10` is called, the response includes `pagination.total_count`, `pagination.page`, and `pagination.per_page` fields"
 
-Each criterion should be independently verifiable and reference concrete types, functions, or paths where relevant.
+Each criterion should be independently verifiable and name the observable contract precisely (an endpoint, a function signature). Locational detail discovered during research — which file implements the pattern, which lines to mirror — goes in Technical Context, not the criterion: the criterion states *what must be true*, Technical Context states *where to look*. Cite a spec or related issue at the end of a bullet, never mid-clause.
 
 #### 4b: Add Technical Context
 
@@ -136,11 +138,13 @@ If not already present, add or enhance the Verification section:
 
 Before presenting, verify:
 
-1. Every acceptance criterion references real code paths or APIs
+1. Every acceptance criterion names a real, observable contract (verified against the code, not guessed)
 2. Technical context has exact file paths (not guesses)
 3. Patterns to follow are actual patterns in the codebase
 4. Decomposition (if any) has clear dependency ordering
 5. No new requirements were invented — only existing intent was sharpened
+6. **Altitude check:** refinement did not push code identifiers into Problem or Solution; file/function/line references live only in Technical Context (and PR decomposition tables)
+7. **Skim test:** the first sentence of each section, read in order, still forms a correct summary at descending altitude
 
 ### Step 6: Present and Apply
 
