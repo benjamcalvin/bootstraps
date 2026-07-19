@@ -1,9 +1,11 @@
-# ADR 0001: Task-delegation substrate, privilege tiers, and exposure model
+# ADR-001: Task-delegation substrate, privilege tiers, and exposure model
 
-- **Status:** Accepted
-- **Date:** 2026-07-18
-- **Issue:** [#77 — feat: generalize second-opinion into a privilege-tiered task-delegation tool](https://github.com/benjamcalvin/bootstraps/issues/77)
-- **Related:** [#75](https://github.com/benjamcalvin/bootstraps/issues/75) (second-opinion), [#44](https://github.com/benjamcalvin/bootstraps/issues/44)/[#45](https://github.com/benjamcalvin/bootstraps/issues/45) (implement-cli), [#69](https://github.com/benjamcalvin/bootstraps/issues/69) (implement-team)
+**Status:** Accepted
+**Last Updated:** 2026-07-18
+**Decision:** Extend `second-opinion` into a privilege-tiered `delegate` primitive (Option A) with a three-tier ladder — `consult` (default, read-only) / `act-sandboxed` (opt-in, worktree-scoped writes) / `act-full` (per-invocation gated) — every delegate subprocess enclosed by a pinned Anthropic `sandbox-runtime` wrapper, fail-closed.
+
+**Issue:** [#77 — feat: generalize second-opinion into a privilege-tiered task-delegation tool](https://github.com/benjamcalvin/bootstraps/issues/77)
+**Related:** [#75](https://github.com/benjamcalvin/bootstraps/issues/75) (second-opinion), [#44](https://github.com/benjamcalvin/bootstraps/issues/44)/[#45](https://github.com/benjamcalvin/bootstraps/issues/45) (implement-cli), [#69](https://github.com/benjamcalvin/bootstraps/issues/69) (implement-team)
 
 ## Context
 
@@ -59,7 +61,7 @@ orchestration stack. Rationale, on the three axes that matter:
 |---|---|---|---|
 | **Billing** | External providers bill their own accounts; no draw on the user's Claude quota. Adding `claude -p` as a provider is subscription-billed and cappable per-invocation (`--max-budget-usd`). | Entirely on the user's Claude subscription bucket; parallel delegates compete with interactive use. Was paused over a billing split that is resolved-for-now but could return (see [Quota and billing](#quota-and-billing-exhaustion)). | Both models at once — most flexible, but forces solving both billing stories before shipping anything. |
 | **Privilege mechanisms** | Every target is a subprocess launched from a shell script, so one external OS-level wrapper (Decision 5) uniformly encloses all of them; per-CLI sandbox flags map directly to tier flags. Matches the decided three-boundary architecture, which puts real enforcement *outside* the harness. | `permission_mode` / `allowed_tools` are harness-native (boundary 1 only) — exactly the layer the maintainer decided to inherit, not rely on. The SDK subprocess would still need the same external wrapper, gaining nothing over launching `claude -p` from the shell substrate. | Same enforcement as A, at the cost of maintaining two invocation stacks (shell + Python SDK) with tier semantics kept in lockstep. |
-| **Maintenance surface** | ~140 lines of dependency-free bash with established exit-code discipline (`0/1/2/3`), plus a SKILL.md. Adding a tier parameter and providers extends an existing, tested pattern. | A Python package (SDK dependency chain, pytest suite, async orchestrator) that is currently paused; reviving it couples delegation to `claude-agent-sdk` release cadence. | Largest surface: a new plugin plus continued upkeep of both existing ones. |
+| **Maintenance surface** | ~140 lines of bash with established exit-code discipline (`0/1/2/3`), plus a SKILL.md — no language-runtime dependency chain, but **not dependency-free once Decision 5 is counted**: A owns a pinned native dependency (`srt`, riding on Seatbelt / bubblewrap+socat) as a hard prerequisite. Adding a tier parameter and providers extends an existing, tested pattern. | A Python package (SDK dependency chain, pytest suite, async orchestrator) that is currently paused; reviving it couples delegation to `claude-agent-sdk` release cadence — **and** it would still need the same `srt` wrapper on top (see privilege row), so B's surface is a superset, not an alternative to, A's. | Largest surface: a new plugin plus continued upkeep of both existing ones. |
 
 Option C's *goal* — one interface over external CLIs and Claude — is still
 reached, but through A's provider abstraction (`run_<provider>()` +
@@ -71,7 +73,12 @@ budget-cap flags of the Claude provider but is not revived as the substrate.
 
 Consequence: the `second-opinion` plugin grows a generalized `delegate.sh`
 (shape finalized in PR 2); `consult` remains the name of the default read-only
-tier and the existing skill's behavior is unchanged.
+tier and the existing skill's **review semantics** are unchanged (same
+prompt-in / findings-out contract, same exit codes, same cleanup rules). Its
+**runtime prerequisites** do change: per Decisions 5–6, once PR 2 lands the
+pinned `srt` wrapper is a hard, fail-closed prerequisite for `consult` too —
+a deliberate breaking change for existing installs without `srt` (see
+[Consequences](#consequences)).
 
 ## Decision 2 (decided, maintainer): the three-boundary model
 
@@ -100,9 +107,9 @@ delegation; the mechanisms listed are for the chosen substrate (A).
 
 | Tier | Capability | Codex (`codex exec`) | Antigravity (`agy`) | Claude provider (`claude -p`) | Wrapper (Decision 5) | Worktree |
 |---|---|---|---|---|---|---|
-| **`consult`** (default) | Read-only. No writes, no terminal side effects, no network beyond the provider API. | `--sandbox read-only` | `--sandbox` (binary toggle: sandbox with terminal restrictions) | `permission_mode` default + read-only `allowed_tools` (`Read`, `Glob`, `Grep`) | **On**; FS jail read-only outside temp; egress allowlist = provider endpoints | Optional (current-tree behavior preserved) |
-| **`act-sandboxed`** (opt-in) | Write, but only inside an isolated scope. | `--sandbox workspace-write`, CWD = worktree | `--sandbox` (no native write-scoped mode — the wrapper's FS write-allowlist *is* the enforcement; see note) | `permission_mode acceptEdits` + restricted `allowed_tools` (`Read`, `Write`, `Edit`, `Glob`, `Grep`, scoped `Bash`) | **On**; FS jail write-allowlist = the worktree + run temp dir only; same egress allowlist | **Required** — dedicated git worktree is the allowed write scope, verified by the tripwire |
-| **`act-full`** (gated) | Unrestricted write / terminal / network. | `--sandbox danger-full-access` | unsandboxed (see forbidden-flags note) | `permission_mode bypassPermissions` | **Off or widened** — only reachable via explicit per-invocation approval | Strongly recommended, not enforced |
+| **`consult`** (default) | Read-only. No writes, no terminal side effects, no network beyond the provider API. | `--sandbox read-only` | `--sandbox` (binary toggle: sandbox with terminal restrictions) | `permission_mode` default + read-only `allowed_tools` (`Read`, `Glob`, `Grep`) | **On**; FS jail read-only outside temp (write restriction) + credential-path `denyRead` list (Decision 5); egress allowlist = provider endpoints | Optional (current-tree behavior preserved) |
+| **`act-sandboxed`** (opt-in) | Write, but only inside an isolated scope. | `--sandbox workspace-write`, CWD = worktree | `--sandbox` (no native write-scoped mode — the wrapper's FS write-allowlist *is* the enforcement; see note) | `permission_mode acceptEdits` + restricted `allowed_tools` (`Read`, `Write`, `Edit`, `Glob`, `Grep`, scoped `Bash`) | **On**; FS jail write-allowlist = the worktree + run temp dir only, same credential-path `denyRead` list; same egress allowlist | **Required** — dedicated git worktree is the allowed write scope, verified by the tripwire |
+| **`act-full`** (gated) | Unrestricted write / terminal / network. | `--sandbox danger-full-access` | unsandboxed (see forbidden-flags note) | `permission_mode bypassPermissions` | **Off or widened** — only reachable via explicit per-invocation approval | **Default: launcher creates a dedicated worktree** — running in the primary tree requires a second explicit opt-out flag (see Decision 8) |
 
 Notes:
 
@@ -146,8 +153,24 @@ default-deny egress through a localhost allowlisting proxy (boundary 3) —
 native Seatbelt on macOS without root, bubblewrap/socat on Linux with the same
 config.
 
+- **Invocation shape:** `srt` is a CLI wrapper, invoked as
+  `srt --settings <config>.json <command…>`. That is what makes one wrapper
+  uniform across every subprocess provider from a bash launcher — no library
+  binding or extra runtime involved.
 - **Pinned to an exact version.** `srt` is a pre-1.0 research preview: no
   floating ranges; version bumps are deliberate, reviewed changes.
+- **Explicit read-deny policy required.** `srt`'s filesystem semantics are
+  asymmetric: **writes are default-deny** (allow-only), but **reads are
+  default-allow** with a deny-then-allow pattern (`filesystem.denyRead` /
+  `allowRead`). A jail with no read policy therefore bounds writes but leaves
+  the readable surface as open as running unsandboxed. The shipped `srt`
+  settings **must** include an explicit `denyRead` list covering known
+  credential and secret paths at every tier where the wrapper is on — at
+  minimum `~/.ssh`, `~/.aws`, `~/.config/gh`, shell history files, and OS
+  keychain stores (the same paths Decision 8 names as tripwire blind spots) —
+  with `allowRead` carve-outs only for the worktree and explicitly needed
+  context. This blocks known credential paths; it does not make reads
+  scope-bounded in general (see [Outbound](#outbound-the-delegate-can-read-and-reads-reach-the-provider)).
 - **No DIY Squid/Seatbelt/nftables glue.** That is security-critical code we
   do not want to own.
 - **Native CLI allowlists enabled underneath as defense-in-depth:** Codex
@@ -173,6 +196,12 @@ degradation to harness-native sandboxing alone. This mirrors the existing
 `consult.sh` exit-code discipline: `2` = required component not installed,
 `3` = component failed. The error must say what is missing and how to install
 it, matching how the skill already surfaces missing provider CLIs.
+
+Fail-closed governs `consult` and `act-sandboxed` — the tiers whose
+enforcement depends on the wrapper. An approved `act-full` invocation running
+with the wrapper intentionally off or widened is not a fail-closed violation;
+it is the explicit outcome of the Decision 4 approval gate, and that gate
+itself (not the wrapper) is what fail-closed protects at `act-full`.
 
 ## Decision 7 (settled by this ADR): allowlist ownership
 
@@ -208,8 +237,13 @@ context.
 
 Mitigations, not eliminations:
 
-- The wrapper's filesystem jail bounds the readable tree; worktree isolation
-  (at `act-sandboxed`) keeps the delegate's view to a dedicated checkout.
+- The wrapper's jail does **not** bound reads by default — `srt` reads are
+  default-allow; only writes are default-deny. What it does provide is the
+  explicit `denyRead` list required by Decision 5, which blocks known
+  credential and secret paths. Reads of anything else the OS lets the process
+  see can still reach the provider. Worktree isolation (at `act-sandboxed`)
+  points the delegate at a dedicated checkout — a scoping convention, not a
+  read barrier.
 - Default-deny egress limits *where* data can go to the provider API — but
   the provider itself necessarily receives what the model reads.
 - Guidance stands: do not delegate from trees holding secrets or credentials
@@ -241,9 +275,17 @@ The orchestrator passes a delegate the **minimum** it needs, and nothing else:
   environment. For the Claude provider, prefer a scoped
   `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`; subscription-billed,
   revocable) over `ANTHROPIC_API_KEY` for routine delegation; pass exactly
-  one, explicitly, and only when delegating to Claude. The wrapper
-  environment is stripped-down by default — no ambient `AWS_*`, `GITHUB_TOKEN`,
-  or similar leaking into the subprocess.
+  one, explicitly, and only when delegating to Claude.
+- **Environment scrubbing is a launcher requirement, not a wrapper
+  guarantee.** Upstream `srt` documents environment stripping only as a
+  Windows side effect (separate `srt-sandbox` account); on macOS (Seatbelt)
+  and Linux (bubblewrap) — this design's target platforms — the sandboxed
+  subprocess **inherits the launcher's ambient environment**, including any
+  exported `AWS_*`, `GITHUB_TOKEN`, or CI secrets. The delegate launcher
+  (PR 2) must therefore construct a scrubbed environment itself before
+  invoking `srt` — e.g. `env -i` plus an explicit allowlist containing only
+  the one provider credential and a minimal `PATH`/`HOME` — so nothing
+  ambient leaks into the subprocess.
 - **Scope:** prompt files contain the task and the needed context, not the
   orchestrator's own instructions, tokens, or unrelated user data. The run
   directory holding prompt files and diffs is cleaned up on **every** exit
@@ -277,6 +319,14 @@ scope*?"** — where the allowed scope is the delegate's dedicated worktree
   check that the jail and the delegate's harness behaved, nothing more.
 - At `consult`, the tripwire degenerates to exactly today's behavior: the
   allowed write scope is empty, so *any* detected write is a violation.
+- At `act-full`, the launcher **defaults into a dedicated worktree too**
+  (Decision 3). This is not a capability restriction — the tier remains
+  unrestricted write/terminal/network — but it keeps the tripwire's
+  before/after scope clean at the highest-blast-radius tier: expected work
+  lands in the delegate's worktree, and any primary-tree delta is still a
+  loud signal. The caller can opt out into the primary tree only with a
+  second explicit flag; doing so forfeits that attribution and the opt-out is
+  surfaced loudly in the result.
 
 ## Quota and billing exhaustion
 
@@ -318,7 +368,13 @@ oversold anywhere the feature is documented.
 
 1. **PR 2 — tier plumbing + `consult` default.** Generalize the launcher to
    accept a privilege tier, defaulting to `consult`; wire only the read-only
-   tier; keep behavior identical. Fail-closed wrapper checks land here.
+   tier. Review semantics stay identical, but PR 2 is a **breaking change
+   for environments without `srt`**: the pinned wrapper becomes a hard,
+   fail-closed prerequisite for `consult` (Decisions 5–6), so installs that
+   previously worked with only the provider CLIs will be refused until `srt`
+   is installed. The refusal message is the migration path — it must name the
+   pinned `srt` version and how to install it. PR 2 also builds the
+   environment-scrubbing launcher requirement (least-privilege pass-down).
 2. **PR 3 — `act-sandboxed` + write-scope tripwire.** Worktree isolation,
    wrapper write-allowlist, generalized tripwire (Decision 8).
 3. **PR 4 — `act-full` gate + trust handling.** Per-invocation approval gate
@@ -331,14 +387,16 @@ prior one established.
 ## Consequences
 
 - The `second-opinion` plugin becomes the home of a general delegation
-  primitive; its existing read-only review flow is the `consult` tier and
-  does not change behavior.
+  primitive; its existing read-only review flow is the `consult` tier —
+  review semantics unchanged, but runtime prerequisites change (next
+  bullet).
 - `implement-cli` stays paused; its budget/depth patterns are inherited as
   design, not as code.
 - A new pinned dependency (`srt`) becomes a hard prerequisite for `consult`
-  and `act-sandboxed` delegation once PR 2 lands — with the fail-closed
-  posture, machines without it get an actionable refusal, not a quiet
-  fallback.
+  and `act-sandboxed` delegation once PR 2 lands — a **breaking change for
+  existing installs** that today need only the provider CLIs. With the
+  fail-closed posture, machines without it get an actionable refusal (naming
+  the pinned version and install steps), not a quiet fallback.
 - Every claim of safety in user-facing docs must link back to the risk
   register above rather than overstating what sandboxes and tripwires
   guarantee.

@@ -59,7 +59,7 @@ part of the review.
 
 The privilege and exposure model for this plugin — and for its planned
 generalization (below) — is specified in
-[ADR 0001: Task-delegation substrate, privilege tiers, and exposure model](../../docs/adr/0001-task-delegation-privilege-model.md).
+[ADR-001: Task-delegation substrate, privilege tiers, and exposure model](../../docs/adr/001-task-delegation-privilege-model.md).
 
 Two consequences to keep in mind:
 
@@ -91,7 +91,7 @@ tier (writes confined to an isolated git worktree) and a gated `act-full` tier
 requiring explicit per-invocation approval — no code path silently escalates
 privilege. The substrate choice, tier ladder, enforcement mechanisms, and
 honest limits are recorded in
-[ADR 0001](../../docs/adr/0001-task-delegation-privilege-model.md). Nothing in
+[ADR-001](../../docs/adr/001-task-delegation-privilege-model.md). Nothing in
 the current version acts on your repo; today's plugin is the `consult` tier
 only.
 
