@@ -121,6 +121,11 @@ require_srt() {
         fi
       done
       ;;
+    *)
+      log "unsupported platform for the srt sandbox: $(uname -s) (supported: macOS, Linux)."
+      log "delegation is refused (fail-closed, ADR-001 Decision 6)."
+      exit 2
+      ;;
   esac
 }
 
@@ -374,17 +379,12 @@ main() {
     esac
   done
 
-  local provider="${1:-}" prompt_file="${2:-}"
-  [ -n "$provider" ] || usage
-  case "$provider" in
-    codex|antigravity) ;;
-    *) log "unknown provider: $provider (supported: ${PROVIDERS[*]})"; exit 1 ;;
-  esac
-  [ -n "$prompt_file" ] || usage
-  [ -f "$prompt_file" ] || { log "prompt file not found: $prompt_file"; exit 1; }
-
   # Tier gate (ADR-001 Decision 4): only consult is wired; higher tiers are
   # refused — never silently downgraded to consult, never silently granted.
+  # Runs immediately after option parsing, before any provider/prompt
+  # validation, so the documented check order (usage → tier gate → srt checks
+  # → provider check) holds and no later reordering can slip provider
+  # execution in front of the gate.
   case "$TIER" in
     consult) ;;
     act-sandboxed)
@@ -399,6 +399,15 @@ main() {
       log "unknown tier: $TIER (supported: consult | act-sandboxed | act-full)"
       exit 1 ;;
   esac
+
+  local provider="${1:-}" prompt_file="${2:-}"
+  [ -n "$provider" ] || usage
+  case "$provider" in
+    codex|antigravity) ;;
+    *) log "unknown provider: $provider (supported: ${PROVIDERS[*]})"; exit 1 ;;
+  esac
+  [ -n "$prompt_file" ] || usage
+  [ -f "$prompt_file" ] || { log "prompt file not found: $prompt_file"; exit 1; }
 
   require_srt
 
@@ -420,7 +429,15 @@ main() {
   # symlinked temp paths (macOS /tmp -> /private/tmp).
   RUN_TMP=$(mktemp -d -t second-opinion-run.XXXXXX)
   trap 'rm -rf "$RUN_TMP"' EXIT
-  RUN_TMP=$(cd "$RUN_TMP" && pwd -P)
+  # Resolve via a temp variable so a failed resolution cannot clobber RUN_TMP:
+  # the trap must always see a valid path, or the mktemp'd dir would leak.
+  local run_tmp_phys
+  if run_tmp_phys=$(cd "$RUN_TMP" && pwd -P) && [ -n "$run_tmp_phys" ]; then
+    RUN_TMP="$run_tmp_phys"
+  else
+    log "failed to resolve the run temp dir to a physical path: $RUN_TMP"
+    exit 3
+  fi
 
   write_srt_settings "$provider"
   srt_preflight

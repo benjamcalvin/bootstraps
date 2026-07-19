@@ -176,6 +176,55 @@ expect_exit 3 "srt fails to start -> exit 3" "$STUB_CODEX_OK0:$STUB_SRT_FAIL:$RE
 err="$(run_stderr "$STUB_CODEX_OK0:$STUB_SRT_FAIL:$REAL_PATH" -- codex "$PROMPT")"
 echo "$err" | grep -qi "failed to start" && pass || fail "srt-failure error should say the wrapper failed to start (got: $err)"
 
+# --- Platform-dependency fail-closed checks (ADR-001 Decision 6) ---
+# srt itself is present, but the OS-level dependency it needs to enforce the
+# jail is not -> exit 2, never a silent skip. These PATHs deliberately exclude
+# REAL_PATH so the host machine's own sandbox-exec/bwrap/socat cannot leak in;
+# a dirname stub covers the one external binary consult.sh needs before the
+# check fires (SCRIPT_DIR resolution).
+#
+# make_srt_nodep_stub <dir> <platform> — srt present, `uname -s` forced to
+# <platform>, and NO platform-dep binaries on the PATH.
+make_srt_nodep_stub() {
+  local dir="$1" platform="$2"
+  make_stub "$dir" srt 'exit 0'
+  make_stub "$dir" uname "echo $platform"
+  make_stub "$dir" dirname 'echo "${1%/*}"'
+}
+
+# Darwin with sandbox-exec (Seatbelt) missing -> exit 2 naming the dep.
+STUB_NODEP_DARWIN="$WORK/bin-srt-nodep-darwin"
+make_srt_nodep_stub "$STUB_NODEP_DARWIN" Darwin
+expect_exit 2 "Darwin: sandbox-exec missing -> exit 2" "$STUB_NODEP_DARWIN" -- codex "$PROMPT"
+err="$(run_stderr "$STUB_NODEP_DARWIN" -- codex "$PROMPT")"
+echo "$err" | grep -q "sandbox-exec" && pass || fail "Darwin dep-missing error should name sandbox-exec (got: $err)"
+
+# Linux with bwrap and socat missing -> exit 2 naming the first missing dep.
+STUB_NODEP_LINUX="$WORK/bin-srt-nodep-linux"
+make_srt_nodep_stub "$STUB_NODEP_LINUX" Linux
+expect_exit 2 "Linux: bwrap missing -> exit 2" "$STUB_NODEP_LINUX" -- codex "$PROMPT"
+err="$(run_stderr "$STUB_NODEP_LINUX" -- codex "$PROMPT")"
+echo "$err" | grep -q "bwrap" && pass || fail "Linux dep-missing error should name bwrap (got: $err)"
+
+# Linux with bwrap present but socat missing -> exit 2 naming socat.
+STUB_NOSOCAT_LINUX="$WORK/bin-srt-nosocat-linux"
+make_srt_nodep_stub "$STUB_NOSOCAT_LINUX" Linux
+make_stub "$STUB_NOSOCAT_LINUX" bwrap 'exit 0'
+expect_exit 2 "Linux: socat missing -> exit 2" "$STUB_NOSOCAT_LINUX" -- codex "$PROMPT"
+err="$(run_stderr "$STUB_NOSOCAT_LINUX" -- codex "$PROMPT")"
+echo "$err" | grep -q "socat" && pass || fail "Linux socat-missing error should name socat (got: $err)"
+
+# Unknown platform -> exit 2 (explicit refusal, not a silent skip), even with
+# every dep binary present — the refusal is about the platform itself.
+STUB_UNKNOWN_OS="$WORK/bin-srt-unknown-os"
+make_srt_nodep_stub "$STUB_UNKNOWN_OS" SunOS
+make_stub "$STUB_UNKNOWN_OS" sandbox-exec 'exit 0'
+make_stub "$STUB_UNKNOWN_OS" bwrap 'exit 0'
+make_stub "$STUB_UNKNOWN_OS" socat 'exit 0'
+expect_exit 2 "unknown platform -> exit 2 (fail-closed)" "$STUB_UNKNOWN_OS" -- codex "$PROMPT"
+err="$(run_stderr "$STUB_UNKNOWN_OS" -- codex "$PROMPT")"
+echo "$err" | grep -qi "unsupported platform" && pass || fail "unknown-platform refusal should say unsupported platform (got: $err)"
+
 # --- list / available() detection ---
 # Empty case: no providers on PATH -> empty output, exit 0.
 expect_exit 0 "list exits 0 with no providers" "" -- list
