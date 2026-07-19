@@ -1,7 +1,7 @@
 # ADR-001: Task-delegation substrate, privilege tiers, and exposure model
 
 **Status:** Accepted
-**Last Updated:** 2026-07-18
+**Last Updated:** 2026-07-19
 **Decision:** Accepted
 
 **Issue:** [#77 — feat: generalize second-opinion into a privilege-tiered task-delegation tool](https://github.com/benjamcalvin/bootstraps/issues/77)
@@ -328,7 +328,11 @@ scope*?"** — where the allowed scope is the delegate's dedicated worktree
   `denyWrite`. Otherwise an adversarial or prompt-injected delegate could
   regenerate the before-snapshots to match its tampering and erase the
   evidence, defeating detection with no jail bypass required. The store is a
-  dedicated temp dir the delegate can neither read as its scope nor write.
+  dedicated temp dir kept out of the delegate's write scope — in `denyWrite`,
+  never `allowWrite` — so the delegate cannot overwrite the before-snapshots to
+  erase evidence. Reads remain default-allow like everywhere else; the store
+  holds only git-status/HEAD snapshots the delegate could already read at the
+  source, so read-protection would buy nothing.
 - **After** completion: re-snapshot and diff. Changes inside the delegate's
   worktree are the expected work product; **any delta outside it is a
   violation** and is surfaced loudly at the top of the result, with the same
