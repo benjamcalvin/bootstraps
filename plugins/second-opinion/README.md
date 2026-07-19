@@ -80,7 +80,10 @@ Providers are detected at runtime — install one or both:
 ### Privilege tiers
 
 `consult.sh` accepts `--tier <consult|act-sandboxed|act-full>` (ADR-001
-tier ladder):
+tier ladder). Gate flags (`--tier`, `--i-approve-full-access`, `--primary-tree`)
+**must precede the provider argument**; placed after it they are hard-refused
+(exit 1), and a gate flag used at a tier where it has no effect warns on stderr
+and is ignored rather than escalating.
 
 - **`consult`** (default) — read-only review. No writes. This is the tier the
   `/second-opinion` review skill uses.

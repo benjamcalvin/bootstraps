@@ -420,7 +420,7 @@ oversold anywhere the feature is documented.
 | 9 | **`srt` is pre-1.0.** API/config churn and its own bugs are possible. | Mitigated: exact-version pin, deliberate reviewed bumps, fail-closed on absence. |
 | 10 | **Subscription-quota exhaustion by parallel Claude delegates.** | Mitigated: budget caps, shared-bucket documentation, external-CLI providers for fan-out. |
 
-## Roadmap (provisional; shapes PR 2–4 per issue #77)
+## Roadmap (complete; PR 2–4 per issue #77 all landed)
 
 1. **PR 2 — tier plumbing + `consult` default.** Generalize the launcher to
    accept a privilege tier, defaulting to `consult`; wire only the read-only

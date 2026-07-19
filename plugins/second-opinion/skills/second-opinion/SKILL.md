@@ -18,9 +18,12 @@ Get an independent code review from external AI CLIs: $ARGUMENTS
 
 You orchestrate the review: build one prompt, fan it out to each requested
 provider in parallel, then synthesize the results. The providers run headlessly
-at the read-only **`consult` tier** — the default (and currently only wired)
-tier of the privilege ladder defined in
-[ADR-001](../../../../docs/adr/001-task-delegation-privilege-model.md). Every
+at the read-only **`consult` tier** — the default tier of the privilege ladder
+defined in
+[ADR-001](../../../../docs/adr/001-task-delegation-privilege-model.md), and the
+only tier this review skill uses. (The acting tiers `act-sandboxed` and
+`act-full` are also wired in `consult.sh` but are delegation capabilities
+outside this read-only review flow; see **Trust handling**.) Every
 provider subprocess is enclosed by the pinned Anthropic `sandbox-runtime`
 wrapper (`srt`): an OS-level filesystem jail (writes confined to the run's temp
 dir and the provider's own state dir; known credential paths deny-read) plus
@@ -175,6 +178,14 @@ worktree, verified by the generalized write-scope tripwire below) and `act-full`
 without its approval flag is refused with exit 1. No tier is ever silently
 downgraded or escalated (ADR-001 Decision 4); see **Trust handling** below for
 how to treat delegate output and writes across all tiers.
+
+**Gate-flag placement.** All gate flags (`--tier`, `--i-approve-full-access`,
+`--primary-tree`) **must precede the provider argument** — placed after the
+provider/prompt-file they are unconsumed trailing positionals and `consult.sh`
+hard-refuses them (exit 1) rather than silently dropping them. A gate flag used
+at a tier where it has no effect (`--primary-tree` or `--i-approve-full-access`
+below `act-full`) is not fatal: `consult.sh` warns on stderr and ignores it
+(exit continues), never escalating the tier.
 
 Then **wait for all** background tasks to finish before synthesizing, and
 capture each provider's exit status. Exit codes: `2` means a required
