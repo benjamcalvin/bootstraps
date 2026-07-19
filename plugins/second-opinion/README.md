@@ -57,6 +57,10 @@ or running commands. They do **not** stop the external model from *reading*
 files it has access to and transmitting their contents back to its provider as
 part of the review.
 
+The privilege and exposure model for this plugin — and for its planned
+generalization (below) — is specified in
+[ADR 0001: Task-delegation substrate, privilege tiers, and exposure model](../../docs/adr/0001-task-delegation-privilege-model.md).
+
 Two consequences to keep in mind:
 
 - **Your filesystem is readable.** Both providers run against your working
@@ -76,6 +80,20 @@ print mode (a short planning trace instead of findings) if the prompt sends the
 agent off exploring the filesystem. The prompt template treats the embedded diff
 as self-contained to reduce this; if a run still comes back thin, re-run or fall
 back to Codex.
+
+## Roadmap: consult → delegate
+
+This plugin's read-only consultation is planned to generalize into a
+privilege-tiered **task-delegation** primitive (issue
+[#77](https://github.com/benjamcalvin/bootstraps/issues/77)): the current
+behavior becomes the default `consult` tier, with an opt-in `act-sandboxed`
+tier (writes confined to an isolated git worktree) and a gated `act-full` tier
+requiring explicit per-invocation approval — no code path silently escalates
+privilege. The substrate choice, tier ladder, enforcement mechanisms, and
+honest limits are recorded in
+[ADR 0001](../../docs/adr/0001-task-delegation-privilege-model.md). Nothing in
+the current version acts on your repo; today's plugin is the `consult` tier
+only.
 
 ## Adding a provider
 
