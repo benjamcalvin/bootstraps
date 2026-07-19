@@ -87,14 +87,27 @@ tier ladder):
 - **`act-sandboxed`** (opt-in, issue #77 PR 3) — read-write, but writes are
   confined to an **isolated scope**: a dedicated detached git worktree of the
   current repo, created under the run temp dir. The `srt` jail's write-allowlist
-  (worktree + run dir writable; the primary repo tree, `$HOME`, and credential
-  paths denied) is the load-bearing enforcement; codex additionally runs
-  `--sandbox workspace-write` and antigravity `--sandbox --mode accept-edits`
-  as defense-in-depth. After the delegate finishes, `consult.sh` prints the
-  worktree diff (the work product) and runs a **write-scope tripwire**: it
-  re-checks the primary tree and surfaces any write that escaped the worktree as
-  a loud `WRITE-SCOPE-TRIPWIRE` line. The worktree is torn down with the run dir
-  on every exit path. Requires being inside a git repository (exit 1 otherwise).
+  (worktree + run dir writable; the primary repo tree, the shared `.git`
+  object/ref store, `$HOME`, and credential paths denied) is the load-bearing
+  enforcement; codex additionally runs `--sandbox workspace-write` and
+  antigravity `--sandbox --mode accept-edits` as defense-in-depth. The worktree
+  scopes only the **writable** surface — it is not a read barrier: reads are
+  default-allow and reach the provider (ADR-001 risk #7). Two intentional
+  consequences: the worktree is checked out at the committed **HEAD**, so
+  **uncommitted** changes in the primary tree are not part of what the delegate
+  sees or acts on; and because the shared `.git` store is deliberately not
+  writable, the delegate produces **working-tree edits only** and cannot
+  `git commit`/index-write inside the worktree — the orchestrator reviews the
+  printed worktree diff and integrates it like an external PR. After the
+  delegate finishes, `consult.sh` prints that diff (the work product) and runs a
+  **write-scope tripwire**: it re-checks the primary tree, any sibling
+  worktrees, and the shared git dir's `hooks/`+`config` (a hook/config plant is
+  a code-exec vector otherwise invisible to `git status`), surfacing any escape
+  as a loud `WRITE-SCOPE-TRIPWIRE` line. The tripwire is post-hoc detection with
+  known blind spots (ignored-file appends, nested ignored paths, out-of-worktree
+  writes, non-hook/config `.git` internals) — the `srt` jail is the actual
+  enforcement. The worktree is torn down with the run dir on every exit path.
+  Requires being inside a git repository (exit 1 otherwise).
 - **`act-full`** (planned: issue #77 PR 4, gated behind explicit per-invocation
   approval) — **refused with exit 1** today.
 

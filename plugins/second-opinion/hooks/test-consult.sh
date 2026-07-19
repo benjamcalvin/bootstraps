@@ -594,6 +594,58 @@ make_git_repo "$REPO_SRTFAIL"
 if [ "$(leftovers)" -eq 0 ]; then pass; else fail "act-sandboxed srt-failure path left dirs behind: $(ls "$TDIR")"; fi
 if [ "$(worktree_count "$REPO_SRTFAIL")" -eq 1 ]; then pass; else fail "act-sandboxed srt-failure left a dangling worktree registration"; fi
 
+# --- act-sandboxed srt-settings generation (enforcement path, CI-checkable) ---
+# Without real srt we cannot prove the jail blocks writes, but we CAN assert the
+# settings the jail would enforce: allowWrite must include the isolated worktree
+# scope and the run dir, and must NOT make the source repo's shared .git store
+# writable. This guards the enforcement path against a silent regression that
+# widens allowWrite or drops the worktree from the generated JSON.
+REPO_SET="$WORK/repo-settings"
+make_git_repo "$REPO_SET"
+rm -f "$CAPTURED"
+(cd "$REPO_SET" && PATH="$STUB_CODEX_WT:$STUB_SRT_CAP:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT") >/dev/null 2>&1
+if [ -f "$CAPTURED" ]; then pass; else fail "act-sandboxed must invoke srt with a --settings file"; fi
+if command -v jq >/dev/null 2>&1; then
+  jq -e '.filesystem.allowWrite[] | select(endswith("/worktree"))' "$CAPTURED" >/dev/null 2>&1 \
+    && pass || fail "act-sandboxed settings allowWrite must include the isolated worktree scope (got: $(jq -c .filesystem.allowWrite "$CAPTURED" 2>/dev/null))"
+  jq -e '.filesystem.allowWrite[] | select(contains("second-opinion-run"))' "$CAPTURED" >/dev/null 2>&1 \
+    && pass || fail "act-sandboxed settings allowWrite must include the run dir (got: $(jq -c .filesystem.allowWrite "$CAPTURED" 2>/dev/null))"
+  REPO_SET_PHYS="$(cd "$REPO_SET" && pwd -P)"
+  if jq -e --arg g "$REPO_SET_PHYS/.git" '.filesystem.allowWrite[] | select(. == $g or startswith($g + "/"))' "$CAPTURED" >/dev/null 2>&1; then
+    fail "act-sandboxed settings must NOT make the shared .git store writable (got: $(jq -c .filesystem.allowWrite "$CAPTURED" 2>/dev/null))"
+  else
+    pass
+  fi
+fi
+
+# --- act-sandboxed cleanup robustness (set -e-in-trap fix) ---
+# If a cleanup removal genuinely fails, cleanup must NOT corrupt the delegate's
+# exit code and must log the leaked path (rather than aborting the EXIT trap
+# under errexit, masking the code, and skipping the run-dir removal). Plant a
+# no-write subdir directly under the run dir (the worktree's parent) so
+# `rm -rf "$RUN_TMP"` cannot fully remove it. Skipped when running as root,
+# where directory permissions are ignored and rm would succeed.
+if [ "$(id -u)" -ne 0 ]; then
+  REPO_STUCK="$WORK/repo-stuck"
+  make_git_repo "$REPO_STUCK"
+  STUB_CODEX_STUCK="$WORK/bin-codex-stuck"
+  make_stub "$STUB_CODEX_STUCK" codex \
+    'prev=; out=' \
+    'for a in "$@"; do if [ "$prev" = "--output-last-message" ]; then out="$a"; fi; prev="$a"; done' \
+    'printf "CODEX ACTED\n" > "$out"' \
+    'mkdir -p ../stuck && printf x > ../stuck/file && chmod 0500 ../stuck' \
+    'exit 0'
+  STUCK_TDIR="$WORK/tmpdir-stuck"
+  mkdir -p "$STUCK_TDIR"
+  stuck_err="$WORK/stuck.err"
+  (cd "$REPO_STUCK" && PATH="$STUB_CODEX_STUCK:$STUB_SRT_OK:$REAL_PATH" TMPDIR="$STUCK_TDIR" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT") >/dev/null 2>"$stuck_err"
+  rc=$?
+  # Re-permit the planted dir so the test's own EXIT cleanup can remove it.
+  find "$STUCK_TDIR" -type d -exec chmod u+rwx {} + 2>/dev/null
+  if [ "$rc" -eq 0 ]; then pass; else fail "a cleanup removal failure must not corrupt the exit code (expected 0, got $rc)"; fi
+  grep -qi "leaked on disk" "$stuck_err" && pass || fail "cleanup must log the leaked path when a removal fails (got: $(cat "$stuck_err"))"
+fi
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed ($(( PASS + FAIL )) total)"
 

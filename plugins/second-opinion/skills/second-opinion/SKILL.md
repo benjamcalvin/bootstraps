@@ -105,10 +105,22 @@ form. In general the tripwire asks *"did anything change outside the delegate's
 allowed write scope?"* At the `act-sandboxed` tier the allowed scope is the
 delegate's dedicated worktree, so writes there are the expected work product
 and only deltas outside it are violations — `consult.sh` runs that check itself
-and surfaces any escape as a loud `WRITE-SCOPE-TRIPWIRE` line. At the `consult`
-tier this skill uses, the allowed write scope is **empty**, so the question
-collapses to *"did anything change at all?"* — any detected write is a
-violation. Record the repo state *before* launching anything:
+and surfaces any escape as a loud `WRITE-SCOPE-TRIPWIRE` line. That check
+snapshots the primary tree **and any sibling worktrees** of the repo, plus the
+shared git dir's `hooks/` and `config` (a `.git/hooks` or `core.hooksPath`
+plant is code-exec on your next git op — invisible to `git status`). It stays
+blind to appends to existing ignored files, new files under already-ignored
+dirs, writes outside any worktree, and shared-git-dir writes other than
+hooks/config; for those the `srt` jail is the enforcement. That worktree is a
+detached checkout of the committed **HEAD**, so uncommitted changes in the
+primary tree are not part of what the delegate sees, and — because the shared
+`.git` object/ref store is deliberately not writable — the delegate produces
+working-tree edits only and cannot `git commit` inside the worktree; the
+orchestrator reviews the printed worktree diff and integrates it like an
+external PR. At the `consult` tier this skill uses, the allowed write scope is
+**empty**, so the question collapses to *"did anything change at all?"* — any
+detected write is a violation. Record the repo state *before* launching
+anything:
 
 ```bash
 git status --porcelain --ignored > "$RUN_DIR/git-status.before"

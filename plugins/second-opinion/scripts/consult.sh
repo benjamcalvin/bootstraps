@@ -189,7 +189,14 @@ write_srt_settings() {
     exit 2
   fi
   local domains
-  domains=$(parse_allowlist "$shipped")
+  # Guard the assignment: parse_allowlist's `done < "$file"` fails (non-zero)
+  # if the shipped file exists but is unreadable, which would otherwise abort
+  # under `set -e` with a raw bash redirection error instead of this actionable
+  # broken-install message.
+  if ! domains=$(parse_allowlist "$shipped"); then
+    log "shipped egress allowlist $shipped could not be read (broken plugin install — reinstall the second-opinion plugin)"
+    exit 2
+  fi
   if [ -z "$domains" ]; then
     log "shipped egress allowlist $shipped contains no valid domains (broken plugin install)"
     exit 2
@@ -225,6 +232,16 @@ EOF
   # (ADR-001 Decision 3: "write-allowlist = the worktree + run temp dir only").
   # The worktree lives under RUN_TMP so RUN_TMP already covers it, but it is
   # listed explicitly so the allowed scope is unambiguous in the settings.
+  #
+  # Deliberately NOT writable: the repo's shared git dir (its object/ref store,
+  # index, config, hooks). A linked worktree keeps its index/HEAD and new
+  # objects partly under that shared common-dir, so an act-sandboxed delegate
+  # CANNOT run `git add`/`git commit` or other index-writing ops inside the
+  # worktree — the jail denies those writes. This is intentional: the delegate
+  # produces WORKING-TREE edits only; the orchestrator reviews the worktree diff
+  # (printed after the run) and integrates it, exactly as it would an external
+  # PR. Keeping the shared git dir unwritable is also what makes the .git
+  # hooks/config plant (a code-exec vector) impossible in the first place.
   local write_json="\"$RUN_TMP\""
   if [ -n "$WORKTREE" ]; then write_json="$write_json, \"$WORKTREE\""; fi
   case "$provider" in
@@ -345,7 +362,10 @@ run_codex() {
     rc=3
   fi
 
-  [ "$rc" -eq 0 ] && cat "$out"
+  # Guard the cat explicitly: run_codex is called via `|| prc=$?`, so errexit is
+  # suppressed for the whole body — a cat failure after the -s check passed
+  # would otherwise leave rc=0 and report success with no output on stdout.
+  if [ "$rc" -eq 0 ]; then cat "$out" || rc=3; fi
   return "$rc"
 }
 
@@ -403,18 +423,44 @@ run_antigravity() {
 # Registered as the EXIT trap, so it fires on success, refusal, error, or
 # signal. The worktree is torn down via `git worktree remove` (which also drops
 # the .git/worktrees admin entry); rm is the fallback if git is unavailable.
+#
+# This trap runs while `set -e` is still in effect, and traps are NOT exempt
+# from errexit the way `||`-guarded call sites are. So cleanup must be unable to
+# abort partway: it captures the real exit status first, turns errexit OFF, and
+# guards EVERY command so a failed worktree/rm removal can neither skip the
+# mandatory `rm -rf "$RUN_TMP"` nor corrupt the script's exit code. A removal
+# that genuinely fails is logged with the leaked path so it is discoverable.
 cleanup() {
+  local rc=$?
+  set +e
   if [ -n "$WORKTREE" ] && [ -n "$SRC_REPO" ] && [ -e "$WORKTREE" ]; then
-    git -C "$SRC_REPO" worktree remove --force "$WORKTREE" >/dev/null 2>&1 \
-      || rm -rf "$WORKTREE"
+    if ! git -C "$SRC_REPO" worktree remove --force "$WORKTREE" >/dev/null 2>&1; then
+      rm -rf "$WORKTREE" 2>/dev/null \
+        || log "cleanup: failed to remove the worktree; it is leaked on disk at $WORKTREE"
+    fi
     git -C "$SRC_REPO" worktree prune >/dev/null 2>&1 || true
   fi
-  [ -n "$RUN_TMP" ] && rm -rf "$RUN_TMP"
+  if [ -n "$RUN_TMP" ]; then
+    rm -rf "$RUN_TMP" 2>/dev/null \
+      || log "cleanup: failed to remove the run dir; it is leaked on disk at $RUN_TMP"
+  fi
+  # Preserve the real exit status: a cleanup failure must never mask it.
+  exit "$rc"
 }
 
 # setup_worktree — create the isolated write scope: a detached git worktree of
 # the current repo's HEAD, under the run temp dir (so one cleanup covers both).
-# This bounds both the writable and the readable surface (ADR-001 Decision 2/3).
+#
+# This bounds the WRITABLE surface only, via the srt write-allowlist (Decision
+# 3). It is NOT a read barrier: per ADR-001's Exposure Model the worktree is "a
+# scoping convention, not a read barrier" — srt reads are default-allow and
+# $SRC_REPO is not in denyRead, so the delegate can still read the primary tree
+# (the worktree's linked .git metadata even reveals its absolute path), and
+# those reads reach the provider at every tier (risk #7). Only the credential
+# paths in denyRead are blocked.
+#
+# `--detach HEAD` checks out the committed HEAD only: uncommitted staged/unstaged
+# changes in the primary tree are NOT part of what the delegate sees or acts on.
 # Requires being inside a git repository — refused with exit 1 otherwise.
 setup_worktree() {
   if ! SRC_REPO=$(git rev-parse --show-toplevel 2>/dev/null) || [ -z "$SRC_REPO" ]; then
@@ -429,26 +475,106 @@ setup_worktree() {
     WORKTREE=""
     exit 3
   fi
-  WORKTREE=$(cd "$WORKTREE" && pwd -P)
+  # Resolve to a physical path via a temp var so a failed resolution cannot
+  # blank out WORKTREE: cleanup() must still see the registered path (the
+  # unresolved but valid "$RUN_TMP/worktree") to drop the .git/worktrees admin
+  # entry, or a stale registration would leak into the user's primary repo.
+  local wt_phys
+  if wt_phys=$(cd "$WORKTREE" && pwd -P) && [ -n "$wt_phys" ]; then
+    WORKTREE="$wt_phys"
+  else
+    log "failed to resolve the act-sandboxed worktree to a physical path: $WORKTREE"
+    exit 3
+  fi
   SANDBOX_CWD="$WORKTREE"
 }
 
-# tripwire_snapshot — record the PRIMARY tree's state before the delegate runs,
-# i.e. everywhere the delegate is NOT allowed to write (ADR-001 Decision 8).
+# git_common_dir — absolute physical path of the repo's shared git directory
+# (where the primary tree and every linked worktree keep the shared object/ref
+# store, config, and hooks). Empty if it cannot be resolved.
+git_common_dir() {
+  local d
+  d=$(git -C "$SRC_REPO" rev-parse --git-common-dir 2>/dev/null) || return 0
+  [ -n "$d" ] || return 0
+  case "$d" in
+    /*) ;;
+    *) d="$SRC_REPO/$d" ;;
+  esac
+  (cd "$d" && pwd -P) 2>/dev/null || true
+}
+
+# tripwire_guarded_trees — print the physical path of every working tree the
+# delegate is NOT allowed to write to: the primary tree AND any other linked
+# worktrees of the repo, EXCLUDING our own delegate worktree ($WORKTREE) whose
+# writes are the expected work product (ADR-001 Decision 8: snapshot "the
+# primary working tree (and any other worktrees of the repo)").
+tripwire_guarded_trees() {
+  local wt wt_phys
+  git -C "$SRC_REPO" worktree list --porcelain 2>/dev/null \
+    | awk '/^worktree /{print substr($0, 10)}' \
+    | while IFS= read -r wt; do
+        [ -n "$wt" ] || continue
+        wt_phys=$(cd "$wt" && pwd -P) 2>/dev/null || continue
+        [ "$wt_phys" = "$WORKTREE" ] && continue
+        printf '%s\n' "$wt_phys"
+      done
+}
+
+# tripwire_gitdir_listing — a change-detection listing (cksum: CRC + size +
+# path) of the shared git dir's hooks/ and config, i.e. the highest-value
+# targets a compromised delegate could plant for code-exec on the user's next
+# git op. cksum is detection, not a security hash — that is all a post-hoc
+# tripwire needs. The srt write-allowlist is what actually PREVENTS the write.
+tripwire_gitdir_listing() {
+  local common
+  common=$(git_common_dir)
+  [ -n "$common" ] || return 0
+  [ -f "$common/config" ] && cksum "$common/config" 2>/dev/null
+  if [ -d "$common/hooks" ]; then
+    find "$common/hooks" -type f 2>/dev/null | LC_ALL=C sort | while IFS= read -r f; do
+      cksum "$f" 2>/dev/null
+    done
+  fi
+  return 0
+}
+
+# tripwire_snapshot — record, before the delegate runs, the state of everywhere
+# the delegate is NOT allowed to write (ADR-001 Decision 8): every guarded
+# working tree (primary + sibling worktrees) plus the shared git dir's
+# hooks/config. The guarded-tree set is frozen here and reused verbatim after
+# the run so before/after compare the same trees.
 tripwire_snapshot() {
-  git -C "$SRC_REPO" status --porcelain --ignored > "$RUN_TMP/tripwire-status.before" 2>/dev/null || true
-  git -C "$SRC_REPO" rev-parse HEAD > "$RUN_TMP/tripwire-head.before" 2>/dev/null || true
+  mkdir -p "$RUN_TMP/tripwire"
+  tripwire_guarded_trees > "$RUN_TMP/tripwire/trees.list"
+  local i=0 tree
+  while IFS= read -r tree; do
+    [ -n "$tree" ] || continue
+    git -C "$tree" status --porcelain --ignored > "$RUN_TMP/tripwire/$i.status.before" 2>/dev/null || true
+    git -C "$tree" rev-parse HEAD > "$RUN_TMP/tripwire/$i.head.before" 2>/dev/null || true
+    i=$((i + 1))
+  done < "$RUN_TMP/tripwire/trees.list"
+  tripwire_gitdir_listing > "$RUN_TMP/tripwire/gitdir.before" 2>/dev/null || true
 }
 
 # report_act_sandboxed — after the delegate finishes: (1) emit the worktree diff
 # (the work product, about to be destroyed) to stdout, and (2) run the
-# generalized write-scope tripwire — re-snapshot the PRIMARY tree and surface
-# ANY out-of-scope delta LOUDLY. Writes INSIDE the worktree are the expected
-# product; writes OUTSIDE it are a violation (ADR-001 Decision 8). Honest limits
-# carry over: the tripwire brackets the whole run, cannot attribute a change to
-# a specific delegate, and is blind to appends to existing ignored files, new
-# files under already-ignored dirs, and writes outside any worktree ($HOME,
-# ~/.ssh, ...) — for those the srt jail is the real enforcement.
+# generalized write-scope tripwire — re-snapshot every guarded tree and the
+# shared git dir and surface ANY out-of-scope delta LOUDLY. Writes INSIDE the
+# delegate worktree are the expected product; writes anywhere else are a
+# violation (ADR-001 Decision 8).
+#
+# Coverage: the primary tree AND sibling worktrees of the repo (working-tree +
+# HEAD), plus the shared git dir's hooks/ and config (a .git/hooks or
+# core.hooksPath/credential.helper plant is code-exec on the user's next git op
+# — the single highest-value target, otherwise invisible to `git status`).
+#
+# Honest limits carry over (restate wherever the tripwire is described): it
+# brackets the whole run and cannot attribute a change to a specific delegate;
+# it is blind to appends to existing ignored files, new files under
+# already-ignored dirs, writes outside any git worktree ($HOME, ~/.ssh, ...),
+# and to shared-git-dir writes OTHER than hooks/config (objects, refs, ...).
+# For all of those the srt write-allowlist jail is the real enforcement; this
+# tripwire is only the cheap post-hoc "did the jail behave?" check.
 report_act_sandboxed() {
   echo ""
   echo "===== act-sandboxed: changes in the isolated worktree write scope ====="
@@ -456,28 +582,52 @@ report_act_sandboxed() {
   wt_status=$(git -C "$WORKTREE" status --porcelain 2>/dev/null || true)
   if [ -n "$wt_status" ]; then
     printf '%s\n' "$wt_status"
-    echo "----- worktree diff (tracked files) -----"
+    echo "----- worktree diff -----"
+    # Intent-to-add first so brand-new (untracked) files — a coding delegate's
+    # most common product — have their CONTENT shown in the diff, not just a
+    # `??` status line. The worktree is destroyed on exit, so staging it is
+    # harmless.
+    git -C "$WORKTREE" add -A -N >/dev/null 2>&1 || true
     git -C "$WORKTREE" --no-pager diff 2>/dev/null
   else
     echo "(the delegate wrote nothing to the worktree)"
   fi
   echo "===== end worktree changes ====="
 
-  git -C "$SRC_REPO" status --porcelain --ignored > "$RUN_TMP/tripwire-status.after" 2>/dev/null || true
-  git -C "$SRC_REPO" rev-parse HEAD > "$RUN_TMP/tripwire-head.after" 2>/dev/null || true
-  # `|| true`: diff exits non-zero when the snapshots differ (the tripwire's
-  # whole point), which would otherwise abort under `set -e` before the check.
-  local status_delta head_delta
-  status_delta=$(diff "$RUN_TMP/tripwire-status.before" "$RUN_TMP/tripwire-status.after" 2>/dev/null || true)
-  head_delta=$(diff "$RUN_TMP/tripwire-head.before" "$RUN_TMP/tripwire-head.after" 2>/dev/null || true)
-  if [ -n "$status_delta" ] || [ -n "$head_delta" ]; then
+  # Write-scope tripwire. `|| true` throughout: diff exits non-zero when the
+  # snapshots differ (the tripwire's whole point), which would otherwise abort
+  # under `set -e` before the check.
+  local tripped=0 i=0 tree tree_status_delta tree_head_delta
+  while IFS= read -r tree; do
+    [ -n "$tree" ] || continue
+    git -C "$tree" status --porcelain --ignored > "$RUN_TMP/tripwire/$i.status.after" 2>/dev/null || true
+    git -C "$tree" rev-parse HEAD > "$RUN_TMP/tripwire/$i.head.after" 2>/dev/null || true
+    tree_status_delta=$(diff "$RUN_TMP/tripwire/$i.status.before" "$RUN_TMP/tripwire/$i.status.after" 2>/dev/null || true)
+    tree_head_delta=$(diff "$RUN_TMP/tripwire/$i.head.before" "$RUN_TMP/tripwire/$i.head.after" 2>/dev/null || true)
+    if [ -n "$tree_status_delta" ] || [ -n "$tree_head_delta" ]; then
+      tripped=1
+      log "out-of-scope write in guarded tree: $tree"
+      [ -n "$tree_status_delta" ] && log "  status delta:" && printf '%s\n' "$tree_status_delta" >&2
+      [ -n "$tree_head_delta" ] && log "  HEAD moved:" && printf '%s\n' "$tree_head_delta" >&2
+    fi
+    i=$((i + 1))
+  done < "$RUN_TMP/tripwire/trees.list"
+
+  tripwire_gitdir_listing > "$RUN_TMP/tripwire/gitdir.after" 2>/dev/null || true
+  local gitdir_delta
+  gitdir_delta=$(diff "$RUN_TMP/tripwire/gitdir.before" "$RUN_TMP/tripwire/gitdir.after" 2>/dev/null || true)
+  if [ -n "$gitdir_delta" ]; then
+    tripped=1
+    log "out-of-scope write in the shared git dir (hooks/ or config) — this is a code-exec vector on your next git operation:"
+    printf '%s\n' "$gitdir_delta" >&2
+  fi
+
+  if [ "$tripped" -ne 0 ]; then
     # Loud on stderr (banner) AND a greppable marker on stdout so neither an
     # orchestrator reading stdout nor a human watching stderr can miss it.
-    log "!!! WRITE-SCOPE TRIPWIRE TRIPPED !!! a write escaped the allowed worktree scope into the PRIMARY repo tree ($SRC_REPO)."
+    log "!!! WRITE-SCOPE TRIPWIRE TRIPPED !!! a write escaped the allowed worktree scope (see the deltas above)."
     log "the delegate (or the jail) let a change land outside the isolated scope — inspect and revert before trusting this run. Note: the bracket cannot attribute it to a specific delegate, and unrelated activity in the window can also trip it."
-    [ -n "$status_delta" ] && log "primary-tree status delta:" && printf '%s\n' "$status_delta" >&2
-    [ -n "$head_delta" ] && log "primary-tree HEAD moved:" && printf '%s\n' "$head_delta" >&2
-    echo "WRITE-SCOPE-TRIPWIRE: out-of-scope write detected in the primary tree ($SRC_REPO)"
+    echo "WRITE-SCOPE-TRIPWIRE: out-of-scope write detected outside the isolated worktree scope (primary tree, a sibling worktree, or the shared git dir of $SRC_REPO)"
   fi
 }
 
