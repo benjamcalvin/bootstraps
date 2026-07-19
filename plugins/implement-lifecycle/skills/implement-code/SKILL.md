@@ -157,6 +157,8 @@ gh pr create --title "<type>: <imperative summary>" --body "$(cat <<'EOF'
 <Behavior layer. 2-4 plain-language sentences: the resulting change and why
 it matters. A reader who has never seen the code must understand it.>
 
+<Closes #N or Part of #N, on its own line — omit when the issue number is 0>
+
 ## Design
 <Design layer. The important design choices and their reasons, in component
 terms; identify intentional deviations from a spec here. Omit only when the

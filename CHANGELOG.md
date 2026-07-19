@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `draft-issue`: new "Writing at the Right Altitude" guidance — issues descend through behavior/design/implementation layers, with code identifiers confined to Technical Context; template sections annotated with their altitude; optional History section for provenance; validation checklist gains altitude, skim-test, and sentence-discipline checks
+- `draft-issue`: new "Writing at the Right Altitude" guidance — issues descend through behavior/design/implementation layers, with locational detail confined to Technical Context and PR decomposition tables (Acceptance Criteria may name the contract under test); template sections annotated with their altitude; optional History section for provenance; validation checklist gains altitude, skim-test, and sentence-discipline checks
 - `refine-issue`: refinement adds depth at the right layer instead of pushing `file:line` references into Problem/Solution; acceptance-criteria example no longer embeds file references; validation gains altitude and skim-test checks
 - `cleanup-issue`: new Altitude quality dimension and "Altitude Fixes" step (3d) that moves misplaced code identifiers, split-worthy sentences, mid-clause citations, and discovery narrative to their proper homes
 

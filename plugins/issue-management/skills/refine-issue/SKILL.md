@@ -28,7 +28,7 @@ You refine existing GitHub issues by grounding them in codebase reality. Unlike 
 
 The goal: after refinement, an AI agent can implement the issue without any codebase exploration of its own.
 
-Refinement adds depth **at the right altitude, not everywhere**. Issues descend through three layers: Problem stays at behavior altitude (plain domain language, no code identifiers), Solution stays at design altitude (component names, no files/functions/lines), and Technical Context is the only home for file paths, function names, and line numbers. Research findings land in the layer they belong to — grounding an issue in the codebase must not mean pushing `file.go:line` references into Problem or Solution. If the existing issue already mixes altitudes, restore the separation as you refine.
+Refinement adds depth **at the right altitude, not everywhere**. Issues descend through three layers: Problem stays at behavior altitude (plain domain language, no code identifiers), Solution stays at design altitude (component and operation names, no files/functions/lines), and file paths and line numbers live in Technical Context and PR decomposition tables — with one exception: an acceptance criterion may name the contract under test, but not where to find it. Research findings land in the layer they belong to — grounding an issue in the codebase must not mean pushing `file.go:line` references into Problem or Solution. If the existing issue already mixes altitudes, restore the separation as you refine.
 
 ### Step 1: Parse the Target
 

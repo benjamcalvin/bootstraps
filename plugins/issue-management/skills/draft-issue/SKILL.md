@@ -32,8 +32,8 @@ The downstream consumer of these issues is an AI agent, so every section must be
 An issue descends through three altitude layers, and each section holds exactly one:
 
 - **Behavior** (Problem): what the system does wrong or will do differently, in plain domain language. **No code identifiers of any kind** — no file paths, function names, or line numbers. Test: a contributor who knows the domain but has never read the code understands it completely.
-- **Design** (Solution): the shape of the change in component and operation terms — which components change roles, how the flow differs before and after. Component names are allowed; files, functions, and line numbers are not.
-- **Implementation** (Technical Context): the seams, exact files, patterns to mirror, and constraints. This is the **only** layer where `file.go:line` references and function names belong.
+- **Design** (Solution): the shape of the change in component and operation terms — which components change roles, how the flow differs before and after. Component and operation names (including endpoint routes) are allowed; files, functions, and line numbers are not.
+- **Implementation** (Technical Context): the seams, exact files, patterns to mirror, and constraints. This is the layer for locational detail — `file.go:line` references, files to modify, code to mirror. Two narrow exceptions exist elsewhere: Acceptance Criteria may name the specific contract under test (see Writing Good Acceptance Criteria), and a Proposed PRs decomposition may list file paths in its tables.
 
 A behavior- or design-layer sentence that seems to need a file reference is a sentence at the wrong altitude: move the reference down to Technical Context, not the sentence up.
 
@@ -113,8 +113,8 @@ Cite a spec or guarantee at the end of the bullet, not mid-clause.>
 
 ## Technical Context
 
-<Implementation layer — the only section where file paths, function names,
-and line numbers belong.>
+<Implementation layer — the home for file paths, line numbers, and
+locational detail.>
 
 - **Key files:** <exact paths to files the implementer must read or modify>
 - **Patterns to follow:** <reference existing analogous code>
@@ -209,7 +209,7 @@ Before presenting to the user, verify:
 6. No ambiguity — an AI agent could start implementing without clarifying questions
 7. References are linked
 8. Verification is explicit
-9. **Altitude check:** Problem and Solution contain zero file paths, function names, or line numbers; all code identifiers live in Acceptance Criteria (contracts only) and Technical Context
+9. **Altitude check:** Problem and Solution contain zero file paths, function names, or line numbers; all code identifiers live in Acceptance Criteria (contracts only), Technical Context, and Proposed PRs file tables
 10. **Skim test:** the first sentence of each section, read in order, forms a correct summary at descending altitude
 11. **Sentence discipline:** no sentence carries a claim, its mechanism, and a citation at once; provenance lives only in History
 
