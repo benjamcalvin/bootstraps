@@ -671,6 +671,49 @@ out="$(cd "$REPO_HOOK" && PATH="$STUB_CODEX_HOOK:$STUB_SRT_OK:$REAL_PATH" "$BASH
 echo "$out" | grep -q "WRITE-SCOPE-TRIPWIRE" && pass || fail "planting a .git/hooks file must trip the tripwire on stdout (got: $out)"
 grep -qi "code-exec vector" "$hook_err" && pass || fail "the gitdir plant must be surfaced with the code-exec warning on stderr (got: $(cat "$hook_err"))"
 
+# --- act-sandboxed tripwire: worktree-enumeration failure falls back to guarding
+# the primary tree (round-3 finding 1) ---
+# tripwire_snapshot() guards the case where `git worktree list --porcelain`
+# fails: rather than silently guarding NOTHING, it falls back to guarding at
+# least the primary tree ($SRC_REPO). Force that failure with a `git` shim that
+# errors ONLY on `worktree list` and passes every other subcommand through to
+# the real git (so worktree add/remove/prune, rev-parse, status all still work),
+# then assert: (a) the script does NOT abort mid-snapshot — the delegate still
+# runs and exits 0; (b) the fallback fires and guards the primary tree (the
+# warning names it); (c) an out-of-scope write into $SRC_REPO under this
+# fallback STILL trips the tripwire loudly on both streams.
+REAL_GIT="$(command -v git)"
+STUB_GIT_NOLIST="$WORK/bin-git-nolist"
+make_stub "$STUB_GIT_NOLIST" git \
+  'prev=' \
+  'for a in "$@"; do' \
+  '  if [ "$prev" = worktree ] && [ "$a" = list ]; then' \
+  '    echo "second-opinion-test: simulated git worktree list failure" >&2' \
+  '    exit 128' \
+  '  fi' \
+  '  prev="$a"' \
+  'done' \
+  "exec \"$REAL_GIT\" \"\$@\""
+REPO_ENUMFAIL="$WORK/repo-enumfail"
+make_git_repo "$REPO_ENUMFAIL"
+STUB_CODEX_ENUMFAIL="$WORK/bin-codex-enumfail"
+make_stub "$STUB_CODEX_ENUMFAIL" codex \
+  'prev=; out=' \
+  'for a in "$@"; do if [ "$prev" = "--output-last-message" ]; then out="$a"; fi; prev="$a"; done' \
+  'printf "CODEX ENUMFAIL\n" > "$out"' \
+  "printf 'escaped\n' > '$REPO_ENUMFAIL/escaped-under-fallback.txt'" \
+  'exit 0'
+enumfail_err="$WORK/enumfail.err"
+out="$(cd "$REPO_ENUMFAIL" && PATH="$STUB_CODEX_ENUMFAIL:$STUB_GIT_NOLIST:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT" 2>"$enumfail_err")"; rc=$?
+# (a) enumeration failure under `set -e`/pipefail must not abort the run.
+if [ "$rc" -eq 0 ]; then pass; else fail "a worktree-enumeration failure must not abort the run (expected exit 0, got $rc; stderr: $(cat "$enumfail_err"))"; fi
+echo "$out" | grep -q "CODEX ENUMFAIL" && pass || fail "the delegate must still run when worktree enumeration fails (got: $out)"
+# (b) the fallback must fire and guard the primary tree (never guard nothing).
+grep -qi "guarding the primary tree only" "$enumfail_err" && pass || fail "enumeration failure must warn that it falls back to guarding the primary tree (got: $(cat "$enumfail_err"))"
+# (c) an out-of-scope write into $SRC_REPO under the fallback must still trip loudly.
+echo "$out" | grep -q "WRITE-SCOPE-TRIPWIRE" && pass || fail "under the enumeration-failure fallback, a write into the primary tree must still trip the tripwire on stdout (got: $out)"
+grep -qi "TRIPWIRE TRIPPED" "$enumfail_err" && pass || fail "the fallback-path trip must be loud on stderr (got: $(cat "$enumfail_err"))"
+
 # --- act-sandboxed cleanup robustness (set -e-in-trap fix) ---
 # If a cleanup removal genuinely fails, cleanup must NOT corrupt the delegate's
 # exit code and must log the leaked path (rather than aborting the EXIT trap
