@@ -7,7 +7,7 @@ description: >-
 argument-hint: "[codex|antigravity|all] [scope: staged | branch | PR number | <git range>]"
 license: MIT
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
   tags: ["review", "codex", "antigravity", "second-opinion", "headless", "multi-provider"]
   author: benjamcalvin
 ---
@@ -97,9 +97,18 @@ CLI's own sandbox — codex `--sandbox read-only`, antigravity `agy --sandbox`
 (a sandbox with terminal restrictions) — as defense-in-depth underneath,
 backed by the maintainer's real-machine verification. The jail restricts
 writes, egress, and terminal access, not file reads in general. The git
-snapshot below is **NOT** a complete
-read-only check; it is a cheap tripwire that catches *some* obvious violations,
-nothing more. Record the repo state *before* launching anything:
+snapshot below is **NOT** a complete read-only check; it is a cheap tripwire
+that catches *some* obvious violations, nothing more.
+
+This is the **write-scope tripwire** (ADR-001 Decision 8) in its degenerate
+form. In general the tripwire asks *"did anything change outside the delegate's
+allowed write scope?"* At the `act-sandboxed` tier the allowed scope is the
+delegate's dedicated worktree, so writes there are the expected work product
+and only deltas outside it are violations — `consult.sh` runs that check itself
+and surfaces any escape as a loud `WRITE-SCOPE-TRIPWIRE` line. At the `consult`
+tier this skill uses, the allowed write scope is **empty**, so the question
+collapses to *"did anything change at all?"* — any detected write is a
+violation. Record the repo state *before* launching anything:
 
 ```bash
 git status --porcelain --ignored > "$RUN_DIR/git-status.before"
@@ -144,9 +153,12 @@ other in a single shell:
 ```
 
 Both invocations run at the default read-only `consult` tier (equivalent to
-passing `--tier consult` explicitly). The higher tiers defined in ADR-001
-(`act-sandboxed`, `act-full`) are not implemented yet and are refused with
-exit 1 — never silently downgraded or escalated.
+passing `--tier consult` explicitly). This review skill only ever uses
+`consult`. The opt-in `act-sandboxed` tier (writes confined to a dedicated git
+worktree, verified by the generalized write-scope tripwire below) is
+implemented in `consult.sh` but is a delegation capability, not part of this
+read-only review flow; `act-full` remains gated and refused with exit 1. No
+tier is ever silently downgraded or escalated (ADR-001 Decision 4).
 
 Then **wait for all** background tasks to finish before synthesizing, and
 capture each provider's exit status. Exit codes: `2` means a required

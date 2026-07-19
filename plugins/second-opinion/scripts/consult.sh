@@ -13,8 +13,17 @@ set -euo pipefail
 #   antigravity  Google Antigravity CLI (binary: agy)
 #
 # Tiers (ADR-001, docs/adr/001-task-delegation-privilege-model.md):
-#   consult        (default) Read-only review — the only tier wired today.
-#   act-sandboxed  NOT YET IMPLEMENTED (issue #77 PR 3). Refused with exit 1.
+#   consult        (default) Read-only review. No writes; unchanged from PR 2.
+#   act-sandboxed  (opt-in) Read-write, but WRITES ARE CONFINED to an isolated
+#                  scope: a dedicated detached git worktree of the current repo,
+#                  created under the run temp dir. The srt jail's write-allowlist
+#                  is the enforcement (worktree + run dir writable, everything
+#                  else — including the primary repo tree, $HOME, credential
+#                  paths — denied). A post-hoc write-scope tripwire re-checks the
+#                  PRIMARY tree and surfaces any out-of-scope write LOUDLY. The
+#                  worktree diff (the work product) is printed after the delegate
+#                  output; the worktree is destroyed on exit like the run dir.
+#                  Requires being inside a git repository (exit 1 otherwise).
 #   act-full       NOT YET IMPLEMENTED (issue #77 PR 4). Refused with exit 1;
 #                  will additionally require explicit per-invocation approval.
 #   Escalation is never silent: an unimplemented tier is refused, never
@@ -77,6 +86,12 @@ RUN_TMP=""
 SRT_BIN=""
 SRT_SETTINGS=""
 CRED_VAR=""
+# act-sandboxed only: the isolated write scope (a detached git worktree) and the
+# repo it was cut from. Empty at consult/act-full. SANDBOX_CWD is the cwd the
+# delegate subprocess runs in (the worktree at act-sandboxed).
+SRC_REPO=""
+WORKTREE=""
+SANDBOX_CWD=""
 
 log() { echo "consult.sh: $*" >&2; }
 
@@ -205,7 +220,13 @@ EOF
   # the run dir and the provider's own state dirs (session logs, caches) are
   # writable. Verified sufficient against the real CLIs under srt 0.0.66.
   # (Paths are physical: srt's jail does not follow symlinks like macOS /tmp.)
+  #
+  # act-sandboxed adds the dedicated worktree as an allowed write scope
+  # (ADR-001 Decision 3: "write-allowlist = the worktree + run temp dir only").
+  # The worktree lives under RUN_TMP so RUN_TMP already covers it, but it is
+  # listed explicitly so the allowed scope is unambiguous in the settings.
   local write_json="\"$RUN_TMP\""
+  if [ -n "$WORKTREE" ]; then write_json="$write_json, \"$WORKTREE\""; fi
   case "$provider" in
     codex)
       if [ -d "$HOME/.codex" ]; then write_json="$write_json, \"$HOME/.codex\""; fi
@@ -268,19 +289,29 @@ EOF
 # macOS/Linux, so scrubbing is this launcher's job (ADR-001 least-privilege
 # pass-down): only HOME/PATH/TMPDIR/TERM plus the single provider credential
 # var pass through.
+#
+# When SANDBOX_CWD is set (act-sandboxed), the delegate runs with its working
+# directory inside the isolated worktree, so provider "workspace"/cwd-relative
+# writes land there. The cd happens in a subshell so it never leaks into the
+# launcher. srt reads are default-allow, so it starts fine from the worktree.
 run_srt() {
   local cred_val=""
   if [ -n "$CRED_VAR" ]; then
     cred_val="${!CRED_VAR:-}"
   fi
-  if [ -n "$cred_val" ]; then
-    env -i HOME="$HOME" PATH="$PATH" TMPDIR="${TMPDIR:-/tmp}" TERM="${TERM:-dumb}" \
-      "$CRED_VAR=$cred_val" \
-      "$SRT_BIN" --settings "$SRT_SETTINGS" -- "$@"
-  else
-    env -i HOME="$HOME" PATH="$PATH" TMPDIR="${TMPDIR:-/tmp}" TERM="${TERM:-dumb}" \
-      "$SRT_BIN" --settings "$SRT_SETTINGS" -- "$@"
-  fi
+  (
+    if [ -n "$SANDBOX_CWD" ]; then
+      cd "$SANDBOX_CWD" || exit 3
+    fi
+    if [ -n "$cred_val" ]; then
+      env -i HOME="$HOME" PATH="$PATH" TMPDIR="${TMPDIR:-/tmp}" TERM="${TERM:-dumb}" \
+        "$CRED_VAR=$cred_val" \
+        "$SRT_BIN" --settings "$SRT_SETTINGS" -- "$@"
+    else
+      env -i HOME="$HOME" PATH="$PATH" TMPDIR="${TMPDIR:-/tmp}" TERM="${TERM:-dumb}" \
+        "$SRT_BIN" --settings "$SRT_SETTINGS" -- "$@"
+    fi
+  )
 }
 
 # --- providers --------------------------------------------------------------
@@ -292,11 +323,18 @@ run_codex() {
   # on every exit path, so no per-path cleanup is needed here.
 
   # codex exec: non-interactive mode. Final agent message goes to the
-  # --output-last-message file; progress noise stays on stdout/stderr. The
-  # native --sandbox read-only flag stays on as defense-in-depth under the
-  # srt jail (ADR-001 Decision 3 note).
+  # --output-last-message file; progress noise stays on stdout/stderr.
+  #
+  # Native --sandbox mode tracks the tier and stays on as defense-in-depth
+  # under the srt jail (ADR-001 Decision 3 note): read-only at consult,
+  # workspace-write at act-sandboxed. At act-sandboxed the delegate's cwd is the
+  # worktree (run_srt cds there via SANDBOX_CWD), so codex's writable
+  # "workspace" is exactly that isolated scope; the srt write-allowlist is the
+  # load-bearing enforcement.
+  local codex_sandbox="read-only"
+  if [ "$TIER" = "act-sandboxed" ]; then codex_sandbox="workspace-write"; fi
   run_srt codex exec \
-    --sandbox read-only \
+    --sandbox "$codex_sandbox" \
     --skip-git-repo-check \
     ${SECOND_OPINION_CODEX_MODEL:+-m "$SECOND_OPINION_CODEX_MODEL"} \
     --output-last-message "$out" \
@@ -339,12 +377,108 @@ run_antigravity() {
     return 3
   fi
 
-  response=$(run_srt agy --sandbox -p "$(cat "$prompt_file")" \
+  # act-sandboxed: agy has NO native write-scoped sandbox mode (only the binary
+  # --sandbox terminal-restriction toggle), so the srt write-allowlist is the
+  # sole write-scope enforcement (ADR-001 Decision 3 note). --sandbox stays on
+  # for its terminal restrictions; --mode accept-edits makes agy apply edits
+  # non-interactively (without it, print mode would block on an edit-approval
+  # prompt with stdin at /dev/null). NOTE the forbidden combo (ADR-001 Decision
+  # 3 / risk #6): we never pair --sandbox with --dangerously-skip-permissions.
+  # accept-edits is the standard edit-acceptance mode, NOT that sandbox-bypass
+  # auto-approve. The delegate's cwd is the worktree (SANDBOX_CWD).
+  local agy_mode=""
+  if [ "$TIER" = "act-sandboxed" ]; then agy_mode="--mode accept-edits"; fi
+  response=$(run_srt agy --sandbox $agy_mode -p "$(cat "$prompt_file")" \
     ${SECOND_OPINION_ANTIGRAVITY_MODEL:+-m "$SECOND_OPINION_ANTIGRAVITY_MODEL"} \
     < /dev/null) || return 3
 
   [ -n "$response" ] || { log "antigravity produced an empty response"; return 3; }
   printf '%s\n' "$response"
+}
+
+# --- act-sandboxed: isolated write scope + write-scope tripwire -------------
+
+# cleanup — remove the run temp dir AND (act-sandboxed) the dedicated worktree
+# on EVERY exit path (mandatory-cleanup rule; ADR-001 least-privilege scope).
+# Registered as the EXIT trap, so it fires on success, refusal, error, or
+# signal. The worktree is torn down via `git worktree remove` (which also drops
+# the .git/worktrees admin entry); rm is the fallback if git is unavailable.
+cleanup() {
+  if [ -n "$WORKTREE" ] && [ -n "$SRC_REPO" ] && [ -e "$WORKTREE" ]; then
+    git -C "$SRC_REPO" worktree remove --force "$WORKTREE" >/dev/null 2>&1 \
+      || rm -rf "$WORKTREE"
+    git -C "$SRC_REPO" worktree prune >/dev/null 2>&1 || true
+  fi
+  [ -n "$RUN_TMP" ] && rm -rf "$RUN_TMP"
+}
+
+# setup_worktree — create the isolated write scope: a detached git worktree of
+# the current repo's HEAD, under the run temp dir (so one cleanup covers both).
+# This bounds both the writable and the readable surface (ADR-001 Decision 2/3).
+# Requires being inside a git repository — refused with exit 1 otherwise.
+setup_worktree() {
+  if ! SRC_REPO=$(git rev-parse --show-toplevel 2>/dev/null) || [ -z "$SRC_REPO" ]; then
+    SRC_REPO=""
+    log "tier 'act-sandboxed' requires running inside a git repository — the isolated write scope is a dedicated worktree of it, and none was found at $PWD."
+    exit 1
+  fi
+  SRC_REPO=$(cd "$SRC_REPO" && pwd -P)
+  WORKTREE="$RUN_TMP/worktree"
+  if ! git -C "$SRC_REPO" worktree add --detach "$WORKTREE" HEAD >"$RUN_TMP/worktree-add.log" 2>&1; then
+    log "failed to create the act-sandboxed worktree: $(tail -3 "$RUN_TMP/worktree-add.log" 2>/dev/null | tr '\n' ' ')"
+    WORKTREE=""
+    exit 3
+  fi
+  WORKTREE=$(cd "$WORKTREE" && pwd -P)
+  SANDBOX_CWD="$WORKTREE"
+}
+
+# tripwire_snapshot — record the PRIMARY tree's state before the delegate runs,
+# i.e. everywhere the delegate is NOT allowed to write (ADR-001 Decision 8).
+tripwire_snapshot() {
+  git -C "$SRC_REPO" status --porcelain --ignored > "$RUN_TMP/tripwire-status.before" 2>/dev/null || true
+  git -C "$SRC_REPO" rev-parse HEAD > "$RUN_TMP/tripwire-head.before" 2>/dev/null || true
+}
+
+# report_act_sandboxed — after the delegate finishes: (1) emit the worktree diff
+# (the work product, about to be destroyed) to stdout, and (2) run the
+# generalized write-scope tripwire — re-snapshot the PRIMARY tree and surface
+# ANY out-of-scope delta LOUDLY. Writes INSIDE the worktree are the expected
+# product; writes OUTSIDE it are a violation (ADR-001 Decision 8). Honest limits
+# carry over: the tripwire brackets the whole run, cannot attribute a change to
+# a specific delegate, and is blind to appends to existing ignored files, new
+# files under already-ignored dirs, and writes outside any worktree ($HOME,
+# ~/.ssh, ...) — for those the srt jail is the real enforcement.
+report_act_sandboxed() {
+  echo ""
+  echo "===== act-sandboxed: changes in the isolated worktree write scope ====="
+  local wt_status
+  wt_status=$(git -C "$WORKTREE" status --porcelain 2>/dev/null || true)
+  if [ -n "$wt_status" ]; then
+    printf '%s\n' "$wt_status"
+    echo "----- worktree diff (tracked files) -----"
+    git -C "$WORKTREE" --no-pager diff 2>/dev/null
+  else
+    echo "(the delegate wrote nothing to the worktree)"
+  fi
+  echo "===== end worktree changes ====="
+
+  git -C "$SRC_REPO" status --porcelain --ignored > "$RUN_TMP/tripwire-status.after" 2>/dev/null || true
+  git -C "$SRC_REPO" rev-parse HEAD > "$RUN_TMP/tripwire-head.after" 2>/dev/null || true
+  # `|| true`: diff exits non-zero when the snapshots differ (the tripwire's
+  # whole point), which would otherwise abort under `set -e` before the check.
+  local status_delta head_delta
+  status_delta=$(diff "$RUN_TMP/tripwire-status.before" "$RUN_TMP/tripwire-status.after" 2>/dev/null || true)
+  head_delta=$(diff "$RUN_TMP/tripwire-head.before" "$RUN_TMP/tripwire-head.after" 2>/dev/null || true)
+  if [ -n "$status_delta" ] || [ -n "$head_delta" ]; then
+    # Loud on stderr (banner) AND a greppable marker on stdout so neither an
+    # orchestrator reading stdout nor a human watching stderr can miss it.
+    log "!!! WRITE-SCOPE TRIPWIRE TRIPPED !!! a write escaped the allowed worktree scope into the PRIMARY repo tree ($SRC_REPO)."
+    log "the delegate (or the jail) let a change land outside the isolated scope — inspect and revert before trusting this run. Note: the bracket cannot attribute it to a specific delegate, and unrelated activity in the window can also trip it."
+    [ -n "$status_delta" ] && log "primary-tree status delta:" && printf '%s\n' "$status_delta" >&2
+    [ -n "$head_delta" ] && log "primary-tree HEAD moved:" && printf '%s\n' "$head_delta" >&2
+    echo "WRITE-SCOPE-TRIPWIRE: out-of-scope write detected in the primary tree ($SRC_REPO)"
+  fi
 }
 
 # --- main -------------------------------------------------------------------
@@ -379,18 +513,16 @@ main() {
     esac
   done
 
-  # Tier gate (ADR-001 Decision 4): only consult is wired; higher tiers are
-  # refused — never silently downgraded to consult, never silently granted.
-  # Runs immediately after option parsing, before any provider/prompt
-  # validation, so the documented check order (usage → tier gate → srt checks
-  # → provider check) holds and no later reordering can slip provider
-  # execution in front of the gate.
+  # Tier gate (ADR-001 Decision 4): consult (read-only) and act-sandboxed
+  # (worktree-scoped writes) are wired; act-full is still gated and refused —
+  # never silently downgraded to consult, never silently granted. Runs
+  # immediately after option parsing, before any provider/prompt validation, so
+  # the documented check order (usage → tier gate → srt checks → provider check)
+  # holds and no later reordering can slip provider execution in front of the
+  # gate.
   case "$TIER" in
     consult) ;;
-    act-sandboxed)
-      log "tier 'act-sandboxed' is not yet implemented (planned: issue #77 PR 3)."
-      log "refusing to run rather than silently downgrading (ADR-001 Decision 4). Re-run with --tier consult (or no --tier) for the read-only tier."
-      exit 1 ;;
+    act-sandboxed) ;;
     act-full)
       log "tier 'act-full' is gated behind an explicit per-invocation approval mechanism that is not yet implemented (planned: issue #77 PR 4)."
       log "refusing to run — no silent escalation (ADR-001 Decision 4). Re-run with --tier consult (or no --tier) for the read-only tier."
@@ -428,7 +560,10 @@ main() {
   # rule). Resolved to a physical path because srt's jail does not follow
   # symlinked temp paths (macOS /tmp -> /private/tmp).
   RUN_TMP=$(mktemp -d -t second-opinion-run.XXXXXX)
-  trap 'rm -rf "$RUN_TMP"' EXIT
+  # cleanup() tears down the run dir AND (act-sandboxed) the worktree on EVERY
+  # exit path — registered now, before the worktree exists, so an early failure
+  # in setup still cleans the run dir.
+  trap cleanup EXIT
   # Resolve via a temp variable so a failed resolution cannot clobber RUN_TMP:
   # the trap must always see a valid path, or the mktemp'd dir would leak.
   local run_tmp_phys
@@ -439,10 +574,31 @@ main() {
     exit 3
   fi
 
+  # act-sandboxed: create the isolated worktree write scope BEFORE generating
+  # the srt settings (so the worktree is in the write-allowlist) and snapshot
+  # the primary tree for the write-scope tripwire.
+  if [ "$TIER" = "act-sandboxed" ]; then
+    setup_worktree
+  fi
+
   write_srt_settings "$provider"
   srt_preflight
 
-  "run_$provider" "$prompt_file"
+  if [ "$TIER" = "act-sandboxed" ]; then
+    tripwire_snapshot
+  fi
+
+  local prc=0
+  "run_$provider" "$prompt_file" || prc=$?
+
+  # act-sandboxed: emit the worktree work product and run the write-scope
+  # tripwire regardless of the delegate's exit status — an out-of-scope write
+  # can happen on a failing run too, and it must still be surfaced loudly.
+  if [ "$TIER" = "act-sandboxed" ]; then
+    report_act_sandboxed
+  fi
+
+  return "$prc"
 }
 
 main "$@"
