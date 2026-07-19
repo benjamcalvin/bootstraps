@@ -28,7 +28,8 @@ provider CLIs' own sandbox flags.
   Linux needs `bubblewrap` and `socat` (`apt-get install bubblewrap socat`).
   If `srt` or a platform dependency is missing, `consult.sh` exits `2`; if the
   wrapper fails to start, it exits `3` — in both cases with an error that says
-  what to install. There is no silent degradation (ADR-001 Decision 6).
+  what to install. Platforms other than macOS and Linux are refused with exit
+  `2`. There is no silent degradation (ADR-001 Decision 6).
 
   > `srt --version` reports the CLI's internal version (1.0.0 for the 0.0.66
   > npm release), so the pin is enforced at install time via the exact-version
@@ -141,7 +142,7 @@ that codex does not get:
   this provider only, plus `allowLocalBinding` for agy's internal loopback
   language server.
 
-Two consequences to keep in mind:
+Three consequences to keep in mind:
 
 - **Your filesystem is readable.** Both providers run against your working
   directory and are told they may read surrounding files for context. If that
@@ -155,6 +156,12 @@ Two consequences to keep in mind:
   Do not review untrusted diffs against a filesystem you would not hand to the
   provider directly. The jail limits writes, egress, and terminal access — not
   reads or disclosure of what is readable.
+- **Antigravity prompts are visible in the process list.** `agy` has no
+  stdin-prompt mode, so the full prompt — including the embedded diff — is
+  passed as a command-line argument and is readable via `ps` by other local
+  users for the duration of the run. On shared/multi-user machines, avoid the
+  antigravity provider for diffs containing anything sensitive (codex reads
+  its prompt from stdin and is not affected).
 
 Note on Antigravity output: some `agy` versions can return sparse output in
 print mode (a short planning trace instead of findings) if the prompt sends the
