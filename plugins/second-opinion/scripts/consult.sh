@@ -822,6 +822,15 @@ main() {
   [ $# -ge 1 ] || usage
 
   if [ "$1" = "list" ]; then
+    # `list` takes no arguments. Reject trailing tokens loudly rather than
+    # silently ignoring them, matching the "unexpected args are loud" posture
+    # applied to the provider-invocation path (ADR-001 Decision 4).
+    if [ "$#" -gt 1 ]; then
+      shift
+      log "unexpected argument(s) after 'list': $*"
+      log "'list' takes no arguments. Usage: consult.sh list"
+      exit 1
+    fi
     if ! command -v srt >/dev/null 2>&1; then
       log "warning: the pinned sandbox wrapper 'srt' is not installed; delegation will be refused (exit 2) until it is. Install: $SRT_INSTALL"
     fi

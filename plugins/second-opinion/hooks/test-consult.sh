@@ -251,6 +251,15 @@ make_stub "$STUB_AGY" agy "exit 0"
 out="$(run_stdout "$STUB_AGY" -- list)"
 if [ "$out" = "antigravity" ]; then pass; else fail "agy-only PATH should list exactly 'antigravity' (got: $out)"; fi
 
+# 'list' takes no arguments: trailing tokens are refused loudly (exit 1,
+# actionable), not silently ignored — same loud-trailing-arg posture as the
+# provider path (round-2 finding 2). Bare 'list' still works (asserted above).
+expect_exit 1 "list with trailing args -> refused" "$STUB_BOTH" -- list extra
+err="$(run_stderr "$STUB_BOTH" -- list extra garbage)"
+echo "$err" | grep -qi "unexpected argument" && echo "$err" | grep -q "extra garbage" \
+  && pass || fail "list trailing-arg refusal should name the offending tokens (got: $err)"
+echo "$err" | grep -qi "takes no arguments" && pass || fail "list trailing-arg refusal should state 'list' takes no arguments (got: $err)"
+
 # --- CLI-failure paths (exit 3), via stub bins that shadow the real CLI. ---
 
 # codex exits non-zero -> exit 3.
@@ -928,20 +937,34 @@ grep -qi "best-effort" "$aft_err" && pass || fail "act-full must surface the bes
 # --i-approve-full-access never escalates on its own.
 echo ""
 echo "=== round-1 finding 4: no-effect flags warn at the wrong tier ==="
+# The no-op warning must WARN, not REFUSE: each case asserts the warning text on
+# stderr AND that the run still exits 0 with normal provider output produced, so a
+# regression from warn->refuse (or any downgrade) fails the suite. (Mutation-
+# tested in round 2: text-only asserts passed even when the branch was patched to
+# `exit 1`; these exit-code + output asserts close that gap — round-2 finding 1.)
 # --primary-tree at consult (default tier): loud no-op warning, run still succeeds.
-err="$(run_stderr "$STUB_CODEX_OK:$STUB_SRT_OK:$REAL_PATH" -- --primary-tree codex "$PROMPT")"
+pt_err="$WORK/pt-consult.err"
+out="$(PATH="$STUB_CODEX_OK:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --primary-tree codex "$PROMPT" 2>"$pt_err")"; rc=$?
+err="$(cat "$pt_err")"
 echo "$err" | grep -qi -- "--primary-tree" && echo "$err" | grep -qi "no effect" \
   && pass || fail "--primary-tree at consult should warn it has no effect (got: $err)"
-# --primary-tree at act-sandboxed: same loud no-op warning.
+if [ "$rc" -eq 0 ] && [ "$out" = "CODEX REVIEW OK" ]; then pass; else fail "--primary-tree at consult must WARN not REFUSE: still exit 0 with normal consult output (rc=$rc, got: $out)"; fi
+# --primary-tree at act-sandboxed: same loud no-op warning, run still succeeds.
 REPO_PT_WARN="$WORK/repo-pt-warn"
 make_git_repo "$REPO_PT_WARN"
-err="$(cd "$REPO_PT_WARN" && PATH="$STUB_CODEX_WT:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --primary-tree --tier act-sandboxed codex "$PROMPT" 2>&1 >/dev/null)"
+pt_sb_err="$WORK/pt-sandboxed.err"
+out="$(cd "$REPO_PT_WARN" && PATH="$STUB_CODEX_WT:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --primary-tree --tier act-sandboxed codex "$PROMPT" 2>"$pt_sb_err")"; rc=$?
+err="$(cat "$pt_sb_err")"
 echo "$err" | grep -qi -- "--primary-tree" && echo "$err" | grep -qi "no effect" \
   && pass || fail "--primary-tree at act-sandboxed should warn it has no effect (got: $err)"
-# --i-approve-full-access without --tier act-full: loud no-op warning, no escalation.
-err="$(run_stderr "$STUB_CODEX_OK:$STUB_SRT_OK:$REAL_PATH" -- --i-approve-full-access codex "$PROMPT")"
+if [ "$rc" -eq 0 ] && echo "$out" | grep -q "CODEX ACTED" && echo "$out" | grep -q "isolated worktree write scope"; then pass; else fail "--primary-tree at act-sandboxed must WARN not REFUSE: still exit 0 with normal act-sandboxed output (rc=$rc, got: $out)"; fi
+# --i-approve-full-access without --tier act-full: loud no-op warning, no escalation, run still succeeds.
+ia_err="$WORK/ia-consult.err"
+out="$(PATH="$STUB_CODEX_OK:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --i-approve-full-access codex "$PROMPT" 2>"$ia_err")"; rc=$?
+err="$(cat "$ia_err")"
 echo "$err" | grep -qi -- "--i-approve-full-access" && echo "$err" | grep -qi "no effect" \
   && pass || fail "--i-approve-full-access without act-full should warn it has no effect (got: $err)"
+if [ "$rc" -eq 0 ] && [ "$out" = "CODEX REVIEW OK" ]; then pass; else fail "--i-approve-full-access without act-full must WARN not REFUSE: still exit 0 with normal consult output (rc=$rc, got: $out)"; fi
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed ($(( PASS + FAIL )) total)"
