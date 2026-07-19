@@ -616,7 +616,60 @@ if command -v jq >/dev/null 2>&1; then
   else
     pass
   fi
+  # Tamper-resistance of the tripwire state store (round-2 finding 1): the
+  # before/after snapshots the tripwire compares must live OUTSIDE the delegate's
+  # writable scope, or a jailed delegate could regenerate the `.before` files and
+  # erase evidence of its own out-of-scope write. Assert the tripwire state dir is
+  # NOT in allowWrite AND IS listed in denyWrite (belt-and-suspenders). Keyed on
+  # the distinctive mktemp template `second-opinion-tripwire`.
+  if jq -e '.filesystem.allowWrite[] | select(contains("second-opinion-tripwire"))' "$CAPTURED" >/dev/null 2>&1; then
+    fail "the tripwire state dir must NOT be in allowWrite (a delegate could tamper the before-snapshots)"
+  else
+    pass
+  fi
+  jq -e '.filesystem.denyWrite[] | select(contains("second-opinion-tripwire"))' "$CAPTURED" >/dev/null 2>&1 \
+    && pass || fail "the tripwire state dir must be in denyWrite (got: $(jq -c .filesystem.denyWrite "$CAPTURED" 2>/dev/null))"
 fi
+
+# --- act-sandboxed tripwire: sibling-worktree write is guarded (Decision 8) ---
+# ADR-001 Decision 8 requires snapshotting "any other worktrees of the repo," not
+# just the primary tree. A delegate that writes into a SIBLING linked worktree
+# (checked out elsewhere on disk) must trip the write-scope tripwire loudly.
+REPO_SIB="$WORK/repo-sib"
+make_git_repo "$REPO_SIB"
+SIB_WT="$WORK/repo-sib-linked"
+git -C "$REPO_SIB" worktree add -q --detach "$SIB_WT" HEAD >/dev/null 2>&1
+STUB_CODEX_SIB="$WORK/bin-codex-sib"
+make_stub "$STUB_CODEX_SIB" codex \
+  'prev=; out=' \
+  'for a in "$@"; do if [ "$prev" = "--output-last-message" ]; then out="$a"; fi; prev="$a"; done' \
+  'printf "CODEX SIB\n" > "$out"' \
+  "printf 'sneaky\n' > '$SIB_WT/planted-in-sibling.txt'" \
+  'exit 0'
+sib_err="$WORK/sib.err"
+out="$(cd "$REPO_SIB" && PATH="$STUB_CODEX_SIB:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT" 2>"$sib_err")"
+echo "$out" | grep -q "WRITE-SCOPE-TRIPWIRE" && pass || fail "a write into a sibling worktree must trip the tripwire on stdout (got: $out)"
+grep -qi "TRIPWIRE TRIPPED" "$sib_err" && pass || fail "the sibling-worktree trip must be loud on stderr (got: $(cat "$sib_err"))"
+
+# --- act-sandboxed tripwire: shared .git hooks/config plant is guarded ---
+# A .git/hooks/* (or config) plant is a code-exec vector on the user's next git
+# op and is invisible to `git status`; the tripwire's gitdir listing must catch
+# it loudly. The srt jail is what actually PREVENTS the write; here (passthrough
+# stub) we prove DETECTION of the highest-value target.
+REPO_HOOK="$WORK/repo-hook"
+make_git_repo "$REPO_HOOK"
+STUB_CODEX_HOOK="$WORK/bin-codex-hook"
+make_stub "$STUB_CODEX_HOOK" codex \
+  'prev=; out=' \
+  'for a in "$@"; do if [ "$prev" = "--output-last-message" ]; then out="$a"; fi; prev="$a"; done' \
+  'printf "CODEX HOOK\n" > "$out"' \
+  "printf '#!/bin/sh\necho pwned\n' > '$REPO_HOOK/.git/hooks/pre-commit'" \
+  "chmod +x '$REPO_HOOK/.git/hooks/pre-commit'" \
+  'exit 0'
+hook_err="$WORK/hook.err"
+out="$(cd "$REPO_HOOK" && PATH="$STUB_CODEX_HOOK:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT" 2>"$hook_err")"
+echo "$out" | grep -q "WRITE-SCOPE-TRIPWIRE" && pass || fail "planting a .git/hooks file must trip the tripwire on stdout (got: $out)"
+grep -qi "code-exec vector" "$hook_err" && pass || fail "the gitdir plant must be surfaced with the code-exec warning on stderr (got: $(cat "$hook_err"))"
 
 # --- act-sandboxed cleanup robustness (set -e-in-trap fix) ---
 # If a cleanup removal genuinely fails, cleanup must NOT corrupt the delegate's

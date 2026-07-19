@@ -19,9 +19,13 @@ set -euo pipefail
 #                  created under the run temp dir. The srt jail's write-allowlist
 #                  is the enforcement (worktree + run dir writable, everything
 #                  else — including the primary repo tree, $HOME, credential
-#                  paths — denied). A post-hoc write-scope tripwire re-checks the
-#                  PRIMARY tree and surfaces any out-of-scope write LOUDLY. The
-#                  worktree diff (the work product) is printed after the delegate
+#                  paths — denied). A post-hoc write-scope tripwire re-checks
+#                  everywhere the delegate is NOT allowed to write — the primary
+#                  tree, any sibling worktrees of the repo, and the shared git
+#                  dir's hooks/config — and surfaces any out-of-scope write
+#                  LOUDLY. Its before/after snapshots live in a separate,
+#                  delegate-unwritable temp dir so they cannot be tampered with.
+#                  The worktree diff (the work product) is printed after the delegate
 #                  output; the worktree is destroyed on exit like the run dir.
 #                  Requires being inside a git repository (exit 1 otherwise).
 #   act-full       NOT YET IMPLEMENTED (issue #77 PR 4). Refused with exit 1;
@@ -92,6 +96,12 @@ CRED_VAR=""
 SRC_REPO=""
 WORKTREE=""
 SANDBOX_CWD=""
+# act-sandboxed only: a tamper-resistant store for the write-scope tripwire's
+# before/after snapshots. Its own mktemp dir — deliberately NOT under RUN_TMP and
+# NOT in the srt write-allowlist — so the jailed delegate cannot overwrite the
+# before-snapshots to erase evidence of an out-of-scope write. Empty at
+# consult/act-full.
+TRIPWIRE_TMP=""
 
 log() { echo "consult.sh: $*" >&2; }
 
@@ -244,6 +254,14 @@ EOF
   # hooks/config plant (a code-exec vector) impossible in the first place.
   local write_json="\"$RUN_TMP\""
   if [ -n "$WORKTREE" ]; then write_json="$write_json, \"$WORKTREE\""; fi
+
+  # Tripwire state store (act-sandboxed): kept OUT of allowWrite above (it is its
+  # own mktemp dir, not under RUN_TMP) AND explicitly denied here — belt and
+  # suspenders — so a delegate cannot tamper with the before-snapshots to erase
+  # evidence of an out-of-scope write. Tampering would then require a jail escape
+  # to an arbitrary path, i.e. at least the privilege the tripwire exists to catch.
+  local deny_write_json=""
+  if [ -n "$TRIPWIRE_TMP" ]; then deny_write_json="\"$TRIPWIRE_TMP\""; fi
   case "$provider" in
     codex)
       if [ -d "$HOME/.codex" ]; then write_json="$write_json, \"$HOME/.codex\""; fi
@@ -292,7 +310,7 @@ EOF
     ],
     "allowRead": [$allowread_json],
     "allowWrite": [$write_json],
-    "denyWrite": []
+    "denyWrite": [$deny_write_json]
   },
   "enableWeakerNetworkIsolation": $weaker
 }
@@ -419,7 +437,8 @@ run_antigravity() {
 # --- act-sandboxed: isolated write scope + write-scope tripwire -------------
 
 # cleanup — remove the run temp dir AND (act-sandboxed) the dedicated worktree
-# on EVERY exit path (mandatory-cleanup rule; ADR-001 least-privilege scope).
+# and the tripwire state dir on EVERY exit path (mandatory-cleanup rule; ADR-001
+# least-privilege scope).
 # Registered as the EXIT trap, so it fires on success, refusal, error, or
 # signal. The worktree is torn down via `git worktree remove` (which also drops
 # the .git/worktrees admin entry); rm is the fallback if git is unavailable.
@@ -443,6 +462,10 @@ cleanup() {
   if [ -n "$RUN_TMP" ]; then
     rm -rf "$RUN_TMP" 2>/dev/null \
       || log "cleanup: failed to remove the run dir; it is leaked on disk at $RUN_TMP"
+  fi
+  if [ -n "$TRIPWIRE_TMP" ]; then
+    rm -rf "$TRIPWIRE_TMP" 2>/dev/null \
+      || log "cleanup: failed to remove the tripwire state dir; it is leaked on disk at $TRIPWIRE_TMP"
   fi
   # Preserve the real exit status: a cleanup failure must never mask it.
   exit "$rc"
@@ -487,6 +510,25 @@ setup_worktree() {
     exit 3
   fi
   SANDBOX_CWD="$WORKTREE"
+}
+
+# setup_tripwire_state — allocate the tamper-resistant store for the write-scope
+# tripwire's before/after snapshots. It lives in its OWN mktemp dir, NOT under
+# $RUN_TMP and deliberately NOT in the srt write-allowlist (and additionally
+# listed in denyWrite), so a delegate — whose cwd and writable scope are the
+# worktree under $RUN_TMP — cannot overwrite the before-snapshots to erase
+# evidence of an out-of-scope write. Doing that would require a jail escape to an
+# arbitrary path, i.e. at least the privilege the tripwire exists to catch.
+# Torn down by cleanup() on every exit path.
+setup_tripwire_state() {
+  TRIPWIRE_TMP=$(mktemp -d -t second-opinion-tripwire.XXXXXX)
+  local phys
+  if phys=$(cd "$TRIPWIRE_TMP" && pwd -P) && [ -n "$phys" ]; then
+    TRIPWIRE_TMP="$phys"
+  else
+    log "failed to resolve the tripwire state dir to a physical path: $TRIPWIRE_TMP"
+    exit 3
+  fi
 }
 
 # git_common_dir — absolute physical path of the repo's shared git directory
@@ -544,16 +586,28 @@ tripwire_gitdir_listing() {
 # hooks/config. The guarded-tree set is frozen here and reused verbatim after
 # the run so before/after compare the same trees.
 tripwire_snapshot() {
-  mkdir -p "$RUN_TMP/tripwire"
-  tripwire_guarded_trees > "$RUN_TMP/tripwire/trees.list"
+  mkdir -p "$TRIPWIRE_TMP"
+  # Guard the enumeration call site: tripwire_guarded_trees is a
+  # git|awk|while-read pipeline, and under `set -o pipefail` a `git worktree
+  # list` failure makes the whole pipeline non-zero even when the trailing loop
+  # exits 0 — which under `set -e` would abort the script mid-snapshot (before
+  # the delegate runs), surfacing a bare exit 1 misclassified as a usage error.
+  # `|| true` keeps errexit from firing; the fallback below guarantees we never
+  # silently guard NOTHING: if enumeration failed or yielded an empty list, guard
+  # at least the primary tree ($SRC_REPO).
+  tripwire_guarded_trees > "$TRIPWIRE_TMP/trees.list" 2>/dev/null || true
+  if [ ! -s "$TRIPWIRE_TMP/trees.list" ]; then
+    log "warning: could not enumerate the repo's worktrees for the write-scope tripwire; guarding the primary tree only ($SRC_REPO)"
+    printf '%s\n' "$SRC_REPO" > "$TRIPWIRE_TMP/trees.list"
+  fi
   local i=0 tree
   while IFS= read -r tree; do
     [ -n "$tree" ] || continue
-    git -C "$tree" status --porcelain --ignored > "$RUN_TMP/tripwire/$i.status.before" 2>/dev/null || true
-    git -C "$tree" rev-parse HEAD > "$RUN_TMP/tripwire/$i.head.before" 2>/dev/null || true
+    git -C "$tree" status --porcelain --ignored > "$TRIPWIRE_TMP/$i.status.before" 2>/dev/null || true
+    git -C "$tree" rev-parse HEAD > "$TRIPWIRE_TMP/$i.head.before" 2>/dev/null || true
     i=$((i + 1))
-  done < "$RUN_TMP/tripwire/trees.list"
-  tripwire_gitdir_listing > "$RUN_TMP/tripwire/gitdir.before" 2>/dev/null || true
+  done < "$TRIPWIRE_TMP/trees.list"
+  tripwire_gitdir_listing > "$TRIPWIRE_TMP/gitdir.before" 2>/dev/null || true
 }
 
 # report_act_sandboxed — after the delegate finishes: (1) emit the worktree diff
@@ -600,10 +654,10 @@ report_act_sandboxed() {
   local tripped=0 i=0 tree tree_status_delta tree_head_delta
   while IFS= read -r tree; do
     [ -n "$tree" ] || continue
-    git -C "$tree" status --porcelain --ignored > "$RUN_TMP/tripwire/$i.status.after" 2>/dev/null || true
-    git -C "$tree" rev-parse HEAD > "$RUN_TMP/tripwire/$i.head.after" 2>/dev/null || true
-    tree_status_delta=$(diff "$RUN_TMP/tripwire/$i.status.before" "$RUN_TMP/tripwire/$i.status.after" 2>/dev/null || true)
-    tree_head_delta=$(diff "$RUN_TMP/tripwire/$i.head.before" "$RUN_TMP/tripwire/$i.head.after" 2>/dev/null || true)
+    git -C "$tree" status --porcelain --ignored > "$TRIPWIRE_TMP/$i.status.after" 2>/dev/null || true
+    git -C "$tree" rev-parse HEAD > "$TRIPWIRE_TMP/$i.head.after" 2>/dev/null || true
+    tree_status_delta=$(diff "$TRIPWIRE_TMP/$i.status.before" "$TRIPWIRE_TMP/$i.status.after" 2>/dev/null || true)
+    tree_head_delta=$(diff "$TRIPWIRE_TMP/$i.head.before" "$TRIPWIRE_TMP/$i.head.after" 2>/dev/null || true)
     if [ -n "$tree_status_delta" ] || [ -n "$tree_head_delta" ]; then
       tripped=1
       log "out-of-scope write in guarded tree: $tree"
@@ -611,11 +665,11 @@ report_act_sandboxed() {
       [ -n "$tree_head_delta" ] && log "  HEAD moved:" && printf '%s\n' "$tree_head_delta" >&2
     fi
     i=$((i + 1))
-  done < "$RUN_TMP/tripwire/trees.list"
+  done < "$TRIPWIRE_TMP/trees.list"
 
-  tripwire_gitdir_listing > "$RUN_TMP/tripwire/gitdir.after" 2>/dev/null || true
+  tripwire_gitdir_listing > "$TRIPWIRE_TMP/gitdir.after" 2>/dev/null || true
   local gitdir_delta
-  gitdir_delta=$(diff "$RUN_TMP/tripwire/gitdir.before" "$RUN_TMP/tripwire/gitdir.after" 2>/dev/null || true)
+  gitdir_delta=$(diff "$TRIPWIRE_TMP/gitdir.before" "$TRIPWIRE_TMP/gitdir.after" 2>/dev/null || true)
   if [ -n "$gitdir_delta" ]; then
     tripped=1
     log "out-of-scope write in the shared git dir (hooks/ or config) — this is a code-exec vector on your next git operation:"
@@ -724,11 +778,13 @@ main() {
     exit 3
   fi
 
-  # act-sandboxed: create the isolated worktree write scope BEFORE generating
-  # the srt settings (so the worktree is in the write-allowlist) and snapshot
-  # the primary tree for the write-scope tripwire.
+  # act-sandboxed: create the isolated worktree write scope AND the
+  # tamper-resistant tripwire state dir BEFORE generating the srt settings — the
+  # worktree goes in the write-allowlist, the tripwire dir in denyWrite (and out
+  # of allowWrite) — then snapshot the guarded trees for the write-scope tripwire.
   if [ "$TIER" = "act-sandboxed" ]; then
     setup_worktree
+    setup_tripwire_state
   fi
 
   write_srt_settings "$provider"
