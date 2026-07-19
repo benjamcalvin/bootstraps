@@ -6,9 +6,37 @@ every supported CLI installed on your machine, runs them read-only in parallel,
 and synthesizes the findings into a single consolidated review with per-provider
 attribution.
 
+This is the read-only **`consult` tier** of the privilege-tiered delegation
+model specified in
+[ADR-001](../../docs/adr/001-task-delegation-privilege-model.md). Every
+provider subprocess runs inside the pinned Anthropic
+[`sandbox-runtime`](https://github.com/anthropic-experimental/sandbox-runtime)
+(`srt`) wrapper — an OS-level filesystem jail plus default-deny egress — and
+`srt` is a **hard prerequisite** (fail-closed): without it, delegation is
+refused with an actionable error rather than silently falling back to the
+provider CLIs' own sandbox flags.
+
+## Prerequisites
+
+- **`srt` (required)** — pinned version, per ADR-001 Decision 5:
+
+  ```bash
+  npm install -g @anthropic-ai/sandbox-runtime@0.0.66
+  ```
+
+  Platform dependencies: macOS needs `sandbox-exec` (Seatbelt, built in);
+  Linux needs `bubblewrap` and `socat` (`apt-get install bubblewrap socat`).
+  If `srt` or a platform dependency is missing, `consult.sh` exits `2`; if the
+  wrapper fails to start, it exits `3` — in both cases with an error that says
+  what to install. There is no silent degradation (ADR-001 Decision 6).
+
+  > `srt --version` reports the CLI's internal version (1.0.0 for the 0.0.66
+  > npm release), so the pin is enforced at install time via the exact-version
+  > command above, not at runtime.
+
 ## Supported providers
 
-| Provider | Binary | Headless invocation | Read-only mechanism |
+| Provider | Binary | Headless invocation | Native sandbox (defense-in-depth under `srt`) |
 |---|---|---|---|
 | OpenAI Codex CLI | `codex` | `codex exec` | `--sandbox read-only` |
 | Google Antigravity CLI | `agy` | `agy --sandbox -p` (print mode) | `--sandbox` (sandbox with terminal restrictions); `-p` only makes it non-interactive |
@@ -33,14 +61,33 @@ Providers are detected at runtime — install one or both:
 
 ## How it works
 
-1. `scripts/consult.sh list` detects which provider CLIs are installed.
+1. `scripts/consult.sh list` detects which provider CLIs are installed (and
+   warns if `srt` is missing).
 2. Claude builds the diff for the requested scope (PR, branch, staged, or range)
    and fills in the prompt template at `assets/prompts/review.md`.
 3. Each provider runs headlessly and read-only in a parallel background task via
-   `scripts/consult.sh <provider> <prompt-file>`.
+   `scripts/consult.sh [--tier consult] <provider> <prompt-file>` — each
+   subprocess enclosed by `srt` with a per-run generated settings file: egress
+   limited to that provider's API endpoints, writes confined to the run temp
+   dir and the provider's own state dir, known credential paths deny-read, and
+   a scrubbed environment (only `HOME`/`PATH`/`TMPDIR`/`TERM` plus the one
+   provider credential var pass through).
 4. Claude cross-checks the findings against the code, highlights consensus
    between providers, drops factually wrong findings, and reports — it never
    applies fixes on its own.
+
+### Privilege tiers
+
+`consult.sh` accepts `--tier <consult|act-sandboxed|act-full>` (ADR-001
+tier ladder). `consult` is the default and the only tier implemented today.
+Requesting `act-sandboxed` (planned: issue #77 PR 3) or `act-full` (planned:
+issue #77 PR 4, gated behind explicit per-invocation approval) is **refused
+with exit 1** — never silently downgraded to `consult`, never silently
+granted (ADR-001 Decision 4).
+
+Exit codes: `0` success, `1` usage error or refused tier, `2` required
+component not installed (provider CLI, `srt`, or an srt platform dependency),
+`3` component failed (provider run, or the `srt` wrapper failed to start).
 
 ## Configuration
 
@@ -48,18 +95,51 @@ Providers are detected at runtime — install one or both:
 |---|---|
 | `SECOND_OPINION_CODEX_MODEL` | Override the Codex model |
 | `SECOND_OPINION_ANTIGRAVITY_MODEL` | Override the Antigravity model (see `agy models`) |
+| `SECOND_OPINION_ALLOWLIST_DIR` | Override the egress-allowlist extension directory (default: `${XDG_CONFIG_HOME:-~/.config}/second-opinion/allowlist.d`) |
 
 ## Security / limitations
 
-The sandbox mechanisms (`codex --sandbox read-only`, `agy --sandbox`) restrict
-**writes and terminal access** — they stop a provider from modifying your repo
-or running commands. They do **not** stop the external model from *reading*
-files it has access to and transmitting their contents back to its provider as
-part of the review.
+The `srt` jail restricts **writes, egress, and terminal access**: writes are
+confined to the run temp dir and the provider's own state dir; network egress
+is default-deny with a per-provider domain allowlist; and known credential
+paths (`~/.ssh`, `~/.aws`, `~/.config/gh`, `~/.gnupg`, shell histories, OS
+keychain stores) are deny-read. The providers' native sandbox flags
+(`codex --sandbox read-only`, `agy --sandbox`) stay on underneath as
+defense-in-depth. None of this stops the external model from *reading* other
+files the jail exposes and transmitting their contents back to its provider
+as part of the review — reads are default-allow outside the deny list.
 
-The privilege and exposure model for this plugin — and for its planned
-generalization (below) — is specified in
-[ADR-001: Task-delegation substrate, privilege tiers, and exposure model](../../docs/adr/001-task-delegation-privilege-model.md).
+The privilege and exposure model for this plugin is specified in
+[ADR-001: Task-delegation substrate, privilege tiers, and exposure model](../../docs/adr/001-task-delegation-privilege-model.md);
+its risk register is the honest statement of what these boundaries do and do
+not guarantee.
+
+### Egress allowlists
+
+The plugin ships tight per-provider allowlists
+(`assets/allowlists/<provider>.txt`) containing provider API endpoints only —
+no registries, no `github.com`, no shared CDNs (broad entries reopen
+exfiltration paths). To extend one, create
+`${XDG_CONFIG_HOME:-~/.config}/second-opinion/allowlist.d/<provider>.txt`
+(one domain per line, `#` comments) — never edit the shipped files. Every run
+with a non-default allowlist reports the extra domains on stderr, so a
+widened egress surface is never invisible (ADR-001 Decision 7).
+
+### Provider-specific relaxations (antigravity)
+
+Verified against real CLIs, `agy` needs two loud, narrowly-scoped relaxations
+that codex does not get:
+
+- **Keychain carve-out**: `agy` stores its OAuth token in the macOS login
+  keychain, which the deny-read policy blocks. An `allowRead` carve-out
+  re-permits exactly `~/Library/Keychains/login.keychain-db`, reported on
+  stderr at invocation time (the ADR-001 Decision 5 mechanism).
+- **trustd access** (`enableWeakerNetworkIsolation`): `agy` is a Go binary;
+  on macOS, Go TLS verification goes through the `trustd` service, which the
+  Seatbelt profile blocks by default. Re-allowing it is a documented srt
+  trade-off (a potential exfiltration vector through trustd) accepted for
+  this provider only, plus `allowLocalBinding` for agy's internal loopback
+  language server.
 
 Two consequences to keep in mind:
 
@@ -73,7 +153,8 @@ Two consequences to keep in mind:
   prompt. A hostile diff (e.g. from an untrusted PR) can attempt prompt
   injection to steer the external agent into reading and exfiltrating files.
   Do not review untrusted diffs against a filesystem you would not hand to the
-  provider directly. `--sandbox` limits writes/terminal, not reads or disclosure.
+  provider directly. The jail limits writes, egress, and terminal access — not
+  reads or disclosure of what is readable.
 
 Note on Antigravity output: some `agy` versions can return sparse output in
 print mode (a short planning trace instead of findings) if the prompt sends the
@@ -83,14 +164,15 @@ back to Codex.
 
 ## Roadmap: consult → delegate
 
-This plugin's read-only consultation is planned to generalize into a
-privilege-tiered **task-delegation** primitive (issue
-[#77](https://github.com/benjamcalvin/bootstraps/issues/77)): the current
-behavior becomes the default `consult` tier, with an opt-in `act-sandboxed`
-tier (writes confined to an isolated git worktree) and a gated `act-full` tier
-requiring explicit per-invocation approval — no code path silently escalates
-privilege. The substrate choice, tier ladder, enforcement mechanisms, and
-honest limits are recorded in
+This plugin is generalizing into a privilege-tiered **task-delegation**
+primitive (issue
+[#77](https://github.com/benjamcalvin/bootstraps/issues/77)). The tier
+interface and the default read-only `consult` tier are implemented (this
+version); the opt-in `act-sandboxed` tier (writes confined to an isolated git
+worktree, issue #77 PR 3) and the gated `act-full` tier (explicit
+per-invocation approval, issue #77 PR 4) are not yet — requesting either is
+refused, never silently downgraded or escalated. The substrate choice, tier
+ladder, enforcement mechanisms, and honest limits are recorded in
 [ADR-001](../../docs/adr/001-task-delegation-privilege-model.md). Nothing in
 the current version acts on your repo; today's plugin is the `consult` tier
 only.
@@ -98,5 +180,8 @@ only.
 ## Adding a provider
 
 `scripts/consult.sh` isolates all per-CLI quirks. To add one: add its name to
-`PROVIDERS`, map it in `binary_for()`, and write a `run_<provider>()` that reads
-a prompt file and prints the review text to stdout. Keep it read-only.
+`PROVIDERS`, map it in `binary_for()`, add a tight provider-endpoint
+allowlist at `assets/allowlists/<provider>.txt`, and write a
+`run_<provider>()` that reads a prompt file, invokes the CLI through
+`run_srt` (never directly), and prints the review text to stdout. Keep it
+read-only.
