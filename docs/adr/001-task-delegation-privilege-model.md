@@ -180,7 +180,10 @@ config.
   Under this policy `allowRead`'s role is narrow: re-permitting a specific
   subpath *inside* a denied directory when a task genuinely needs it (e.g. a
   single config file under a denied dotdir). Such carve-outs into credential
-  paths should be rare and surfaced loudly. This blocks known credential
+  paths should be rare and surfaced loudly via the same mechanism as
+  Decision 7's allowlist extensions: any `allowRead` carve-out into a denied
+  credential path is reported to the user at invocation time, before or
+  alongside the run. This blocks known credential
   paths; it does not make reads scope-bounded in general (see [Outbound](#outbound-the-delegate-can-read-and-reads-reach-the-provider)).
 - **No DIY Squid/Seatbelt/nftables glue.** That is security-critical code we
   do not want to own.
