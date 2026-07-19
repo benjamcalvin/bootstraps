@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Last Updated:** 2026-07-18
-**Decision:** Extend `second-opinion` into a privilege-tiered `delegate` primitive (Option A) with a three-tier ladder — `consult` (default, read-only) / `act-sandboxed` (opt-in, worktree-scoped writes) / `act-full` (per-invocation gated) — every delegate subprocess enclosed by a pinned Anthropic `sandbox-runtime` wrapper, fail-closed.
+**Decision:** Accepted
 
 **Issue:** [#77 — feat: generalize second-opinion into a privilege-tiered task-delegation tool](https://github.com/benjamcalvin/bootstraps/issues/77)
 **Related:** [#75](https://github.com/benjamcalvin/bootstraps/issues/75) (second-opinion), [#44](https://github.com/benjamcalvin/bootstraps/issues/44)/[#45](https://github.com/benjamcalvin/bootstraps/issues/45) (implement-cli), [#69](https://github.com/benjamcalvin/bootstraps/issues/69) (implement-team)
@@ -41,6 +41,15 @@ This ADR records that resolution plus the privilege and exposure model. Several
 decisions were settled by the maintainer during scoping (issue #77 comments);
 they are recorded below as **decided**, not open questions. One decision —
 allowlist ownership — is settled by this ADR itself.
+
+## Decision
+
+We will extend `second-opinion` into a privilege-tiered `delegate` primitive
+(Option A) with a three-tier ladder — `consult` (default, read-only) /
+`act-sandboxed` (opt-in, worktree-scoped writes) / `act-full` (per-invocation
+gated) — every delegate subprocess enclosed by a pinned Anthropic
+`sandbox-runtime` wrapper, fail-closed. The numbered Decision sections below
+record each constituent decision and its rationale.
 
 ## Decision 1: Substrate — extend `second-opinion` into a `delegate` primitive (Option A)
 
@@ -167,10 +176,12 @@ config.
   settings **must** include an explicit `denyRead` list covering known
   credential and secret paths at every tier where the wrapper is on — at
   minimum `~/.ssh`, `~/.aws`, `~/.config/gh`, shell history files, and OS
-  keychain stores (the same paths Decision 8 names as tripwire blind spots) —
-  with `allowRead` carve-outs only for the worktree and explicitly needed
-  context. This blocks known credential paths; it does not make reads
-  scope-bounded in general (see [Outbound](#outbound-the-delegate-can-read-and-reads-reach-the-provider)).
+  keychain stores (the same paths Decision 8 names as tripwire blind spots).
+  Under this policy `allowRead`'s role is narrow: re-permitting a specific
+  subpath *inside* a denied directory when a task genuinely needs it (e.g. a
+  single config file under a denied dotdir). Such carve-outs into credential
+  paths should be rare and surfaced loudly. This blocks known credential
+  paths; it does not make reads scope-bounded in general (see [Outbound](#outbound-the-delegate-can-read-and-reads-reach-the-provider)).
 - **No DIY Squid/Seatbelt/nftables glue.** That is security-critical code we
   do not want to own.
 - **Native CLI allowlists enabled underneath as defense-in-depth:** Codex
@@ -359,7 +370,7 @@ oversold anywhere the feature is documented.
 | 4 | **macOS Seatbelt (`sandbox-exec`) is deprecated-but-functional.** `srt` absorbs that platform risk, but if Apple removes it, the macOS jail story breaks. | On the register; fail-closed posture (Decision 6) means breakage refuses delegation rather than degrading silently. |
 | 5 | **Env-var proxying (`HTTPS_PROXY`) is advisory only.** A process can ignore it. Never load-bearing: the OS-level egress block is what makes the proxy mandatory. | Enforced by design — the jail blocks direct egress; the proxy is the only door. |
 | 6 | **Antigravity sandbox bypass via flag combo:** `--sandbox` + `--dangerously-skip-permissions` auto-approves the bypass prompt ([antigravity-cli#36](https://github.com/google-antigravity/antigravity-cli/issues/36)). | Forbidden: the delegate launcher must never emit that combination (Decision 3 note). |
-| 7 | **Reads reach the provider at every tier.** No sandbox stops the model from transmitting what it can read. | Accepted and documented (outbound exposure); bounded by jail scope and user guidance. |
+| 7 | **Reads reach the provider at every tier.** No sandbox stops the model from transmitting what it can read. | Accepted and documented (outbound exposure). Known credential paths are blocked by the required `denyRead` list (Decision 5); everything else readable in-jail reaches the provider — bounded only by user guidance. |
 | 8 | **The tripwire is detection, not prevention**, with known blind spots (ignored-file appends, nested ignored paths, out-of-worktree writes). | Accepted; prevention is the wrapper jail — the tripwire only verifies after the fact. |
 | 9 | **`srt` is pre-1.0.** API/config churn and its own bugs are possible. | Mitigated: exact-version pin, deliberate reviewed bumps, fail-closed on absence. |
 | 10 | **Subscription-quota exhaustion by parallel Claude delegates.** | Mitigated: budget caps, shared-bucket documentation, external-CLI providers for fan-out. |
@@ -393,10 +404,11 @@ prior one established.
 - `implement-cli` stays paused; its budget/depth patterns are inherited as
   design, not as code.
 - A new pinned dependency (`srt`) becomes a hard prerequisite for `consult`
-  and `act-sandboxed` delegation once PR 2 lands — a **breaking change for
-  existing installs** that today need only the provider CLIs. With the
-  fail-closed posture, machines without it get an actionable refusal (naming
-  the pinned version and install steps), not a quiet fallback.
+  delegation once PR 2 lands, extending to `act-sandboxed` when PR 3 lands —
+  a **breaking change for existing installs** that today need only the
+  provider CLIs. With the fail-closed posture, machines without it get an
+  actionable refusal (naming the pinned version and install steps), not a
+  quiet fallback.
 - Every claim of safety in user-facing docs must link back to the risk
   register above rather than overstating what sandboxes and tripwires
   guarantee.
