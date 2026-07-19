@@ -229,5 +229,12 @@ not act on your repo.
 `PROVIDERS`, map it in `binary_for()`, add a tight provider-endpoint
 allowlist at `assets/allowlists/<provider>.txt`, and write a
 `run_<provider>()` that reads a prompt file, invokes the CLI through
-`run_srt` (never directly), and prints the review text to stdout. Keep it
-read-only.
+`run_srt` (never directly), and prints the delegate output to stdout. Select
+the sandbox/write mode by `$TIER`: read-only at `consult` (e.g.
+`codex --sandbox read-only`, `agy --sandbox`) and worktree-scoped write at
+`act-sandboxed` (e.g. `codex --sandbox workspace-write`,
+`agy --sandbox --mode accept-edits`, cwd = the worktree). The `srt`
+write-allowlist is the actual enforcement regardless of tier. Never pair
+`agy --sandbox` with `--dangerously-skip-permissions` — that combo
+auto-approves the sandbox-bypass prompt (ADR-001 Decision 3, forbidden at
+every tier).

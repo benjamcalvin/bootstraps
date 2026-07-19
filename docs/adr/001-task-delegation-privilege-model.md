@@ -317,8 +317,18 @@ scope*?"** — where the allowed scope is the delegate's dedicated worktree
 
 - **Before** launching: snapshot `git status --porcelain --ignored` and
   `git rev-parse HEAD` in the **primary** working tree (and any other
-  worktrees of the repo), i.e. everywhere the delegate is *not* allowed to
-  write.
+  worktrees of the repo), plus a listing of the shared git dir's `hooks/`
+  and `config` — i.e. everywhere the delegate is *not* allowed to write. The
+  shared `.git` `hooks/`/`config` are covered explicitly because a
+  `.git/hooks` plant or a `core.hooksPath` / `credential.helper` / `url.insteadOf`
+  rewrite in `config` is a code-exec vector on the user's next git operation
+  in the **primary** tree, yet is invisible to a working-tree `git status`.
+- **The tripwire's own before/after snapshot state must live OUTSIDE the
+  delegate's writable scope** — not under any `allowWrite` path, and kept in
+  `denyWrite`. Otherwise an adversarial or prompt-injected delegate could
+  regenerate the before-snapshots to match its tampering and erase the
+  evidence, defeating detection with no jail bypass required. The store is a
+  dedicated temp dir the delegate can neither read as its scope nor write.
 - **After** completion: re-snapshot and diff. Changes inside the delegate's
   worktree are the expected work product; **any delta outside it is a
   violation** and is surfaced loudly at the top of the result, with the same
@@ -327,8 +337,11 @@ scope*?"** — where the allowed scope is the delegate's dedicated worktree
   and can be tripped by unrelated activity in the window.
 - The known blind spots carry over and must be restated wherever the tripwire
   is described: it cannot see appends to existing ignored files, new files
-  inside already-ignored directories, or writes outside any git worktree
-  (`~/.ssh`, `~/.aws/credentials`, …). For those, the enforcement is the
+  inside already-ignored directories, writes outside any git worktree
+  (`~/.ssh`, `~/.aws/credentials`, …), or writes to the shared `.git`
+  internals **other than `hooks/` and `config`** (the object/ref store,
+  `index`, …) — those two are covered per the bullet above, but `objects/`,
+  `refs/`, and the rest are not. For those, the enforcement is the
   wrapper's filesystem jail (boundary 2); the tripwire is a cheap post-hoc
   check that the jail and the delegate's harness behaved, nothing more.
 - At `consult`, the tripwire degenerates to exactly today's behavior: the
@@ -374,7 +387,7 @@ oversold anywhere the feature is documented.
 | 5 | **Env-var proxying (`HTTPS_PROXY`) is advisory only.** A process can ignore it. Never load-bearing: the OS-level egress block is what makes the proxy mandatory. | Enforced by design — the jail blocks direct egress; the proxy is the only door. |
 | 6 | **Antigravity sandbox bypass via flag combo:** `--sandbox` + `--dangerously-skip-permissions` auto-approves the bypass prompt ([antigravity-cli#36](https://github.com/google-antigravity/antigravity-cli/issues/36)). | Forbidden: the delegate launcher must never emit that combination (Decision 3 note). |
 | 7 | **Reads reach the provider at every tier.** No sandbox stops the model from transmitting what it can read. | Accepted and documented (outbound exposure). Known credential paths are blocked by the required `denyRead` list (Decision 5); everything else readable in-jail reaches the provider — bounded only by user guidance. |
-| 8 | **The tripwire is detection, not prevention**, with known blind spots (ignored-file appends, nested ignored paths, out-of-worktree writes). | Accepted; prevention is the wrapper jail — the tripwire only verifies after the fact. |
+| 8 | **The tripwire is detection, not prevention**, with known blind spots (ignored-file appends, nested ignored paths, out-of-worktree writes, and shared `.git` internals *other than* `hooks/`/`config` — objects, refs, index, … — which stay uncovered now that `hooks/` and `config` are checked). | Accepted; prevention is the wrapper jail — the tripwire only verifies after the fact. Its own before/after snapshot state is kept in `denyWrite`, outside the delegate's writable scope, so it cannot be regenerated to erase evidence. |
 | 9 | **`srt` is pre-1.0.** API/config churn and its own bugs are possible. | Mitigated: exact-version pin, deliberate reviewed bumps, fail-closed on absence. |
 | 10 | **Subscription-quota exhaustion by parallel Claude delegates.** | Mitigated: budget caps, shared-bucket documentation, external-CLI providers for fan-out. |
 
