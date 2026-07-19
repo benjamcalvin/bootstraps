@@ -743,6 +743,151 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 echo ""
+echo "=== act-full tier (issue #77 PR 4) ==="
+echo ""
+# act-full is the highest-blast-radius tier: unrestricted write/terminal/network
+# with the srt wrapper intentionally OFF (ADR-001 Decision 3/6). It is granted
+# ONLY by two independent affirmative signals on the same invocation — the tier
+# AND --i-approve-full-access (Decision 4) — and defaults into a dedicated
+# worktree, leaving the primary tree only via the distinct --primary-tree opt-out
+# (Decision 8). These tests use the passthrough stubs (real jail behaviour needs
+# real srt, but at act-full the wrapper is off anyway, so what matters here — the
+# gate, the flags emitted, the worktree default, the tripwire, and the loud
+# surfacing — is all CI-checkable).
+
+# --- The gate: act-full needs BOTH the tier AND the approval flag (Decision 4) ---
+
+# (1) act-full WITHOUT the approval flag is refused, exit 1 (regression: the
+# placeholder refusal is now a real gate, but the refusal contract is unchanged).
+expect_exit 1 "act-full without approval -> refused" "" -- --tier act-full codex "$PROMPT"
+
+# The refusal must be actionable: name the tier, its approval requirement, the
+# concrete approval flag, and cite the ADR — never a silent downgrade.
+err="$(run_stderr "" -- --tier act-full codex "$PROMPT")"
+echo "$err" | grep -q "act-full" && echo "$err" | grep -qi "approval" \
+  && pass || fail "act-full refusal should name the tier and its approval requirement (got: $err)"
+echo "$err" | grep -q -- "--i-approve-full-access" && pass || fail "act-full refusal should name the concrete approval flag (got: $err)"
+echo "$err" | grep -qi "ADR-001 Decision 4" && pass || fail "act-full refusal should cite the ADR (got: $err)"
+
+# The approval flag WITHOUT the tier must NOT escalate: it stays consult (a safe
+# downgrade is fine; a silent UPgrade is the risk the gate prevents). Uses the
+# codex happy-path stub through real srt; must behave exactly like consult.
+out="$(PATH="$STUB_CODEX_OK:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --i-approve-full-access codex "$PROMPT" 2>/dev/null)"; rc=$?
+if [ "$rc" -eq 0 ] && [ "$out" = "CODEX REVIEW OK" ]; then pass; else fail "the approval flag without --tier act-full must run as consult, not escalate (rc=$rc, got: $out)"; fi
+if echo "$out" | grep -q "ACT-FULL"; then fail "approval flag alone must not produce act-full output"; else pass; fi
+
+# act-full without approval must refuse BEFORE invoking any provider.
+rm -f "$WORK/invoked-marker"
+PATH="$STUB_MARKER:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-full codex "$PROMPT" >/dev/null 2>&1
+if [ ! -f "$WORK/invoked-marker" ]; then pass; else fail "refused act-full (no approval) must not invoke the provider CLI"; fi
+
+# --- act-full granted: worktree by default, wrapper off, loud surfacing ---
+
+# act-full default (no --primary-tree): writes land in the isolated worktree, the
+# source repo stays clean, the widened posture is surfaced loudly on both streams.
+REPO_AF="$WORK/repo-af"
+make_git_repo "$REPO_AF"
+af_err="$WORK/af.err"
+out="$(cd "$REPO_AF" && PATH="$STUB_CODEX_WT:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-full --i-approve-full-access codex "$PROMPT" 2>"$af_err")"; rc=$?
+if [ "$rc" -eq 0 ]; then pass; else fail "granted act-full should run and exit 0 (rc=$rc, stderr: $(cat "$af_err"))"; fi
+echo "$out" | grep -q "CODEX ACTED" && pass || fail "act-full should print the delegate message (got: $out)"
+echo "$out" | grep -q "ACT-FULL-WRAPPER-OFF" && pass || fail "act-full must surface the wrapper-off posture loudly on stdout (got: $out)"
+grep -qi "FULL ACCESS" "$af_err" && pass || fail "act-full must surface full-access loudly on stderr at invocation (got: $(cat "$af_err"))"
+# Worktree by default: the delegate's write lands in the worktree, NOT the source.
+echo "$out" | grep -q "isolated worktree write scope" && pass || fail "act-full should default into a worktree and emit the worktree-changes section (got: $out)"
+echo "$out" | grep -q "delegate-artifact.txt" && pass || fail "act-full should surface the worktree write delegate-artifact.txt (got: $out)"
+if [ -f "$REPO_AF/delegate-artifact.txt" ]; then fail "act-full default write leaked into the source repo tree"; else pass; fi
+if [ -z "$(git -C "$REPO_AF" status --porcelain)" ]; then pass; else fail "act-full default must leave the source repo tree clean (got: $(git -C "$REPO_AF" status --porcelain))"; fi
+# An in-scope worktree write must NOT trip the tripwire.
+if echo "$out" | grep -q "WRITE-SCOPE-TRIPWIRE"; then fail "an in-scope act-full worktree write must NOT trip the tripwire (got: $out)"; else pass; fi
+# --primary-tree is NOT set, so the forfeit marker must be absent.
+if echo "$out" | grep -q "ACT-FULL-PRIMARY-TREE"; then fail "act-full default (worktree) must not emit the primary-tree forfeit marker"; else pass; fi
+
+# --- act-full srt-off posture: srt is NOT required and NOT invoked (Decision 6) ---
+# (a) srt entirely absent from PATH: an approved act-full run STILL succeeds
+# (fail-closed does NOT govern act-full — the wrapper is off by design). Contrast
+# with consult, which exits 2 without srt.
+REPO_AF_NOSRT="$WORK/repo-af-nosrt"
+make_git_repo "$REPO_AF_NOSRT"
+out="$(cd "$REPO_AF_NOSRT" && PATH="$STUB_CODEX_WT:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-full --i-approve-full-access codex "$PROMPT" 2>/dev/null)"; rc=$?
+if [ "$rc" -eq 0 ] && echo "$out" | grep -q "CODEX ACTED"; then pass; else fail "an approved act-full run must NOT be blocked by srt's absence (rc=$rc, got: $out)"; fi
+# (b) srt present but must NOT be invoked at act-full: a capturing srt stub that
+# copies the settings file must NOT fire (no settings file produced).
+REPO_AF_CAP="$WORK/repo-af-cap"
+make_git_repo "$REPO_AF_CAP"
+rm -f "$CAPTURED"
+(cd "$REPO_AF_CAP" && PATH="$STUB_CODEX_WT:$STUB_SRT_CAP:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-full --i-approve-full-access codex "$PROMPT") >/dev/null 2>&1
+if [ -f "$CAPTURED" ]; then fail "act-full must NOT invoke srt (the wrapper is off) — but the srt stub captured a settings file"; else pass; fi
+
+# --- act-full codex posture: --sandbox danger-full-access (Decision 3) ---
+REPO_AF_CX="$WORK/repo-af-cx"
+make_git_repo "$REPO_AF_CX"
+out="$(cd "$REPO_AF_CX" && PATH="$STUB_CODEX_WT_ECHO:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-full --i-approve-full-access codex "$PROMPT" 2>/dev/null)"
+echo "$out" | grep -qx -- 'danger-full-access' && pass || fail "act-full codex must use --sandbox danger-full-access (got: $out)"
+if echo "$out" | grep -qx -- 'read-only'; then fail "act-full codex must not stay --sandbox read-only (got: $out)"; else pass; fi
+
+# --- act-full agy posture: UNSANDBOXED, forbidden combo impossible (Decision 3) ---
+# agy is unsandboxed at act-full: --sandbox is DROPPED, --mode accept-edits stays,
+# and --dangerously-skip-permissions is NEVER emitted (the forbidden combo must be
+# structurally impossible at every tier).
+REPO_AF_AGY="$WORK/repo-af-agy"
+make_git_repo "$REPO_AF_AGY"
+out="$(cd "$REPO_AF_AGY" && PATH="$STUB_AGY_WT_ECHO:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-full --i-approve-full-access antigravity "$PROMPT" 2>/dev/null)"
+if echo "$out" | grep -qx -- '--sandbox'; then fail "act-full agy must be UNSANDBOXED (--sandbox must be dropped) (got: $out)"; else pass; fi
+echo "$out" | grep -qx -- 'accept-edits' && pass || fail "act-full agy should pass --mode accept-edits so it can write non-interactively (got: $out)"
+if echo "$out" | grep -qx -- '--dangerously-skip-permissions'; then fail "act-full agy must NEVER emit --dangerously-skip-permissions (forbidden combo)"; else pass; fi
+
+# --- act-full worktree-default tripwire: an out-of-scope write trips loudly ---
+# The write-scope tripwire still runs at act-full (worktree default). A delegate
+# that writes into the source repo tree (outside the worktree) must trip it —
+# proving any primary-tree delta is still a loud signal at the highest tier.
+REPO_AF_TRIP="$WORK/repo-af-trip"
+make_git_repo "$REPO_AF_TRIP"
+STUB_CODEX_AF_ESCAPE="$WORK/bin-codex-af-escape"
+make_stub "$STUB_CODEX_AF_ESCAPE" codex \
+  'prev=; out=' \
+  'for a in "$@"; do if [ "$prev" = "--output-last-message" ]; then out="$a"; fi; prev="$a"; done' \
+  'printf "CODEX AF ESCAPED\n" > "$out"' \
+  "printf 'escaped\n' > '$REPO_AF_TRIP/af-escaped.txt'" \
+  'exit 0'
+af_trip_err="$WORK/af-trip.err"
+out="$(cd "$REPO_AF_TRIP" && PATH="$STUB_CODEX_AF_ESCAPE:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-full --i-approve-full-access codex "$PROMPT" 2>"$af_trip_err")"
+echo "$out" | grep -q "WRITE-SCOPE-TRIPWIRE" && pass || fail "an out-of-scope write at act-full (worktree default) must trip the tripwire on stdout (got: $out)"
+grep -qi "TRIPWIRE TRIPPED" "$af_trip_err" && pass || fail "the act-full tripwire trip must be loud on stderr (got: $(cat "$af_trip_err"))"
+
+# --- act-full --primary-tree opt-out: runs in the primary tree, forfeits attribution ---
+# The distinct opt-out flag (Decision 8) runs the delegate in the primary tree
+# (no worktree), and MUST surface the forfeited attribution loudly. The delegate
+# write lands directly in the primary tree here (the opt-out's whole point).
+REPO_AF_PT="$WORK/repo-af-pt"
+make_git_repo "$REPO_AF_PT"
+pt_err="$WORK/pt.err"
+out="$(cd "$REPO_AF_PT" && PATH="$STUB_CODEX_WT:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-full --i-approve-full-access --primary-tree codex "$PROMPT" 2>"$pt_err")"; rc=$?
+if [ "$rc" -eq 0 ]; then pass; else fail "act-full --primary-tree should run and exit 0 (rc=$rc, stderr: $(cat "$pt_err"))"; fi
+echo "$out" | grep -q "ACT-FULL-PRIMARY-TREE" && pass || fail "act-full --primary-tree must surface the forfeited attribution loudly on stdout (got: $out)"
+grep -qi "FORFEIT" "$pt_err" && pass || fail "act-full --primary-tree must surface the forfeited attribution loudly on stderr (got: $(cat "$pt_err"))"
+# No isolated worktree is created (opt-out), so the delegate's write lands in the
+# primary tree and no worktree registration is left behind.
+if [ -f "$REPO_AF_PT/delegate-artifact.txt" ]; then pass; else fail "act-full --primary-tree delegate write should land in the primary tree (opt-out chosen)"; fi
+if [ "$(worktree_count "$REPO_AF_PT")" -eq 1 ]; then pass; else fail "act-full --primary-tree must NOT create an isolated worktree (got: $(git -C "$REPO_AF_PT" worktree list))"; fi
+# In --primary-tree mode there is no clean worktree section / tripwire attribution.
+if echo "$out" | grep -q "isolated worktree write scope"; then fail "act-full --primary-tree must not emit the isolated-worktree section"; else pass; fi
+
+# --- act-full cleanup: worktree + run dir removed on the happy path ---
+REPO_AF_CLEAN="$WORK/repo-af-clean"
+make_git_repo "$REPO_AF_CLEAN"
+(cd "$REPO_AF_CLEAN" && PATH="$STUB_CODEX_WT:$STUB_SRT_OK:$REAL_PATH" TMPDIR="$TDIR" "$BASH_BIN" "$CONSULT" --tier act-full --i-approve-full-access codex "$PROMPT") >/dev/null 2>&1
+if [ "$(leftovers)" -eq 0 ]; then pass; else fail "act-full happy path left run/worktree dirs behind: $(ls "$TDIR")"; fi
+if [ "$(worktree_count "$REPO_AF_CLEAN")" -eq 1 ]; then pass; else fail "act-full happy path left a dangling worktree registration: $(git -C "$REPO_AF_CLEAN" worktree list)"; fi
+
+# --- act-full default requires a git repo (worktree default); suggests --primary-tree ---
+rc=0
+(cd "$NONREPO" && PATH="$STUB_CODEX_WT:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-full --i-approve-full-access codex "$PROMPT") >/dev/null 2>&1 || rc=$?
+if [ "$rc" -eq 1 ]; then pass; else fail "act-full default outside a git repo must exit 1 (got: $rc)"; fi
+err="$(cd "$NONREPO" && PATH="$STUB_CODEX_WT:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-full --i-approve-full-access codex "$PROMPT" 2>&1 >/dev/null)"
+echo "$err" | grep -q -- "--primary-tree" && pass || fail "act-full-outside-repo refusal should point at --primary-tree (got: $err)"
+
+echo ""
 echo "Results: $PASS passed, $FAIL failed ($(( PASS + FAIL )) total)"
 
 if [ "$FAIL" -gt 0 ]; then

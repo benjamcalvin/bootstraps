@@ -144,13 +144,21 @@ Notes:
 - **No code path silently escalates.** A caller requests a higher tier
   explicitly per invocation. `act-sandboxed` is opt-in via the tier
   parameter. `act-full` additionally requires an **explicit per-invocation
-  approval** (a distinct affirmative signal beyond selecting the tier —
-  concrete mechanism, e.g. a `--i-approve-full-access`-style flag plus
-  surfaced confirmation, finalized in PR 4). Requesting `act-full` without
-  that approval is **refused with an actionable error**, never downgraded
-  silently and never granted silently.
+  approval** — a distinct affirmative signal beyond selecting the tier.
+  **Finalized in PR 4:** the approval is the `--i-approve-full-access` flag,
+  which must be passed on the **same invocation** as `--tier act-full`. Tier
+  and flag together — two independent affirmative signals — are what grant
+  `act-full`; either alone does not. Requesting `act-full` without the
+  approval flag is **refused with an actionable error** (naming the tier, the
+  approval flag, and citing this decision), never downgraded silently and
+  never granted silently. The approval flag on its own — without
+  `--tier act-full` — does not escalate: the run stays at whatever tier was
+  selected (`consult` by default). The widened posture is surfaced loudly on
+  stderr at invocation and in the result on stdout.
 - Tier grants do not persist: approval for one invocation confers nothing on
-  the next. There is no configuration that makes `act-full` a default.
+  the next. The `--i-approve-full-access` flag is per-invocation only; there
+  is no configuration, environment variable, or state file that makes
+  `act-full` a default.
 
 ## Decision 5 (decided, maintainer): pin-and-adopt Anthropic `sandbox-runtime` as the single external wrapper
 
@@ -356,8 +364,14 @@ scope*?"** — where the allowed scope is the delegate's dedicated worktree
   before/after scope clean at the highest-blast-radius tier: expected work
   lands in the delegate's worktree, and any primary-tree delta is still a
   loud signal. The caller can opt out into the primary tree only with a
-  second explicit flag; doing so forfeits that attribution and the opt-out is
-  surfaced loudly in the result.
+  distinct explicit flag — **finalized in PR 4 as `--primary-tree`** (separate
+  from the `--i-approve-full-access` approval flag, so leaving the worktree is
+  its own deliberate third signal); doing so forfeits that attribution and the
+  opt-out is surfaced loudly in the result (a `ACT-FULL-PRIMARY-TREE` marker on
+  stdout and a banner on stderr). When `act-full` runs in the default worktree,
+  the write-scope tripwire runs exactly as it does at `act-sandboxed`, even
+  though the `srt` wrapper is off — the tripwire is post-hoc detection and does
+  not depend on the jail.
 
 ## Quota and billing exhaustion
 
@@ -408,9 +422,13 @@ oversold anywhere the feature is documented.
    environment-scrubbing launcher requirement (least-privilege pass-down).
 2. **PR 3 — `act-sandboxed` + write-scope tripwire.** Worktree isolation,
    wrapper write-allowlist, generalized tripwire (Decision 8).
-3. **PR 4 — `act-full` gate + trust handling.** Per-invocation approval gate
-   (Decision 4), refusal path, and codified output-as-data / least-privilege
-   pass-down rules in the orchestrating skill.
+3. **PR 4 — `act-full` gate + trust handling (landed).** Per-invocation
+   approval gate (Decision 4) via `--i-approve-full-access`, the refusal path,
+   the wrapper-off posture (codex `--sandbox danger-full-access`, agy
+   unsandboxed, Claude `bypassPermissions`), worktree-by-default with the
+   `--primary-tree` opt-out (Decision 8), the write-scope tripwire running at
+   `act-full`, loud surfacing of the widened posture, and the codified
+   output-as-data / least-privilege pass-down rules in the orchestrating skill.
 
 Strictly sequential: each PR's security posture depends on the boundary the
 prior one established.
