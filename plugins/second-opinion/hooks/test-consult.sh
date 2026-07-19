@@ -887,6 +887,62 @@ if [ "$rc" -eq 1 ]; then pass; else fail "act-full default outside a git repo mu
 err="$(cd "$NONREPO" && PATH="$STUB_CODEX_WT:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-full --i-approve-full-access codex "$PROMPT" 2>&1 >/dev/null)"
 echo "$err" | grep -q -- "--primary-tree" && pass || fail "act-full-outside-repo refusal should point at --primary-tree (got: $err)"
 
+# --- Round-1 finding 1: gate flags AFTER the positionals are refused, NOT ------
+# silently downgraded to consult. The option-parse loop stops at the FIRST
+# non-flag token (the provider), so a misplaced gate flag lands as an unconsumed
+# trailing argument; accepting it silently would run an intended act-full request
+# at read-only consult, violating the "escalation is never silent / never
+# downgraded to consult" invariant (ADR-001 Decision 4).
+echo ""
+echo "=== round-1 finding 1: trailing gate flags refused (no silent downgrade) ==="
+# Empty PATH is fine: the trailing-arg check refuses before any provider/srt run.
+expect_exit 1 "trailing --tier after provider -> refused"                  "" -- codex "$PROMPT" --tier act-full
+expect_exit 1 "trailing --tier+approval after provider -> refused"         "" -- codex "$PROMPT" --tier act-full --i-approve-full-access
+expect_exit 1 "trailing --i-approve-full-access after provider -> refused" "" -- codex "$PROMPT" --i-approve-full-access
+expect_exit 1 "trailing --primary-tree after provider -> refused"          "" -- codex "$PROMPT" --primary-tree
+err="$(run_stderr "" -- codex "$PROMPT" --tier act-full --i-approve-full-access)"
+echo "$err" | grep -qi "trailing" && pass || fail "trailing-arg refusal should name the trailing arguments (got: $err)"
+echo "$err" | grep -q -- "--tier" && echo "$err" | grep -qi "before the provider" \
+  && pass || fail "trailing-arg refusal should say gate flags must come BEFORE the provider (got: $err)"
+echo "$err" | grep -qi "ADR-001 Decision 4" && pass || fail "trailing-arg refusal should cite the no-silent-downgrade decision (got: $err)"
+# The misplaced-flag run must NOT silently produce a successful consult result.
+out="$(run_stdout "$STUB_CODEX_OK:$STUB_SRT_OK:$REAL_PATH" -- codex "$PROMPT" --tier act-full --i-approve-full-access)"
+if [ -z "$out" ]; then pass; else fail "misplaced gate flags must be refused, not silently downgraded to a consult result (got: $out)"; fi
+
+# --- Round-1 finding 2: at act-full the write-scope tripwire is best-effort, ---
+# not tamper-proof (wrapper off => no jail protecting its snapshot store). The
+# widened banner must say so loudly on BOTH streams so worktree-default users do
+# not over-trust a silent tripwire as proof nothing escaped.
+echo ""
+echo "=== round-1 finding 2: act-full tripwire best-effort caveat surfaced ==="
+REPO_AF_TAMPER="$WORK/repo-af-tamper"
+make_git_repo "$REPO_AF_TAMPER"
+aft_err="$WORK/af-tamper.err"
+out="$(cd "$REPO_AF_TAMPER" && PATH="$STUB_CODEX_WT:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-full --i-approve-full-access codex "$PROMPT" 2>"$aft_err")"
+echo "$out" | grep -q "ACT-FULL-TRIPWIRE-BEST-EFFORT" && pass || fail "act-full (worktree default) must surface the best-effort tripwire caveat on stdout (got: $out)"
+echo "$out" | grep -qi "not tamper-proof" && pass || fail "act-full best-effort caveat should state the tripwire is not tamper-proof (got: $out)"
+grep -qi "best-effort" "$aft_err" && pass || fail "act-full must surface the best-effort tripwire caveat loudly on stderr (got: $(cat "$aft_err"))"
+
+# --- Round-1 finding 4: flags with NO EFFECT at the selected tier warn loudly --
+# (no silent, invisible flags). --primary-tree only means something at act-full;
+# --i-approve-full-access never escalates on its own.
+echo ""
+echo "=== round-1 finding 4: no-effect flags warn at the wrong tier ==="
+# --primary-tree at consult (default tier): loud no-op warning, run still succeeds.
+err="$(run_stderr "$STUB_CODEX_OK:$STUB_SRT_OK:$REAL_PATH" -- --primary-tree codex "$PROMPT")"
+echo "$err" | grep -qi -- "--primary-tree" && echo "$err" | grep -qi "no effect" \
+  && pass || fail "--primary-tree at consult should warn it has no effect (got: $err)"
+# --primary-tree at act-sandboxed: same loud no-op warning.
+REPO_PT_WARN="$WORK/repo-pt-warn"
+make_git_repo "$REPO_PT_WARN"
+err="$(cd "$REPO_PT_WARN" && PATH="$STUB_CODEX_WT:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --primary-tree --tier act-sandboxed codex "$PROMPT" 2>&1 >/dev/null)"
+echo "$err" | grep -qi -- "--primary-tree" && echo "$err" | grep -qi "no effect" \
+  && pass || fail "--primary-tree at act-sandboxed should warn it has no effect (got: $err)"
+# --i-approve-full-access without --tier act-full: loud no-op warning, no escalation.
+err="$(run_stderr "$STUB_CODEX_OK:$STUB_SRT_OK:$REAL_PATH" -- --i-approve-full-access codex "$PROMPT")"
+echo "$err" | grep -qi -- "--i-approve-full-access" && echo "$err" | grep -qi "no effect" \
+  && pass || fail "--i-approve-full-access without act-full should warn it has no effect (got: $err)"
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed ($(( PASS + FAIL )) total)"
 

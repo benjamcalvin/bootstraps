@@ -583,13 +583,26 @@ setup_worktree() {
   SANDBOX_CWD="$WORKTREE"
 }
 
-# setup_tripwire_state — allocate the tamper-resistant store for the write-scope
-# tripwire's before/after snapshots. It lives in its OWN mktemp dir, NOT under
-# $RUN_TMP and deliberately NOT in the srt write-allowlist (and additionally
-# listed in denyWrite), so a delegate — whose cwd and writable scope are the
-# worktree under $RUN_TMP — cannot overwrite the before-snapshots to erase
-# evidence of an out-of-scope write. Doing that would require a jail escape to an
-# arbitrary path, i.e. at least the privilege the tripwire exists to catch.
+# setup_tripwire_state — allocate the store for the write-scope tripwire's
+# before/after snapshots. It lives in its OWN mktemp dir, NOT under $RUN_TMP and
+# deliberately NOT in the srt write-allowlist (and additionally listed in
+# denyWrite when the wrapper is on).
+#
+# Tamper-resistance is TIER-DEPENDENT — do not overstate it:
+#   act-sandboxed — TAMPER-RESISTANT. The srt jail is ON: the delegate's writable
+#     scope is the worktree under $RUN_TMP and this store is denied, so
+#     overwriting the before-snapshots to erase evidence would require a jail
+#     escape to an arbitrary path — i.e. at least the privilege the tripwire
+#     exists to catch.
+#   act-full — BEST-EFFORT DETECTION ONLY. WRAPPER_OFF=1 means write_srt_settings
+#     is skipped, so no srt jail / denyWrite is ever generated and the delegate
+#     runs unsandboxed with unrestricted write access (ADR-001 Decision 3). It
+#     can trivially discover this store (an mktemp dir under $TMPDIR, readable
+#     and listable) and overwrite the snapshots — NO jail escape needed, it
+#     already holds the arbitrary-write privilege the guarantee above assumed
+#     absent. Genuine tamper-resistance is impossible at act-full (same-user, no
+#     jail); the tripwire is a courtesy signal, not tamper-proof, and this is
+#     surfaced loudly in the act-full banner (announce_act_full/report_act_full).
 # Torn down by cleanup() on every exit path.
 setup_tripwire_state() {
   TRIPWIRE_TMP=$(mktemp -d -t second-opinion-tripwire.XXXXXX)
@@ -770,6 +783,7 @@ announce_act_full() {
     log "--primary-tree: running in the PRIMARY working tree (no isolated worktree). Write-scope tripwire ATTRIBUTION IS FORFEITED — the delegate's edits land directly in your tree and cannot be bracketed. Review the full working-tree diff as an external PR before trusting or integrating it."
   else
     log "writes default into a dedicated isolated worktree (ADR-001 Decision 8); any change OUTSIDE it (primary tree, sibling worktrees, or shared .git hooks/config) is still surfaced as a loud write-scope tripwire signal."
+    log "CAVEAT: with the wrapper off, that tripwire is BEST-EFFORT detection, NOT tamper-proof — a full-access delegate can overwrite the tripwire's own snapshots to erase evidence (unlike act-sandboxed, where the jail makes it tamper-resistant). Treat a silent tripwire as a courtesy signal, not proof nothing escaped."
   fi
 }
 
@@ -789,6 +803,7 @@ report_act_full() {
   else
     echo "===== act-full: FULL ACCESS (wrapper off), writes defaulted into an isolated worktree ====="
     echo "ACT-FULL-WRAPPER-OFF: ran UNSANDBOXED with unrestricted write/terminal/network, approved via --i-approve-full-access (ADR-001 Decision 3/6). Expected work lands in the isolated worktree below; any delta OUTSIDE it is a loud write-scope tripwire signal."
+    echo "ACT-FULL-TRIPWIRE-BEST-EFFORT: with the wrapper off, the write-scope tripwire below is BEST-EFFORT detection, NOT tamper-proof — a full-access delegate could overwrite the tripwire's own snapshots to hide an out-of-scope write (no jail escape needed; unlike act-sandboxed, nothing enforces the store's integrity). It is a courtesy signal, not proof of containment (ADR-001 Decision 8)."
     echo "===== end act-full banner ====="
     report_act_sandboxed
   fi
@@ -868,6 +883,36 @@ main() {
   esac
   [ -n "$prompt_file" ] || usage
   [ -f "$prompt_file" ] || { log "prompt file not found: $prompt_file"; exit 1; }
+
+  # Reject any argument AFTER the provider + prompt file. The option-parse loop
+  # above stops at the FIRST non-flag token (the provider: `*) break`), so gate
+  # flags placed after the provider are never parsed as options — they arrive
+  # here as unconsumed trailing positionals. Silently ignoring them would drop
+  # the requested tier/approval and run at the default `consult`, violating the
+  # "escalation is never silent … never downgraded to consult" invariant
+  # (ADR-001 Decision 4). Refuse loudly instead of downgrading silently.
+  if [ "$#" -gt 2 ]; then
+    shift 2
+    log "unexpected trailing argument(s) after the provider and prompt file: $*"
+    log "gate flags (--tier, --i-approve-full-access, --primary-tree) MUST come BEFORE the provider; placed after it they are not parsed and would be silently dropped."
+    log "refusing rather than silently running at a lower tier (ADR-001 Decision 4). Correct order: consult.sh [--tier <tier>] [--i-approve-full-access] [--primary-tree] <provider> <prompt-file>"
+    exit 1
+  fi
+
+  # Loud-surface any gate flag that has NO EFFECT at the selected tier (no
+  # silent, invisible flags — the same loud-posture philosophy as ADR-001
+  # Decisions 4/7). --primary-tree only opts out of the isolated worktree at
+  # act-full (Decision 8); --i-approve-full-access is the second approval signal
+  # for act-full only and never escalates on its own (Decision 4). Warn (not
+  # refuse) so existing valid invocations are never broken. The act-full gate
+  # above already exited if act-full was requested without approval, so an
+  # APPROVE_FULL=1 that reaches here necessarily sits at a non-act-full tier.
+  if [ "$PRIMARY_TREE_OPTOUT" -eq 1 ] && [ "$TIER" != "act-full" ]; then
+    log "warning: --primary-tree has NO EFFECT at tier '$TIER' — it only opts out of the isolated worktree at act-full (ADR-001 Decision 8). Ignoring it."
+  fi
+  if [ "$APPROVE_FULL" -eq 1 ] && [ "$TIER" != "act-full" ]; then
+    log "warning: --i-approve-full-access has NO EFFECT at tier '$TIER' — it is the second approval signal for act-full only and does NOT escalate the tier (ADR-001 Decision 4). Ignoring it."
+  fi
 
   # srt is a HARD, fail-closed prerequisite at consult/act-sandboxed (Decisions
   # 5-6). At act-full the wrapper is intentionally OFF (WRAPPER_OFF), so an

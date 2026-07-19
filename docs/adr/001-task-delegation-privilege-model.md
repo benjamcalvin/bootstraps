@@ -371,7 +371,18 @@ scope*?"** — where the allowed scope is the delegate's dedicated worktree
   stdout and a banner on stderr). When `act-full` runs in the default worktree,
   the write-scope tripwire runs exactly as it does at `act-sandboxed`, even
   though the `srt` wrapper is off — the tripwire is post-hoc detection and does
-  not depend on the jail.
+  not depend on the jail. **The tripwire's tamper-resistance, however, DOES
+  depend on the jail, and must not be oversold at `act-full`.** The
+  before/after snapshot store is tamper-resistant only while the wrapper is on
+  (`consult`, `act-sandboxed`): the jail keeps it in `denyWrite` and outside the
+  delegate's writable scope, so erasing evidence would require a jail escape. At
+  `act-full` the wrapper is off by design, no `denyWrite` is generated, and the
+  delegate holds unrestricted write, so it can discover and overwrite the
+  snapshots with no jail escape needed — genuine tamper-resistance is impossible
+  at this tier (same-user, no jail). At `act-full` the tripwire is therefore
+  **best-effort detection only, not tamper-proof** — a courtesy signal, surfaced
+  as such in the loud `act-full` banner so `--primary-tree`/worktree-default
+  users do not over-trust a silent tripwire as proof nothing escaped.
 
 ## Quota and billing exhaustion
 
@@ -405,7 +416,7 @@ oversold anywhere the feature is documented.
 | 5 | **Env-var proxying (`HTTPS_PROXY`) is advisory only.** A process can ignore it. Never load-bearing: the OS-level egress block is what makes the proxy mandatory. | Enforced by design — the jail blocks direct egress; the proxy is the only door. |
 | 6 | **Antigravity sandbox bypass via flag combo:** `--sandbox` + `--dangerously-skip-permissions` auto-approves the bypass prompt ([antigravity-cli#36](https://github.com/google-antigravity/antigravity-cli/issues/36)). | Forbidden: the delegate launcher must never emit that combination (Decision 3 note). |
 | 7 | **Reads reach the provider at every tier.** No sandbox stops the model from transmitting what it can read. | Accepted and documented (outbound exposure). Known credential paths are blocked by the required `denyRead` list (Decision 5); everything else readable in-jail reaches the provider — bounded only by user guidance. |
-| 8 | **The tripwire is detection, not prevention**, with known blind spots (ignored-file appends, nested ignored paths, out-of-worktree writes, and shared `.git` internals *other than* `hooks/`/`config` — objects, refs, index, … — which stay uncovered now that `hooks/` and `config` are checked). | Accepted; prevention is the wrapper jail — the tripwire only verifies after the fact. Its own before/after snapshot state is kept in `denyWrite`, outside the delegate's writable scope, so it cannot be regenerated to erase evidence. |
+| 8 | **The tripwire is detection, not prevention**, with known blind spots (ignored-file appends, nested ignored paths, out-of-worktree writes, and shared `.git` internals *other than* `hooks/`/`config` — objects, refs, index, … — which stay uncovered now that `hooks/` and `config` are checked). Its **tamper-resistance is also tier-dependent**: at `act-full` the wrapper is off, so a full-access delegate can overwrite the before/after snapshots with no jail escape. | Accepted; prevention is the wrapper jail — the tripwire only verifies after the fact. Its own before/after snapshot state is kept in `denyWrite`, outside the delegate's writable scope, so it cannot be regenerated to erase evidence **while the jail is on** (`consult`, `act-sandboxed`). At `act-full` (wrapper off) this tamper-resistance does not hold — the tripwire is **best-effort detection only** there, surfaced as such in the loud `act-full` banner, never sold as proof of containment. |
 | 9 | **`srt` is pre-1.0.** API/config churn and its own bugs are possible. | Mitigated: exact-version pin, deliberate reviewed bumps, fail-closed on absence. |
 | 10 | **Subscription-quota exhaustion by parallel Claude delegates.** | Mitigated: budget caps, shared-bucket documentation, external-CLI providers for fan-out. |
 
@@ -424,8 +435,10 @@ oversold anywhere the feature is documented.
    wrapper write-allowlist, generalized tripwire (Decision 8).
 3. **PR 4 — `act-full` gate + trust handling (landed).** Per-invocation
    approval gate (Decision 4) via `--i-approve-full-access`, the refusal path,
-   the wrapper-off posture (codex `--sandbox danger-full-access`, agy
-   unsandboxed, Claude `bypassPermissions`), worktree-by-default with the
+   the wrapper-off posture for the shipped providers (codex
+   `--sandbox danger-full-access`, agy unsandboxed — the Claude provider and its
+   `bypassPermissions` posture remain future/design work per Decision 1, not
+   delivered here), worktree-by-default with the
    `--primary-tree` opt-out (Decision 8), the write-scope tripwire running at
    `act-full`, loud surfacing of the widened posture, and the codified
    output-as-data / least-privilege pass-down rules in the orchestrating skill.

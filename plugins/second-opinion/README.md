@@ -146,7 +146,12 @@ Decision 4).
 > it (via `--i-approve-full-access`) for tasks you would run yourself with full
 > privileges, in trees you trust, with an untrusted-diff posture in mind. The
 > worktree default and the write-scope tripwire are convenience and detection,
-> **not** containment — containment is off at this tier by design.
+> **not** containment — containment is off at this tier by design. The tripwire
+> at `act-full` is also **best-effort, not tamper-proof**: with the wrapper off,
+> a full-access delegate can overwrite the tripwire's own before/after snapshots
+> to erase evidence (no jail escape needed), unlike `act-sandboxed` where the
+> jail keeps that store tamper-resistant. Treat a silent tripwire as a courtesy
+> signal, not proof nothing escaped.
 
 > **Provider write support (honest limits).** The `act-sandboxed` write path was
 > verified end-to-end against **real `srt` + a codex-shaped delegate**: in-scope
