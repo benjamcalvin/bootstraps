@@ -80,11 +80,49 @@ Providers are detected at runtime — install one or both:
 ### Privilege tiers
 
 `consult.sh` accepts `--tier <consult|act-sandboxed|act-full>` (ADR-001
-tier ladder). `consult` is the default and the only tier implemented today.
-Requesting `act-sandboxed` (planned: issue #77 PR 3) or `act-full` (planned:
-issue #77 PR 4, gated behind explicit per-invocation approval) is **refused
-with exit 1** — never silently downgraded to `consult`, never silently
-granted (ADR-001 Decision 4).
+tier ladder):
+
+- **`consult`** (default) — read-only review. No writes. This is the tier the
+  `/second-opinion` review skill uses.
+- **`act-sandboxed`** (opt-in, issue #77 PR 3) — read-write, but writes are
+  confined to an **isolated scope**: a dedicated detached git worktree of the
+  current repo, created under the run temp dir. The `srt` jail's write-allowlist
+  (worktree + run dir writable; the primary repo tree, the shared `.git`
+  object/ref store, `$HOME`, and credential paths denied) is the load-bearing
+  enforcement; codex additionally runs `--sandbox workspace-write` and
+  antigravity `--sandbox --mode accept-edits` as defense-in-depth. The worktree
+  scopes only the **writable** surface — it is not a read barrier: reads are
+  default-allow and reach the provider (ADR-001 risk #7). Two intentional
+  consequences: the worktree is checked out at the committed **HEAD**, so
+  **uncommitted** changes in the primary tree are not part of what the delegate
+  sees or acts on; and because the shared `.git` store is deliberately not
+  writable, the delegate produces **working-tree edits only** and cannot
+  `git commit`/index-write inside the worktree — the orchestrator reviews the
+  printed worktree diff and integrates it like an external PR. After the
+  delegate finishes, `consult.sh` prints that diff (the work product) and runs a
+  **write-scope tripwire**: it re-checks the primary tree, any sibling
+  worktrees, and the shared git dir's `hooks/`+`config` (a hook/config plant is
+  a code-exec vector otherwise invisible to `git status`), surfacing any escape
+  as a loud `WRITE-SCOPE-TRIPWIRE` line. The tripwire is post-hoc detection with
+  known blind spots (ignored-file appends, nested ignored paths, out-of-worktree
+  writes, non-hook/config `.git` internals) — the `srt` jail is the actual
+  enforcement. The worktree is torn down with the run dir on every exit path.
+  Requires being inside a git repository (exit 1 otherwise).
+- **`act-full`** (planned: issue #77 PR 4, gated behind explicit per-invocation
+  approval) — **refused with exit 1** today.
+
+No tier is ever silently downgraded to `consult` or silently granted (ADR-001
+Decision 4).
+
+> **Provider write support (honest limits).** The `act-sandboxed` write path was
+> verified end-to-end against **real `srt` + a codex-shaped delegate**: in-scope
+> worktree writes land in the worktree, and an out-of-scope write into the
+> source repo is blocked by the jail ("Operation not permitted"), leaving the
+> primary tree clean. Antigravity's non-interactive write behaviour under
+> `--sandbox --mode accept-edits` was **not** exercised against a real logged-in
+> `agy` here; the flags follow ADR-001 Decision 3, and the `srt` write-allowlist
+> is the enforcement regardless of provider, but if `agy` blocks or prompts on
+> edits in print mode, prefer codex for `act-sandboxed`.
 
 Exit codes: `0` success, `1` usage error or refused tier, `2` required
 component not installed (provider CLI, `srt`, or an srt platform dependency),
@@ -174,15 +212,16 @@ back to Codex.
 This plugin is generalizing into a privilege-tiered **task-delegation**
 primitive (issue
 [#77](https://github.com/benjamcalvin/bootstraps/issues/77)). The tier
-interface and the default read-only `consult` tier are implemented (this
-version); the opt-in `act-sandboxed` tier (writes confined to an isolated git
-worktree, issue #77 PR 3) and the gated `act-full` tier (explicit
-per-invocation approval, issue #77 PR 4) are not yet — requesting either is
-refused, never silently downgraded or escalated. The substrate choice, tier
-ladder, enforcement mechanisms, and honest limits are recorded in
-[ADR-001](../../docs/adr/001-task-delegation-privilege-model.md). Nothing in
-the current version acts on your repo; today's plugin is the `consult` tier
-only.
+interface and the default read-only `consult` tier (issue #77 PR 2) and the
+opt-in `act-sandboxed` tier — writes confined to an isolated git worktree,
+enforced by the `srt` write-allowlist and verified by the write-scope tripwire
+(issue #77 PR 3) — are implemented (this version). The gated `act-full` tier
+(explicit per-invocation approval, issue #77 PR 4) is **not** yet — requesting
+it is refused, never silently downgraded or escalated. The substrate choice,
+tier ladder, enforcement mechanisms, and honest limits are recorded in
+[ADR-001](../../docs/adr/001-task-delegation-privilege-model.md). The
+`/second-opinion` review skill uses only the read-only `consult` tier and does
+not act on your repo.
 
 ## Adding a provider
 
@@ -190,5 +229,12 @@ only.
 `PROVIDERS`, map it in `binary_for()`, add a tight provider-endpoint
 allowlist at `assets/allowlists/<provider>.txt`, and write a
 `run_<provider>()` that reads a prompt file, invokes the CLI through
-`run_srt` (never directly), and prints the review text to stdout. Keep it
-read-only.
+`run_srt` (never directly), and prints the delegate output to stdout. Select
+the sandbox/write mode by `$TIER`: read-only at `consult` (e.g.
+`codex --sandbox read-only`, `agy --sandbox`) and worktree-scoped write at
+`act-sandboxed` (e.g. `codex --sandbox workspace-write`,
+`agy --sandbox --mode accept-edits`, cwd = the worktree). The `srt`
+write-allowlist is the actual enforcement regardless of tier. Never pair
+`agy --sandbox` with `--dangerously-skip-permissions` — that combo
+auto-approves the sandbox-bypass prompt (ADR-001 Decision 3, forbidden at
+every tier).

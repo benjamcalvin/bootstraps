@@ -115,40 +115,36 @@ expect_exit 1 "missing prompt-file arg -> error" "" -- codex
 expect_exit 1 "nonexistent prompt file -> error" "" -- codex "$WORK/does-not-exist.md"
 expect_exit 1 "unknown option -> error"          "" -- --bogus codex "$PROMPT"
 
-# --- Tier interface: parsing errors and escalation refusal (exit 1) ---
+# --- Tier interface: parsing errors and act-full escalation refusal (exit 1) ---
+# act-sandboxed is now wired (issue #77 PR 3); act-full remains gated/refused.
 expect_exit 1 "unknown tier -> error"            "" -- --tier super-user codex "$PROMPT"
 expect_exit 1 "--tier without value -> error"    "" -- --tier
-expect_exit 1 "act-sandboxed tier -> refused"    "" -- --tier act-sandboxed codex "$PROMPT"
 expect_exit 1 "act-full tier -> refused"         "" -- --tier act-full codex "$PROMPT"
 
-# Refusal messages must be actionable: name the tier, say it is not
-# implemented/gated, and point at the working tier. No silent escalation and
-# no silent downgrade (ADR-001 Decision 4).
-err="$(run_stderr "" -- --tier act-sandboxed codex "$PROMPT")"
-echo "$err" | grep -q "act-sandboxed" && echo "$err" | grep -qi "not .*implemented" \
-  && pass || fail "act-sandboxed refusal should name the tier and say it is not implemented (got: $err)"
-echo "$err" | grep -q -- "--tier consult" && pass || fail "act-sandboxed refusal should point at the consult tier (got: $err)"
+# act-full refusal must be actionable: name the tier and its approval gate, and
+# point at the working tier. No silent escalation (ADR-001 Decision 4).
 err="$(run_stderr "" -- --tier act-full codex "$PROMPT")"
 echo "$err" | grep -q "act-full" && echo "$err" | grep -qi "approval" \
   && pass || fail "act-full refusal should name the tier and its approval gate (got: $err)"
+echo "$err" | grep -q -- "--tier consult" && pass || fail "act-full refusal should point at the consult tier (got: $err)"
 
-# Escalation refusal must happen before any provider invocation: a provider
-# stub that drops a marker file must never run.
+# act-full refusal must happen before any provider invocation: a provider stub
+# that drops a marker file must never run.
 STUB_MARKER="$WORK/bin-marker"
 make_stub "$STUB_MARKER" codex "touch $WORK/invoked-marker" "exit 0"
 PATH="$STUB_MARKER:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-full codex "$PROMPT" >/dev/null 2>&1
-if [ ! -f "$WORK/invoked-marker" ]; then pass; else fail "refused tier must not invoke the provider CLI"; fi
-PATH="$STUB_MARKER:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT" >/dev/null 2>&1
-if [ ! -f "$WORK/invoked-marker" ]; then pass; else fail "refused act-sandboxed must not invoke the provider CLI"; fi
+if [ ! -f "$WORK/invoked-marker" ]; then pass; else fail "refused act-full tier must not invoke the provider CLI"; fi
 
 # --- Fail-closed srt checks (ADR-001 Decisions 5-6) ---
 
 # srt missing entirely (provider IS present) -> exit 2, actionable message
-# naming the pinned version and the install command.
+# naming the pinned version and the install command. PATH is the codex stub dir
+# ONLY (no REAL_PATH), so a real srt installed on the host cannot leak in and
+# make the fail-closed check pass; the check fires before SCRIPT_DIR is used.
 STUB_CODEX_ONLY="$WORK/bin-codex-only"
 make_stub "$STUB_CODEX_ONLY" codex "exit 0"
-expect_exit 2 "srt not on PATH -> exit 2" "$STUB_CODEX_ONLY:$REAL_PATH" -- codex "$PROMPT"
-err="$(run_stderr "$STUB_CODEX_ONLY:$REAL_PATH" -- codex "$PROMPT")"
+expect_exit 2 "srt not on PATH -> exit 2" "$STUB_CODEX_ONLY" -- codex "$PROMPT"
+err="$(run_stderr "$STUB_CODEX_ONLY" -- codex "$PROMPT")"
 echo "$err" | grep -q "sandbox-runtime@0.0.66" && echo "$err" | grep -q "npm install" \
   && pass || fail "srt-missing error should name the pinned version and install command (got: $err)"
 
@@ -469,6 +465,282 @@ if [ "$(leftovers)" -eq 0 ]; then pass; else fail "provider-failure path left ru
 # srt-failure path (exit 3, preflight)
 PATH="$STUB_CODEX_OK0:$STUB_SRT_FAIL:$REAL_PATH" TMPDIR="$TDIR" "$BASH_BIN" "$CONSULT" codex "$PROMPT" >/dev/null 2>&1
 if [ "$(leftovers)" -eq 0 ]; then pass; else fail "srt-failure path left run dirs behind: $(ls "$TDIR")"; fi
+
+echo ""
+echo "=== act-sandboxed tier (issue #77 PR 3) ==="
+echo ""
+# These exercise the tier plumbing with the PASSTHROUGH srt stub: the srt jail's
+# real write enforcement needs real srt (verified manually against real
+# srt+codex — see the PR description). Here the stub lets us prove the launcher
+# creates the isolated worktree, points the delegate's cwd at it, emits the work
+# product, runs the write-scope tripwire, and cleans everything up.
+
+# make_git_repo <dir> — a throwaway git repo to act as the source tree the
+# delegate is confined away from.
+make_git_repo() {
+  local repo="$1"
+  mkdir -p "$repo"
+  git -C "$repo" init -q
+  git -C "$repo" config user.email test@example.com
+  git -C "$repo" config user.name "second-opinion test"
+  printf 'orig\n' > "$repo/tracked.txt"
+  git -C "$repo" add -A
+  git -C "$repo" commit -qm init >/dev/null 2>&1
+}
+
+# worktree_count <repo> — number of registered worktrees (1 == just the main
+# tree, i.e. no dangling act-sandboxed registration left behind).
+worktree_count() { git -C "$1" worktree list 2>/dev/null | grep -c . ; }
+
+# A codex stub that (1) writes the required --output-last-message file so
+# run_codex succeeds and (2) creates a NEW file in its cwd — which the launcher
+# sets to the worktree. Proves the delegate's writes land in the isolated scope.
+STUB_CODEX_WT="$WORK/bin-codex-wt"
+make_stub "$STUB_CODEX_WT" codex \
+  'prev=; out=' \
+  'for a in "$@"; do if [ "$prev" = "--output-last-message" ]; then out="$a"; fi; prev="$a"; done' \
+  'printf "CODEX ACTED\n" > "$out"' \
+  'printf "delegate wrote this\n" > delegate-artifact.txt' \
+  'exit 0'
+
+# act-sandboxed default: writes land in the worktree, NOT the source repo.
+REPO_WT="$WORK/repo-wt"
+make_git_repo "$REPO_WT"
+out="$(cd "$REPO_WT" && PATH="$STUB_CODEX_WT:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT" 2>/dev/null)"
+echo "$out" | grep -q "CODEX ACTED" && pass || fail "act-sandboxed should still print the delegate message (got: $out)"
+echo "$out" | grep -q "isolated worktree write scope" && pass || fail "act-sandboxed should emit the worktree-changes section (got: $out)"
+echo "$out" | grep -q "delegate-artifact.txt" && pass || fail "act-sandboxed should surface the worktree write delegate-artifact.txt (got: $out)"
+# The write must NOT have leaked into the source repo tree.
+if [ -f "$REPO_WT/delegate-artifact.txt" ]; then fail "act-sandboxed write leaked into the source repo tree"; else pass; fi
+if [ -z "$(git -C "$REPO_WT" status --porcelain)" ]; then pass; else fail "source repo tree must stay clean after act-sandboxed run (got: $(git -C "$REPO_WT" status --porcelain))"; fi
+# An in-scope write must NOT trip the write-scope tripwire.
+if echo "$out" | grep -q "WRITE-SCOPE-TRIPWIRE"; then fail "an in-scope worktree write must NOT trip the tripwire (got: $out)"; else pass; fi
+
+# act-sandboxed wires codex write capability: --sandbox workspace-write, not
+# read-only. The stub echoes its argv into the message file (one per line).
+STUB_CODEX_WT_ECHO="$WORK/bin-codex-wt-echo"
+make_stub "$STUB_CODEX_WT_ECHO" codex \
+  'prev=; out=' \
+  'for a in "$@"; do if [ "$prev" = "--output-last-message" ]; then out="$a"; fi; prev="$a"; done' \
+  'for a in "$@"; do printf "%s\n" "$a"; done > "$out"' \
+  'exit 0'
+REPO_WT2="$WORK/repo-wt2"
+make_git_repo "$REPO_WT2"
+out="$(cd "$REPO_WT2" && PATH="$STUB_CODEX_WT_ECHO:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT" 2>/dev/null)"
+echo "$out" | grep -qx -- 'workspace-write' && pass || fail "act-sandboxed codex must use --sandbox workspace-write (got: $out)"
+if echo "$out" | grep -qx -- 'read-only'; then fail "act-sandboxed codex must not stay --sandbox read-only (got: $out)"; else pass; fi
+
+# act-sandboxed wires agy write capability: --mode accept-edits plus --sandbox
+# (never --dangerously-skip-permissions, ADR-001 Decision 3 forbidden combo).
+STUB_AGY_WT_ECHO="$WORK/bin-agy-wt-echo"
+make_stub "$STUB_AGY_WT_ECHO" agy 'for a in "$@"; do printf "%s\n" "$a"; done'
+REPO_WT3="$WORK/repo-wt3"
+make_git_repo "$REPO_WT3"
+out="$(cd "$REPO_WT3" && PATH="$STUB_AGY_WT_ECHO:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-sandboxed antigravity "$PROMPT" 2>/dev/null)"
+echo "$out" | grep -qx -- '--sandbox' && pass || fail "act-sandboxed agy must keep --sandbox (got: $out)"
+echo "$out" | grep -qx -- 'accept-edits' && pass || fail "act-sandboxed agy must pass --mode accept-edits (got: $out)"
+if echo "$out" | grep -qx -- '--dangerously-skip-permissions'; then fail "act-sandboxed agy must NEVER pass --dangerously-skip-permissions with --sandbox (got: $out)"; else pass; fi
+
+# Out-of-scope write: a delegate that writes OUTSIDE the worktree (into the
+# source repo tree) must trip the write-scope tripwire, LOUDLY on both streams.
+REPO_TRIP="$WORK/repo-trip"
+make_git_repo "$REPO_TRIP"
+STUB_CODEX_ESCAPE="$WORK/bin-codex-escape"
+make_stub "$STUB_CODEX_ESCAPE" codex \
+  'prev=; out=' \
+  'for a in "$@"; do if [ "$prev" = "--output-last-message" ]; then out="$a"; fi; prev="$a"; done' \
+  'printf "CODEX ESCAPED\n" > "$out"' \
+  "printf 'escaped\n' > '$REPO_TRIP/escaped.txt'" \
+  'exit 0'
+trip_err="$WORK/trip.err"
+out="$(cd "$REPO_TRIP" && PATH="$STUB_CODEX_ESCAPE:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT" 2>"$trip_err")"
+echo "$out" | grep -q "WRITE-SCOPE-TRIPWIRE" && pass || fail "an out-of-scope write must trip the tripwire on stdout (got: $out)"
+grep -qi "TRIPWIRE TRIPPED" "$trip_err" && pass || fail "the tripwire trip must be surfaced loudly on stderr (got: $(cat "$trip_err"))"
+
+# consult (default) tier: no worktree, no worktree section, repo untouched.
+REPO_CONSULT="$WORK/repo-consult"
+make_git_repo "$REPO_CONSULT"
+out="$(cd "$REPO_CONSULT" && PATH="$STUB_CODEX_OK:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" codex "$PROMPT" 2>/dev/null)"
+if echo "$out" | grep -q "isolated worktree write scope"; then fail "consult tier must not emit a worktree section"; else pass; fi
+if [ "$(worktree_count "$REPO_CONSULT")" -eq 1 ]; then pass; else fail "consult tier must not create a worktree (got: $(git -C "$REPO_CONSULT" worktree list))"; fi
+if [ -z "$(git -C "$REPO_CONSULT" status --porcelain)" ]; then pass; else fail "consult tier must leave the repo untouched"; fi
+
+# act-sandboxed requires a git repo: refused with exit 1 outside one.
+NONREPO="$WORK/not-a-repo"
+mkdir -p "$NONREPO"
+rc=0
+(cd "$NONREPO" && PATH="$STUB_CODEX_WT:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT") >/dev/null 2>&1 || rc=$?
+if [ "$rc" -eq 1 ]; then pass; else fail "act-sandboxed outside a git repo must exit 1 (got: $rc)"; fi
+
+# --- act-sandboxed cleanup: worktree + run dir removed on ALL exit paths ---
+# No second-opinion residue in TMPDIR, and no dangling worktree registration in
+# the source repo, on the happy, provider-failure, and srt-failure paths.
+# happy path
+REPO_CLEAN="$WORK/repo-clean"
+make_git_repo "$REPO_CLEAN"
+(cd "$REPO_CLEAN" && PATH="$STUB_CODEX_WT:$STUB_SRT_OK:$REAL_PATH" TMPDIR="$TDIR" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT") >/dev/null 2>&1
+if [ "$(leftovers)" -eq 0 ]; then pass; else fail "act-sandboxed happy path left run/worktree dirs behind: $(ls "$TDIR")"; fi
+if [ "$(worktree_count "$REPO_CLEAN")" -eq 1 ]; then pass; else fail "act-sandboxed happy path left a dangling worktree registration: $(git -C "$REPO_CLEAN" worktree list)"; fi
+# provider-failure path (exit 3)
+REPO_FAIL="$WORK/repo-fail"
+make_git_repo "$REPO_FAIL"
+(cd "$REPO_FAIL" && PATH="$STUB_CODEX_FAIL:$STUB_SRT_OK:$REAL_PATH" TMPDIR="$TDIR" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT") >/dev/null 2>&1
+if [ "$(leftovers)" -eq 0 ]; then pass; else fail "act-sandboxed provider-failure path left dirs behind: $(ls "$TDIR")"; fi
+if [ "$(worktree_count "$REPO_FAIL")" -eq 1 ]; then pass; else fail "act-sandboxed provider-failure left a dangling worktree registration"; fi
+# srt-failure path (exit 3, preflight) — the worktree is created before srt runs.
+REPO_SRTFAIL="$WORK/repo-srtfail"
+make_git_repo "$REPO_SRTFAIL"
+(cd "$REPO_SRTFAIL" && PATH="$STUB_CODEX_OK0:$STUB_SRT_FAIL:$REAL_PATH" TMPDIR="$TDIR" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT") >/dev/null 2>&1
+if [ "$(leftovers)" -eq 0 ]; then pass; else fail "act-sandboxed srt-failure path left dirs behind: $(ls "$TDIR")"; fi
+if [ "$(worktree_count "$REPO_SRTFAIL")" -eq 1 ]; then pass; else fail "act-sandboxed srt-failure left a dangling worktree registration"; fi
+
+# --- act-sandboxed srt-settings generation (enforcement path, CI-checkable) ---
+# Without real srt we cannot prove the jail blocks writes, but we CAN assert the
+# settings the jail would enforce: allowWrite must include the isolated worktree
+# scope and the run dir, and must NOT make the source repo's shared .git store
+# writable. This guards the enforcement path against a silent regression that
+# widens allowWrite or drops the worktree from the generated JSON.
+REPO_SET="$WORK/repo-settings"
+make_git_repo "$REPO_SET"
+rm -f "$CAPTURED"
+(cd "$REPO_SET" && PATH="$STUB_CODEX_WT:$STUB_SRT_CAP:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT") >/dev/null 2>&1
+if [ -f "$CAPTURED" ]; then pass; else fail "act-sandboxed must invoke srt with a --settings file"; fi
+if command -v jq >/dev/null 2>&1; then
+  jq -e '.filesystem.allowWrite[] | select(endswith("/worktree"))' "$CAPTURED" >/dev/null 2>&1 \
+    && pass || fail "act-sandboxed settings allowWrite must include the isolated worktree scope (got: $(jq -c .filesystem.allowWrite "$CAPTURED" 2>/dev/null))"
+  jq -e '.filesystem.allowWrite[] | select(contains("second-opinion-run"))' "$CAPTURED" >/dev/null 2>&1 \
+    && pass || fail "act-sandboxed settings allowWrite must include the run dir (got: $(jq -c .filesystem.allowWrite "$CAPTURED" 2>/dev/null))"
+  REPO_SET_PHYS="$(cd "$REPO_SET" && pwd -P)"
+  if jq -e --arg g "$REPO_SET_PHYS/.git" '.filesystem.allowWrite[] | select(. == $g or startswith($g + "/"))' "$CAPTURED" >/dev/null 2>&1; then
+    fail "act-sandboxed settings must NOT make the shared .git store writable (got: $(jq -c .filesystem.allowWrite "$CAPTURED" 2>/dev/null))"
+  else
+    pass
+  fi
+  # Tamper-resistance of the tripwire state store (round-2 finding 1): the
+  # before/after snapshots the tripwire compares must live OUTSIDE the delegate's
+  # writable scope, or a jailed delegate could regenerate the `.before` files and
+  # erase evidence of its own out-of-scope write. Assert the tripwire state dir is
+  # NOT in allowWrite AND IS listed in denyWrite (belt-and-suspenders). Keyed on
+  # the distinctive mktemp template `second-opinion-tripwire`.
+  if jq -e '.filesystem.allowWrite[] | select(contains("second-opinion-tripwire"))' "$CAPTURED" >/dev/null 2>&1; then
+    fail "the tripwire state dir must NOT be in allowWrite (a delegate could tamper the before-snapshots)"
+  else
+    pass
+  fi
+  jq -e '.filesystem.denyWrite[] | select(contains("second-opinion-tripwire"))' "$CAPTURED" >/dev/null 2>&1 \
+    && pass || fail "the tripwire state dir must be in denyWrite (got: $(jq -c .filesystem.denyWrite "$CAPTURED" 2>/dev/null))"
+fi
+
+# --- act-sandboxed tripwire: sibling-worktree write is guarded (Decision 8) ---
+# ADR-001 Decision 8 requires snapshotting "any other worktrees of the repo," not
+# just the primary tree. A delegate that writes into a SIBLING linked worktree
+# (checked out elsewhere on disk) must trip the write-scope tripwire loudly.
+REPO_SIB="$WORK/repo-sib"
+make_git_repo "$REPO_SIB"
+SIB_WT="$WORK/repo-sib-linked"
+git -C "$REPO_SIB" worktree add -q --detach "$SIB_WT" HEAD >/dev/null 2>&1
+STUB_CODEX_SIB="$WORK/bin-codex-sib"
+make_stub "$STUB_CODEX_SIB" codex \
+  'prev=; out=' \
+  'for a in "$@"; do if [ "$prev" = "--output-last-message" ]; then out="$a"; fi; prev="$a"; done' \
+  'printf "CODEX SIB\n" > "$out"' \
+  "printf 'sneaky\n' > '$SIB_WT/planted-in-sibling.txt'" \
+  'exit 0'
+sib_err="$WORK/sib.err"
+out="$(cd "$REPO_SIB" && PATH="$STUB_CODEX_SIB:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT" 2>"$sib_err")"
+echo "$out" | grep -q "WRITE-SCOPE-TRIPWIRE" && pass || fail "a write into a sibling worktree must trip the tripwire on stdout (got: $out)"
+grep -qi "TRIPWIRE TRIPPED" "$sib_err" && pass || fail "the sibling-worktree trip must be loud on stderr (got: $(cat "$sib_err"))"
+
+# --- act-sandboxed tripwire: shared .git hooks/config plant is guarded ---
+# A .git/hooks/* (or config) plant is a code-exec vector on the user's next git
+# op and is invisible to `git status`; the tripwire's gitdir listing must catch
+# it loudly. The srt jail is what actually PREVENTS the write; here (passthrough
+# stub) we prove DETECTION of the highest-value target.
+REPO_HOOK="$WORK/repo-hook"
+make_git_repo "$REPO_HOOK"
+STUB_CODEX_HOOK="$WORK/bin-codex-hook"
+make_stub "$STUB_CODEX_HOOK" codex \
+  'prev=; out=' \
+  'for a in "$@"; do if [ "$prev" = "--output-last-message" ]; then out="$a"; fi; prev="$a"; done' \
+  'printf "CODEX HOOK\n" > "$out"' \
+  "printf '#!/bin/sh\necho pwned\n' > '$REPO_HOOK/.git/hooks/pre-commit'" \
+  "chmod +x '$REPO_HOOK/.git/hooks/pre-commit'" \
+  'exit 0'
+hook_err="$WORK/hook.err"
+out="$(cd "$REPO_HOOK" && PATH="$STUB_CODEX_HOOK:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT" 2>"$hook_err")"
+echo "$out" | grep -q "WRITE-SCOPE-TRIPWIRE" && pass || fail "planting a .git/hooks file must trip the tripwire on stdout (got: $out)"
+grep -qi "code-exec vector" "$hook_err" && pass || fail "the gitdir plant must be surfaced with the code-exec warning on stderr (got: $(cat "$hook_err"))"
+
+# --- act-sandboxed tripwire: worktree-enumeration failure falls back to guarding
+# the primary tree (round-3 finding 1) ---
+# tripwire_snapshot() guards the case where `git worktree list --porcelain`
+# fails: rather than silently guarding NOTHING, it falls back to guarding at
+# least the primary tree ($SRC_REPO). Force that failure with a `git` shim that
+# errors ONLY on `worktree list` and passes every other subcommand through to
+# the real git (so worktree add/remove/prune, rev-parse, status all still work),
+# then assert: (a) the script does NOT abort mid-snapshot — the delegate still
+# runs and exits 0; (b) the fallback fires and guards the primary tree (the
+# warning names it); (c) an out-of-scope write into $SRC_REPO under this
+# fallback STILL trips the tripwire loudly on both streams.
+REAL_GIT="$(command -v git)"
+STUB_GIT_NOLIST="$WORK/bin-git-nolist"
+make_stub "$STUB_GIT_NOLIST" git \
+  'prev=' \
+  'for a in "$@"; do' \
+  '  if [ "$prev" = worktree ] && [ "$a" = list ]; then' \
+  '    echo "second-opinion-test: simulated git worktree list failure" >&2' \
+  '    exit 128' \
+  '  fi' \
+  '  prev="$a"' \
+  'done' \
+  "exec \"$REAL_GIT\" \"\$@\""
+REPO_ENUMFAIL="$WORK/repo-enumfail"
+make_git_repo "$REPO_ENUMFAIL"
+STUB_CODEX_ENUMFAIL="$WORK/bin-codex-enumfail"
+make_stub "$STUB_CODEX_ENUMFAIL" codex \
+  'prev=; out=' \
+  'for a in "$@"; do if [ "$prev" = "--output-last-message" ]; then out="$a"; fi; prev="$a"; done' \
+  'printf "CODEX ENUMFAIL\n" > "$out"' \
+  "printf 'escaped\n' > '$REPO_ENUMFAIL/escaped-under-fallback.txt'" \
+  'exit 0'
+enumfail_err="$WORK/enumfail.err"
+out="$(cd "$REPO_ENUMFAIL" && PATH="$STUB_CODEX_ENUMFAIL:$STUB_GIT_NOLIST:$STUB_SRT_OK:$REAL_PATH" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT" 2>"$enumfail_err")"; rc=$?
+# (a) enumeration failure under `set -e`/pipefail must not abort the run.
+if [ "$rc" -eq 0 ]; then pass; else fail "a worktree-enumeration failure must not abort the run (expected exit 0, got $rc; stderr: $(cat "$enumfail_err"))"; fi
+echo "$out" | grep -q "CODEX ENUMFAIL" && pass || fail "the delegate must still run when worktree enumeration fails (got: $out)"
+# (b) the fallback must fire and guard the primary tree (never guard nothing).
+grep -qi "guarding the primary tree only" "$enumfail_err" && pass || fail "enumeration failure must warn that it falls back to guarding the primary tree (got: $(cat "$enumfail_err"))"
+# (c) an out-of-scope write into $SRC_REPO under the fallback must still trip loudly.
+echo "$out" | grep -q "WRITE-SCOPE-TRIPWIRE" && pass || fail "under the enumeration-failure fallback, a write into the primary tree must still trip the tripwire on stdout (got: $out)"
+grep -qi "TRIPWIRE TRIPPED" "$enumfail_err" && pass || fail "the fallback-path trip must be loud on stderr (got: $(cat "$enumfail_err"))"
+
+# --- act-sandboxed cleanup robustness (set -e-in-trap fix) ---
+# If a cleanup removal genuinely fails, cleanup must NOT corrupt the delegate's
+# exit code and must log the leaked path (rather than aborting the EXIT trap
+# under errexit, masking the code, and skipping the run-dir removal). Plant a
+# no-write subdir directly under the run dir (the worktree's parent) so
+# `rm -rf "$RUN_TMP"` cannot fully remove it. Skipped when running as root,
+# where directory permissions are ignored and rm would succeed.
+if [ "$(id -u)" -ne 0 ]; then
+  REPO_STUCK="$WORK/repo-stuck"
+  make_git_repo "$REPO_STUCK"
+  STUB_CODEX_STUCK="$WORK/bin-codex-stuck"
+  make_stub "$STUB_CODEX_STUCK" codex \
+    'prev=; out=' \
+    'for a in "$@"; do if [ "$prev" = "--output-last-message" ]; then out="$a"; fi; prev="$a"; done' \
+    'printf "CODEX ACTED\n" > "$out"' \
+    'mkdir -p ../stuck && printf x > ../stuck/file && chmod 0500 ../stuck' \
+    'exit 0'
+  STUCK_TDIR="$WORK/tmpdir-stuck"
+  mkdir -p "$STUCK_TDIR"
+  stuck_err="$WORK/stuck.err"
+  (cd "$REPO_STUCK" && PATH="$STUB_CODEX_STUCK:$STUB_SRT_OK:$REAL_PATH" TMPDIR="$STUCK_TDIR" "$BASH_BIN" "$CONSULT" --tier act-sandboxed codex "$PROMPT") >/dev/null 2>"$stuck_err"
+  rc=$?
+  # Re-permit the planted dir so the test's own EXIT cleanup can remove it.
+  find "$STUCK_TDIR" -type d -exec chmod u+rwx {} + 2>/dev/null
+  if [ "$rc" -eq 0 ]; then pass; else fail "a cleanup removal failure must not corrupt the exit code (expected 0, got $rc)"; fi
+  grep -qi "leaked on disk" "$stuck_err" && pass || fail "cleanup must log the leaked path when a removal fails (got: $(cat "$stuck_err"))"
+fi
 
 echo ""
 echo "Results: $PASS passed, $FAIL failed ($(( PASS + FAIL )) total)"
