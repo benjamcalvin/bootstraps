@@ -80,7 +80,10 @@ Providers are detected at runtime — install one or both:
 ### Privilege tiers
 
 `consult.sh` accepts `--tier <consult|act-sandboxed|act-full>` (ADR-001
-tier ladder):
+tier ladder). Gate flags (`--tier`, `--i-approve-full-access`, `--primary-tree`)
+**must precede the provider argument**; placed after it they are hard-refused
+(exit 1), and a gate flag used at a tier where it has no effect warns on stderr
+and is ignored rather than escalating.
 
 - **`consult`** (default) — read-only review. No writes. This is the tier the
   `/second-opinion` review skill uses.
@@ -108,11 +111,50 @@ tier ladder):
   writes, non-hook/config `.git` internals) — the `srt` jail is the actual
   enforcement. The worktree is torn down with the run dir on every exit path.
   Requires being inside a git repository (exit 1 otherwise).
-- **`act-full`** (planned: issue #77 PR 4, gated behind explicit per-invocation
-  approval) — **refused with exit 1** today.
+- **`act-full`** (gated, issue #77 PR 4) — **unrestricted write / terminal /
+  network with the `srt` wrapper intentionally OFF.** This is the
+  highest-blast-radius tier, so it is gated behind **two independent
+  affirmative signals on the same invocation**: the tier **and** the
+  `--i-approve-full-access` flag. `--tier act-full` alone is **refused with
+  exit 1** and an actionable error (naming the tier, the approval flag, and
+  citing ADR-001 Decision 4) — never silently downgraded to `consult`, never
+  silently granted. The approval is **per-invocation only**: it persists
+  nothing and there is no config that makes `act-full` a default. Because the
+  wrapper is off by design (not by failure), an approved `act-full` run is
+  **not** blocked when `srt` is absent — fail-closed governs only the tiers
+  whose enforcement depends on the wrapper (`consult`, `act-sandboxed`), not
+  `act-full` (ADR-001 Decision 6). Per-CLI posture: codex
+  `--sandbox danger-full-access`, antigravity **unsandboxed** (`--sandbox`
+  dropped; the forbidden `--sandbox --dangerously-skip-permissions` combo is
+  structurally impossible to emit at any tier). Writes **default into a
+  dedicated isolated worktree** (ADR-001 Decision 3/8) so the write-scope
+  tripwire's before/after scope stays clean — expected work lands in the
+  worktree and any primary-tree delta is still a loud `WRITE-SCOPE-TRIPWIRE`
+  signal. Running in the **primary tree** requires a distinct second opt-out
+  flag, `--primary-tree`, which **forfeits tripwire attribution** (the
+  delegate's edits land directly in your tree and cannot be bracketed) and is
+  surfaced loudly (`ACT-FULL-PRIMARY-TREE` on stdout, a banner on stderr). The
+  widened posture is surfaced loudly at invocation regardless: a
+  `FULL ACCESS / SANDBOX WRAPPER OFF` banner on stderr and an
+  `ACT-FULL-WRAPPER-OFF` marker in the result. **`act-full` is a delegation
+  capability, not part of the read-only `/second-opinion` review flow**, which
+  only ever uses `consult`.
 
 No tier is ever silently downgraded to `consult` or silently granted (ADR-001
 Decision 4).
+
+> **Full-access is genuinely unsandboxed.** At `act-full` the `srt` filesystem
+> jail and default-deny egress are OFF. The delegate can write anywhere, run
+> any command, and reach any network endpoint your user account can. Only grant
+> it (via `--i-approve-full-access`) for tasks you would run yourself with full
+> privileges, in trees you trust, with an untrusted-diff posture in mind. The
+> worktree default and the write-scope tripwire are convenience and detection,
+> **not** containment — containment is off at this tier by design. The tripwire
+> at `act-full` is also **best-effort, not tamper-proof**: with the wrapper off,
+> a full-access delegate can overwrite the tripwire's own before/after snapshots
+> to erase evidence (no jail escape needed), unlike `act-sandboxed` where the
+> jail keeps that store tamper-resistant. Treat a silent tripwire as a courtesy
+> signal, not proof nothing escaped.
 
 > **Provider write support (honest limits).** The `act-sandboxed` write path was
 > verified end-to-end against **real `srt` + a codex-shaped delegate**: in-scope
@@ -211,14 +253,17 @@ back to Codex.
 
 This plugin is generalizing into a privilege-tiered **task-delegation**
 primitive (issue
-[#77](https://github.com/benjamcalvin/bootstraps/issues/77)). The tier
-interface and the default read-only `consult` tier (issue #77 PR 2) and the
-opt-in `act-sandboxed` tier — writes confined to an isolated git worktree,
-enforced by the `srt` write-allowlist and verified by the write-scope tripwire
-(issue #77 PR 3) — are implemented (this version). The gated `act-full` tier
-(explicit per-invocation approval, issue #77 PR 4) is **not** yet — requesting
-it is refused, never silently downgraded or escalated. The substrate choice,
-tier ladder, enforcement mechanisms, and honest limits are recorded in
+[#77](https://github.com/benjamcalvin/bootstraps/issues/77)). All three tiers
+are now implemented: the tier interface and the default read-only `consult`
+tier (issue #77 PR 2), the opt-in `act-sandboxed` tier — writes confined to an
+isolated git worktree, enforced by the `srt` write-allowlist and verified by
+the write-scope tripwire (issue #77 PR 3) — and the gated `act-full` tier —
+full access with the `srt` wrapper off, granted only by `--tier act-full`
+**plus** `--i-approve-full-access` on the same invocation, worktree-by-default
+with a `--primary-tree` opt-out, tripwire still running, widened posture
+surfaced loudly (issue #77 PR 4, this version). No tier is ever silently
+downgraded or escalated. The substrate choice, tier ladder, enforcement
+mechanisms, and honest limits are recorded in
 [ADR-001](../../docs/adr/001-task-delegation-privilege-model.md). The
 `/second-opinion` review skill uses only the read-only `consult` tier and does
 not act on your repo.
@@ -231,10 +276,15 @@ allowlist at `assets/allowlists/<provider>.txt`, and write a
 `run_<provider>()` that reads a prompt file, invokes the CLI through
 `run_srt` (never directly), and prints the delegate output to stdout. Select
 the sandbox/write mode by `$TIER`: read-only at `consult` (e.g.
-`codex --sandbox read-only`, `agy --sandbox`) and worktree-scoped write at
+`codex --sandbox read-only`, `agy --sandbox`), worktree-scoped write at
 `act-sandboxed` (e.g. `codex --sandbox workspace-write`,
-`agy --sandbox --mode accept-edits`, cwd = the worktree). The `srt`
-write-allowlist is the actual enforcement regardless of tier. Never pair
-`agy --sandbox` with `--dangerously-skip-permissions` — that combo
-auto-approves the sandbox-bypass prompt (ADR-001 Decision 3, forbidden at
-every tier).
+`agy --sandbox --mode accept-edits`, cwd = the worktree), and full access at
+`act-full` (e.g. `codex --sandbox danger-full-access`, `agy` **unsandboxed** —
+`--sandbox` dropped — cwd = the worktree by default). At `consult`/`act-sandboxed`
+the `srt` write-allowlist is the actual enforcement; at `act-full` the wrapper
+is off (`run_srt` launches the delegate directly, still env-scrubbed), so the
+provider's own flags are all that constrain it. Never pair `agy --sandbox` with
+`--dangerously-skip-permissions` — that combo auto-approves the sandbox-bypass
+prompt (ADR-001 Decision 3, forbidden at every tier); the launcher never emits
+`--dangerously-skip-permissions` as a token, so the combo is structurally
+impossible.

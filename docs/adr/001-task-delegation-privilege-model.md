@@ -144,13 +144,21 @@ Notes:
 - **No code path silently escalates.** A caller requests a higher tier
   explicitly per invocation. `act-sandboxed` is opt-in via the tier
   parameter. `act-full` additionally requires an **explicit per-invocation
-  approval** (a distinct affirmative signal beyond selecting the tier —
-  concrete mechanism, e.g. a `--i-approve-full-access`-style flag plus
-  surfaced confirmation, finalized in PR 4). Requesting `act-full` without
-  that approval is **refused with an actionable error**, never downgraded
-  silently and never granted silently.
+  approval** — a distinct affirmative signal beyond selecting the tier.
+  **Finalized in PR 4:** the approval is the `--i-approve-full-access` flag,
+  which must be passed on the **same invocation** as `--tier act-full`. Tier
+  and flag together — two independent affirmative signals — are what grant
+  `act-full`; either alone does not. Requesting `act-full` without the
+  approval flag is **refused with an actionable error** (naming the tier, the
+  approval flag, and citing this decision), never downgraded silently and
+  never granted silently. The approval flag on its own — without
+  `--tier act-full` — does not escalate: the run stays at whatever tier was
+  selected (`consult` by default). The widened posture is surfaced loudly on
+  stderr at invocation and in the result on stdout.
 - Tier grants do not persist: approval for one invocation confers nothing on
-  the next. There is no configuration that makes `act-full` a default.
+  the next. The `--i-approve-full-access` flag is per-invocation only; there
+  is no configuration, environment variable, or state file that makes
+  `act-full` a default.
 
 ## Decision 5 (decided, maintainer): pin-and-adopt Anthropic `sandbox-runtime` as the single external wrapper
 
@@ -356,8 +364,25 @@ scope*?"** — where the allowed scope is the delegate's dedicated worktree
   before/after scope clean at the highest-blast-radius tier: expected work
   lands in the delegate's worktree, and any primary-tree delta is still a
   loud signal. The caller can opt out into the primary tree only with a
-  second explicit flag; doing so forfeits that attribution and the opt-out is
-  surfaced loudly in the result.
+  distinct explicit flag — **finalized in PR 4 as `--primary-tree`** (separate
+  from the `--i-approve-full-access` approval flag, so leaving the worktree is
+  its own deliberate third signal); doing so forfeits that attribution and the
+  opt-out is surfaced loudly in the result (a `ACT-FULL-PRIMARY-TREE` marker on
+  stdout and a banner on stderr). When `act-full` runs in the default worktree,
+  the write-scope tripwire runs exactly as it does at `act-sandboxed`, even
+  though the `srt` wrapper is off — the tripwire is post-hoc detection and does
+  not depend on the jail. **The tripwire's tamper-resistance, however, DOES
+  depend on the jail, and must not be oversold at `act-full`.** The
+  before/after snapshot store is tamper-resistant only while the wrapper is on
+  (`consult`, `act-sandboxed`): the jail keeps it in `denyWrite` and outside the
+  delegate's writable scope, so erasing evidence would require a jail escape. At
+  `act-full` the wrapper is off by design, no `denyWrite` is generated, and the
+  delegate holds unrestricted write, so it can discover and overwrite the
+  snapshots with no jail escape needed — genuine tamper-resistance is impossible
+  at this tier (same-user, no jail). At `act-full` the tripwire is therefore
+  **best-effort detection only, not tamper-proof** — a courtesy signal, surfaced
+  as such in the loud `act-full` banner so `--primary-tree`/worktree-default
+  users do not over-trust a silent tripwire as proof nothing escaped.
 
 ## Quota and billing exhaustion
 
@@ -391,11 +416,11 @@ oversold anywhere the feature is documented.
 | 5 | **Env-var proxying (`HTTPS_PROXY`) is advisory only.** A process can ignore it. Never load-bearing: the OS-level egress block is what makes the proxy mandatory. | Enforced by design — the jail blocks direct egress; the proxy is the only door. |
 | 6 | **Antigravity sandbox bypass via flag combo:** `--sandbox` + `--dangerously-skip-permissions` auto-approves the bypass prompt ([antigravity-cli#36](https://github.com/google-antigravity/antigravity-cli/issues/36)). | Forbidden: the delegate launcher must never emit that combination (Decision 3 note). |
 | 7 | **Reads reach the provider at every tier.** No sandbox stops the model from transmitting what it can read. | Accepted and documented (outbound exposure). Known credential paths are blocked by the required `denyRead` list (Decision 5); everything else readable in-jail reaches the provider — bounded only by user guidance. |
-| 8 | **The tripwire is detection, not prevention**, with known blind spots (ignored-file appends, nested ignored paths, out-of-worktree writes, and shared `.git` internals *other than* `hooks/`/`config` — objects, refs, index, … — which stay uncovered now that `hooks/` and `config` are checked). | Accepted; prevention is the wrapper jail — the tripwire only verifies after the fact. Its own before/after snapshot state is kept in `denyWrite`, outside the delegate's writable scope, so it cannot be regenerated to erase evidence. |
+| 8 | **The tripwire is detection, not prevention**, with known blind spots (ignored-file appends, nested ignored paths, out-of-worktree writes, and shared `.git` internals *other than* `hooks/`/`config` — objects, refs, index, … — which stay uncovered now that `hooks/` and `config` are checked). Its **tamper-resistance is also tier-dependent**: at `act-full` the wrapper is off, so a full-access delegate can overwrite the before/after snapshots with no jail escape. | Accepted; prevention is the wrapper jail — the tripwire only verifies after the fact. Its own before/after snapshot state is kept in `denyWrite`, outside the delegate's writable scope, so it cannot be regenerated to erase evidence **while the jail is on** (`consult`, `act-sandboxed`). At `act-full` (wrapper off) this tamper-resistance does not hold — the tripwire is **best-effort detection only** there, surfaced as such in the loud `act-full` banner, never sold as proof of containment. |
 | 9 | **`srt` is pre-1.0.** API/config churn and its own bugs are possible. | Mitigated: exact-version pin, deliberate reviewed bumps, fail-closed on absence. |
 | 10 | **Subscription-quota exhaustion by parallel Claude delegates.** | Mitigated: budget caps, shared-bucket documentation, external-CLI providers for fan-out. |
 
-## Roadmap (provisional; shapes PR 2–4 per issue #77)
+## Roadmap (complete; PR 2–4 per issue #77 all landed)
 
 1. **PR 2 — tier plumbing + `consult` default.** Generalize the launcher to
    accept a privilege tier, defaulting to `consult`; wire only the read-only
@@ -408,9 +433,15 @@ oversold anywhere the feature is documented.
    environment-scrubbing launcher requirement (least-privilege pass-down).
 2. **PR 3 — `act-sandboxed` + write-scope tripwire.** Worktree isolation,
    wrapper write-allowlist, generalized tripwire (Decision 8).
-3. **PR 4 — `act-full` gate + trust handling.** Per-invocation approval gate
-   (Decision 4), refusal path, and codified output-as-data / least-privilege
-   pass-down rules in the orchestrating skill.
+3. **PR 4 — `act-full` gate + trust handling (landed).** Per-invocation
+   approval gate (Decision 4) via `--i-approve-full-access`, the refusal path,
+   the wrapper-off posture for the shipped providers (codex
+   `--sandbox danger-full-access`, agy unsandboxed — the Claude provider and its
+   `bypassPermissions` posture remain future/design work per Decision 1, not
+   delivered here), worktree-by-default with the
+   `--primary-tree` opt-out (Decision 8), the write-scope tripwire running at
+   `act-full`, loud surfacing of the widened posture, and the codified
+   output-as-data / least-privilege pass-down rules in the orchestrating skill.
 
 Strictly sequential: each PR's security posture depends on the boundary the
 prior one established.

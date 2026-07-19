@@ -5,8 +5,17 @@ set -euo pipefail
 #
 # Usage:
 #   consult.sh list                                  # print available providers, one per line
-#   consult.sh [--tier <tier>] <provider> <prompt-file>
+#   consult.sh [--tier <tier>] [--i-approve-full-access] [--primary-tree] \
+#              <provider> <prompt-file>
 #                                                    # run delegation, print result text to stdout
+#
+# Gate flags:
+#   --i-approve-full-access  Second, distinct per-invocation approval REQUIRED to
+#                            grant --tier act-full (ADR-001 Decision 4). Without
+#                            it, act-full is refused (exit 1). Persists nothing.
+#   --primary-tree           act-full only: run in the primary working tree
+#                            instead of the default isolated worktree, forfeiting
+#                            write-scope tripwire attribution (ADR-001 Decision 8).
 #
 # Providers:
 #   codex        OpenAI Codex CLI (binary: codex)
@@ -28,20 +37,35 @@ set -euo pipefail
 #                  The worktree diff (the work product) is printed after the delegate
 #                  output; the worktree is destroyed on exit like the run dir.
 #                  Requires being inside a git repository (exit 1 otherwise).
-#   act-full       NOT YET IMPLEMENTED (issue #77 PR 4). Refused with exit 1;
-#                  will additionally require explicit per-invocation approval.
-#   Escalation is never silent: an unimplemented tier is refused, never
+#   act-full       (gated) Unrestricted write / terminal / network. Requires TWO
+#                  independent affirmative signals on the SAME invocation: the
+#                  tier AND --i-approve-full-access (ADR-001 Decision 4).
+#                  Requesting act-full without the approval flag is REFUSED with
+#                  exit 1 and an actionable error — never silently downgraded to
+#                  consult, never silently granted. When granted, the srt wrapper
+#                  is OFF (unsandboxed: codex --sandbox danger-full-access, agy
+#                  UNSANDBOXED, never the forbidden --sandbox
+#                  --dangerously-skip-permissions combo). Writes default into a
+#                  dedicated worktree (Decision 8); --primary-tree opts out into
+#                  the primary tree, forfeiting tripwire attribution (surfaced
+#                  loudly). The widened posture is surfaced loudly on stderr at
+#                  invocation and in the result on stdout.
+#   Escalation is never silent: an ungranted higher tier is refused, never
 #   downgraded to consult (ADR-001 Decision 4).
 #
 # Sandbox (ADR-001 Decisions 5-6, fail-closed):
-#   Every delegate subprocess runs inside the pinned Anthropic sandbox-runtime
-#   wrapper (`srt`, npm @anthropic-ai/sandbox-runtime@0.0.66) — OS-level
-#   filesystem jail + default-deny egress through a localhost allowlisting
-#   proxy. srt and its platform deps (Seatbelt's sandbox-exec on macOS,
-#   bubblewrap + socat on Linux) are HARD prerequisites: if missing, the
-#   delegation is refused with exit 2; if the wrapper fails to start, exit 3.
-#   There is no silent degradation to the provider CLIs' own sandbox flags —
-#   those stay on underneath as defense-in-depth only.
+#   At consult and act-sandboxed, every delegate subprocess runs inside the
+#   pinned Anthropic sandbox-runtime wrapper (`srt`, npm
+#   @anthropic-ai/sandbox-runtime@0.0.66) — OS-level filesystem jail +
+#   default-deny egress through a localhost allowlisting proxy. srt and its
+#   platform deps (Seatbelt's sandbox-exec on macOS, bubblewrap + socat on Linux)
+#   are HARD prerequisites AT THOSE TIERS: if missing, the delegation is refused
+#   with exit 2; if the wrapper fails to start, exit 3. There is no silent
+#   degradation to the provider CLIs' own sandbox flags — those stay on
+#   underneath as defense-in-depth only. At act-full the wrapper is intentionally
+#   OFF (the explicit outcome of the Decision 4 gate, not a fail-closed
+#   violation), so the srt checks are skipped and an approved act-full run is NOT
+#   blocked by srt's absence.
 #
 #   Note: `srt --version` reports the CLI's internal version (1.0.0 for the
 #   0.0.66 npm release), so the pin cannot be verified at runtime; it is
@@ -86,21 +110,33 @@ ALLOWLIST_DIR="$SCRIPT_DIR/../assets/allowlists"
 
 # Globals set in main before any provider runs.
 TIER="consult"
+# act-full gate (ADR-001 Decision 4): act-full needs TWO independent affirmative
+# signals on the SAME invocation — the tier AND --i-approve-full-access. Neither
+# persists; both are per-invocation only. A THIRD flag, --primary-tree, is the
+# distinct opt-out that leaves the default isolated worktree for the primary tree
+# (ADR-001 Decision 8), forfeiting tripwire attribution.
+APPROVE_FULL=0
+PRIMARY_TREE_OPTOUT=0
+# act-full runs with the srt wrapper intentionally OFF (ADR-001 Decision 3/6):
+# unrestricted write/terminal/network. run_srt honours this by launching the
+# delegate directly (still env-scrubbed) instead of through srt.
+WRAPPER_OFF=0
 RUN_TMP=""
 SRT_BIN=""
 SRT_SETTINGS=""
 CRED_VAR=""
-# act-sandboxed only: the isolated write scope (a detached git worktree) and the
-# repo it was cut from. Empty at consult/act-full. SANDBOX_CWD is the cwd the
-# delegate subprocess runs in (the worktree at act-sandboxed).
+# Acting tiers only: the isolated write scope (a detached git worktree) and the
+# repo it was cut from. Empty at consult, and at act-full when --primary-tree is
+# chosen. SANDBOX_CWD is the cwd the delegate subprocess runs in (the worktree at
+# act-sandboxed, and at act-full by default).
 SRC_REPO=""
 WORKTREE=""
 SANDBOX_CWD=""
-# act-sandboxed only: a tamper-resistant store for the write-scope tripwire's
+# Acting tiers only: a tamper-resistant store for the write-scope tripwire's
 # before/after snapshots. Its own mktemp dir — deliberately NOT under RUN_TMP and
 # NOT in the srt write-allowlist — so the jailed delegate cannot overwrite the
-# before-snapshots to erase evidence of an out-of-scope write. Empty at
-# consult/act-full.
+# before-snapshots to erase evidence of an out-of-scope write. Empty at consult,
+# and at act-full when --primary-tree is chosen.
 TRIPWIRE_TMP=""
 
 log() { echo "consult.sh: $*" >&2; }
@@ -325,10 +361,18 @@ EOF
 # pass-down): only HOME/PATH/TMPDIR/TERM plus the single provider credential
 # var pass through.
 #
-# When SANDBOX_CWD is set (act-sandboxed), the delegate runs with its working
-# directory inside the isolated worktree, so provider "workspace"/cwd-relative
-# writes land there. The cd happens in a subshell so it never leaks into the
-# launcher. srt reads are default-allow, so it starts fine from the worktree.
+# When SANDBOX_CWD is set (act-sandboxed, and act-full by default), the delegate
+# runs with its working directory inside the isolated worktree, so provider
+# "workspace"/cwd-relative writes land there. The cd happens in a subshell so it
+# never leaks into the launcher. srt reads are default-allow, so it starts fine
+# from the worktree.
+#
+# When WRAPPER_OFF is set (act-full — ADR-001 Decision 3/6), the srt jail is
+# intentionally absent and the delegate is launched DIRECTLY. Environment
+# scrubbing (least-privilege pass-down) still applies at every tier: only
+# HOME/PATH/TMPDIR/TERM plus the one provider credential pass through, so ambient
+# secrets never reach the delegate even when the jail is off. What act-full drops
+# is the filesystem/egress jail, not the env hygiene.
 run_srt() {
   local cred_val=""
   if [ -n "$CRED_VAR" ]; then
@@ -338,7 +382,16 @@ run_srt() {
     if [ -n "$SANDBOX_CWD" ]; then
       cd "$SANDBOX_CWD" || exit 3
     fi
-    if [ -n "$cred_val" ]; then
+    if [ "$WRAPPER_OFF" = "1" ]; then
+      if [ -n "$cred_val" ]; then
+        env -i HOME="$HOME" PATH="$PATH" TMPDIR="${TMPDIR:-/tmp}" TERM="${TERM:-dumb}" \
+          "$CRED_VAR=$cred_val" \
+          "$@"
+      else
+        env -i HOME="$HOME" PATH="$PATH" TMPDIR="${TMPDIR:-/tmp}" TERM="${TERM:-dumb}" \
+          "$@"
+      fi
+    elif [ -n "$cred_val" ]; then
       env -i HOME="$HOME" PATH="$PATH" TMPDIR="${TMPDIR:-/tmp}" TERM="${TERM:-dumb}" \
         "$CRED_VAR=$cred_val" \
         "$SRT_BIN" --settings "$SRT_SETTINGS" -- "$@"
@@ -360,14 +413,17 @@ run_codex() {
   # codex exec: non-interactive mode. Final agent message goes to the
   # --output-last-message file; progress noise stays on stdout/stderr.
   #
-  # Native --sandbox mode tracks the tier and stays on as defense-in-depth
-  # under the srt jail (ADR-001 Decision 3 note): read-only at consult,
-  # workspace-write at act-sandboxed. At act-sandboxed the delegate's cwd is the
-  # worktree (run_srt cds there via SANDBOX_CWD), so codex's writable
-  # "workspace" is exactly that isolated scope; the srt write-allowlist is the
-  # load-bearing enforcement.
+  # Native --sandbox mode tracks the tier (ADR-001 Decision 3): read-only at
+  # consult, workspace-write at act-sandboxed, danger-full-access at act-full.
+  # At consult/act-sandboxed it stays on as defense-in-depth under the srt jail;
+  # at act-full the srt jail is off (WRAPPER_OFF) and danger-full-access is the
+  # intended unrestricted posture. At act-sandboxed and (by default) act-full the
+  # delegate's cwd is the worktree (run_srt cds there via SANDBOX_CWD), so codex's
+  # writable "workspace" is that scope; the srt write-allowlist is the
+  # load-bearing enforcement at act-sandboxed.
   local codex_sandbox="read-only"
   if [ "$TIER" = "act-sandboxed" ]; then codex_sandbox="workspace-write"; fi
+  if [ "$TIER" = "act-full" ]; then codex_sandbox="danger-full-access"; fi
   run_srt codex exec \
     --sandbox "$codex_sandbox" \
     --skip-git-repo-check \
@@ -415,18 +471,30 @@ run_antigravity() {
     return 3
   fi
 
-  # act-sandboxed: agy has NO native write-scoped sandbox mode (only the binary
-  # --sandbox terminal-restriction toggle), so the srt write-allowlist is the
-  # sole write-scope enforcement (ADR-001 Decision 3 note). --sandbox stays on
-  # for its terminal restrictions; --mode accept-edits makes agy apply edits
-  # non-interactively (without it, print mode would block on an edit-approval
-  # prompt with stdin at /dev/null). NOTE the forbidden combo (ADR-001 Decision
-  # 3 / risk #6): we never pair --sandbox with --dangerously-skip-permissions.
-  # accept-edits is the standard edit-acceptance mode, NOT that sandbox-bypass
-  # auto-approve. The delegate's cwd is the worktree (SANDBOX_CWD).
-  local agy_mode=""
+  # Sandbox/edit posture by tier (ADR-001 Decision 3). agy has NO native
+  # write-scoped mode (only the binary --sandbox terminal-restriction toggle):
+  #   consult        --sandbox, no edit mode           (read-only)
+  #   act-sandboxed  --sandbox --mode accept-edits      (srt write-allowlist is
+  #                  the sole write-scope enforcement; --sandbox stays on for its
+  #                  terminal restrictions, accept-edits applies edits
+  #                  non-interactively — without it, print mode blocks on an
+  #                  edit-approval prompt with stdin at /dev/null)
+  #   act-full       UNSANDBOXED (--sandbox DROPPED) --mode accept-edits (the srt
+  #                  jail is off, WRAPPER_OFF; ADR-001 Decision 3 says agy is
+  #                  unsandboxed at act-full)
+  #
+  # FORBIDDEN COMBO (ADR-001 Decision 3 / risk #6): agy --sandbox
+  # --dangerously-skip-permissions auto-approves the sandbox-bypass prompt. It is
+  # STRUCTURALLY IMPOSSIBLE to emit here: --dangerously-skip-permissions is never
+  # a token this script produces at ANY tier, and --sandbox is present only at
+  # consult/act-sandboxed (never combined with any skip-permissions flag) and
+  # absent entirely at act-full. accept-edits is the standard edit-acceptance
+  # mode, NOT that sandbox-bypass auto-approve. The delegate's cwd is the worktree
+  # (SANDBOX_CWD) at act-sandboxed and by default at act-full.
+  local agy_sandbox="--sandbox" agy_mode=""
   if [ "$TIER" = "act-sandboxed" ]; then agy_mode="--mode accept-edits"; fi
-  response=$(run_srt agy --sandbox $agy_mode -p "$(cat "$prompt_file")" \
+  if [ "$TIER" = "act-full" ]; then agy_sandbox=""; agy_mode="--mode accept-edits"; fi
+  response=$(run_srt agy $agy_sandbox $agy_mode -p "$(cat "$prompt_file")" \
     ${SECOND_OPINION_ANTIGRAVITY_MODEL:+-m "$SECOND_OPINION_ANTIGRAVITY_MODEL"} \
     < /dev/null) || return 3
 
@@ -488,7 +556,10 @@ cleanup() {
 setup_worktree() {
   if ! SRC_REPO=$(git rev-parse --show-toplevel 2>/dev/null) || [ -z "$SRC_REPO" ]; then
     SRC_REPO=""
-    log "tier 'act-sandboxed' requires running inside a git repository — the isolated write scope is a dedicated worktree of it, and none was found at $PWD."
+    log "tier '$TIER' defaults to a dedicated git worktree as its write scope, but no git repository was found at $PWD."
+    if [ "$TIER" = "act-full" ]; then
+      log "to run act-full in the current directory instead, re-run with --primary-tree — this forfeits write-scope tripwire attribution (ADR-001 Decision 8)."
+    fi
     exit 1
   fi
   SRC_REPO=$(cd "$SRC_REPO" && pwd -P)
@@ -512,13 +583,26 @@ setup_worktree() {
   SANDBOX_CWD="$WORKTREE"
 }
 
-# setup_tripwire_state — allocate the tamper-resistant store for the write-scope
-# tripwire's before/after snapshots. It lives in its OWN mktemp dir, NOT under
-# $RUN_TMP and deliberately NOT in the srt write-allowlist (and additionally
-# listed in denyWrite), so a delegate — whose cwd and writable scope are the
-# worktree under $RUN_TMP — cannot overwrite the before-snapshots to erase
-# evidence of an out-of-scope write. Doing that would require a jail escape to an
-# arbitrary path, i.e. at least the privilege the tripwire exists to catch.
+# setup_tripwire_state — allocate the store for the write-scope tripwire's
+# before/after snapshots. It lives in its OWN mktemp dir, NOT under $RUN_TMP and
+# deliberately NOT in the srt write-allowlist (and additionally listed in
+# denyWrite when the wrapper is on).
+#
+# Tamper-resistance is TIER-DEPENDENT — do not overstate it:
+#   act-sandboxed — TAMPER-RESISTANT. The srt jail is ON: the delegate's writable
+#     scope is the worktree under $RUN_TMP and this store is denied, so
+#     overwriting the before-snapshots to erase evidence would require a jail
+#     escape to an arbitrary path — i.e. at least the privilege the tripwire
+#     exists to catch.
+#   act-full — BEST-EFFORT DETECTION ONLY. WRAPPER_OFF=1 means write_srt_settings
+#     is skipped, so no srt jail / denyWrite is ever generated and the delegate
+#     runs unsandboxed with unrestricted write access (ADR-001 Decision 3). It
+#     can trivially discover this store (an mktemp dir under $TMPDIR, readable
+#     and listable) and overwrite the snapshots — NO jail escape needed, it
+#     already holds the arbitrary-write privilege the guarantee above assumed
+#     absent. Genuine tamper-resistance is impossible at act-full (same-user, no
+#     jail); the tripwire is a courtesy signal, not tamper-proof, and this is
+#     surfaced loudly in the act-full banner (announce_act_full/report_act_full).
 # Torn down by cleanup() on every exit path.
 setup_tripwire_state() {
   TRIPWIRE_TMP=$(mktemp -d -t second-opinion-tripwire.XXXXXX)
@@ -631,7 +715,7 @@ tripwire_snapshot() {
 # tripwire is only the cheap post-hoc "did the jail behave?" check.
 report_act_sandboxed() {
   echo ""
-  echo "===== act-sandboxed: changes in the isolated worktree write scope ====="
+  echo "===== $TIER: changes in the isolated worktree write scope ====="
   local wt_status
   wt_status=$(git -C "$WORKTREE" status --porcelain 2>/dev/null || true)
   if [ -n "$wt_status" ]; then
@@ -685,10 +769,52 @@ report_act_sandboxed() {
   fi
 }
 
+# --- act-full: widened-posture gate surfacing (ADR-001 Decisions 3, 6, 7) ----
+
+# announce_act_full — surface the widened posture LOUDLY on stderr at invocation
+# time (ADR-001 Decision 7's loud-extension philosophy applied to the highest
+# tier). Called after the gate has granted act-full and before the delegate runs,
+# so the user sees — at the moment of the run — that this delegate is unsandboxed.
+announce_act_full() {
+  log "!!! act-full GRANTED: FULL ACCESS / SANDBOX WRAPPER OFF !!!"
+  log "this delegate runs UNSANDBOXED — unrestricted write, terminal, and network. The srt filesystem jail and egress allowlist are intentionally OFF (ADR-001 Decision 3/6)."
+  log "granted only by your explicit --i-approve-full-access on THIS invocation (ADR-001 Decision 4); it confers nothing on future runs and is not persisted anywhere."
+  if [ "$PRIMARY_TREE_OPTOUT" = "1" ]; then
+    log "--primary-tree: running in the PRIMARY working tree (no isolated worktree). Write-scope tripwire ATTRIBUTION IS FORFEITED — the delegate's edits land directly in your tree and cannot be bracketed. Review the full working-tree diff as an external PR before trusting or integrating it."
+  else
+    log "writes default into a dedicated isolated worktree (ADR-001 Decision 8); any change OUTSIDE it (primary tree, sibling worktrees, or shared .git hooks/config) is still surfaced as a loud write-scope tripwire signal."
+    log "CAVEAT: with the wrapper off, that tripwire is BEST-EFFORT detection, NOT tamper-proof — a full-access delegate can overwrite the tripwire's own snapshots to erase evidence (unlike act-sandboxed, where the jail makes it tamper-resistant). Treat a silent tripwire as a courtesy signal, not proof nothing escaped."
+  fi
+}
+
+# report_act_full — the act-full result surface (stdout). Prints a greppable,
+# loud banner so neither an orchestrator reading stdout nor a human can miss that
+# this ran with the wrapper off. In the default worktree mode it then delegates to
+# report_act_sandboxed for the worktree diff + write-scope tripwire; in
+# --primary-tree mode it states the forfeited attribution instead (the tripwire's
+# guarded scope IS where the work lands, so it cannot cleanly attribute).
+report_act_full() {
+  echo ""
+  if [ "$PRIMARY_TREE_OPTOUT" = "1" ]; then
+    echo "===== act-full: FULL ACCESS in the PRIMARY tree (wrapper off) ====="
+    echo "ACT-FULL-WRAPPER-OFF: ran UNSANDBOXED with unrestricted write/terminal/network, approved via --i-approve-full-access (ADR-001 Decision 3/6)."
+    echo "ACT-FULL-PRIMARY-TREE: ran in the primary working tree via --primary-tree; write-scope tripwire attribution is FORFEITED. Any change in this tree may be the delegate's and cannot be bracketed — review the full working-tree diff as an external PR before trusting or integrating it (ADR-001 Decision 8)."
+    echo "===== end act-full ====="
+  else
+    echo "===== act-full: FULL ACCESS (wrapper off), writes defaulted into an isolated worktree ====="
+    echo "ACT-FULL-WRAPPER-OFF: ran UNSANDBOXED with unrestricted write/terminal/network, approved via --i-approve-full-access (ADR-001 Decision 3/6). Expected work lands in the isolated worktree below; any delta OUTSIDE it is a loud write-scope tripwire signal."
+    echo "ACT-FULL-TRIPWIRE-BEST-EFFORT: with the wrapper off, the write-scope tripwire below is BEST-EFFORT detection, NOT tamper-proof — a full-access delegate could overwrite the tripwire's own snapshots to hide an out-of-scope write (no jail escape needed; unlike act-sandboxed, nothing enforces the store's integrity). It is a courtesy signal, not proof of containment (ADR-001 Decision 8)."
+    echo "===== end act-full banner ====="
+    report_act_sandboxed
+  fi
+}
+
 # --- main -------------------------------------------------------------------
 
 usage() {
-  log "usage: consult.sh list | consult.sh [--tier <consult|act-sandboxed|act-full>] <provider> <prompt-file>"
+  log "usage: consult.sh list | consult.sh [--tier <consult|act-sandboxed|act-full>] [--i-approve-full-access] [--primary-tree] <provider> <prompt-file>"
+  log "  --i-approve-full-access  required second signal to grant act-full (per-invocation; ADR-001 Decision 4)"
+  log "  --primary-tree           act-full only: run in the primary tree instead of an isolated worktree, forfeiting tripwire attribution (ADR-001 Decision 8)"
   exit 1
 }
 
@@ -696,6 +822,15 @@ main() {
   [ $# -ge 1 ] || usage
 
   if [ "$1" = "list" ]; then
+    # `list` takes no arguments. Reject trailing tokens loudly rather than
+    # silently ignoring them, matching the "unexpected args are loud" posture
+    # applied to the provider-invocation path (ADR-001 Decision 4).
+    if [ "$#" -gt 1 ]; then
+      shift
+      log "unexpected argument(s) after 'list': $*"
+      log "'list' takes no arguments. Usage: consult.sh list"
+      exit 1
+    fi
     if ! command -v srt >/dev/null 2>&1; then
       log "warning: the pinned sandbox wrapper 'srt' is not installed; delegation will be refused (exit 2) until it is. Install: $SRT_INSTALL"
     fi
@@ -710,6 +845,10 @@ main() {
         TIER="$2"; shift 2 ;;
       --tier=*)
         TIER="${1#--tier=}"; shift ;;
+      --i-approve-full-access)
+        APPROVE_FULL=1; shift ;;
+      --primary-tree)
+        PRIMARY_TREE_OPTOUT=1; shift ;;
       -*)
         log "unknown option: $1"; usage ;;
       *)
@@ -718,19 +857,28 @@ main() {
   done
 
   # Tier gate (ADR-001 Decision 4): consult (read-only) and act-sandboxed
-  # (worktree-scoped writes) are wired; act-full is still gated and refused —
-  # never silently downgraded to consult, never silently granted. Runs
-  # immediately after option parsing, before any provider/prompt validation, so
-  # the documented check order (usage → tier gate → srt checks → provider check)
-  # holds and no later reordering can slip provider execution in front of the
-  # gate.
+  # (worktree-scoped writes) are wired. act-full requires TWO independent
+  # affirmative signals on this SAME invocation — the tier AND
+  # --i-approve-full-access — and is otherwise REFUSED, never silently downgraded
+  # to consult and never silently granted. Runs immediately after option parsing,
+  # before any provider/prompt validation, so the documented check order
+  # (usage → tier gate → srt checks → provider check) holds and no later
+  # reordering can slip provider execution in front of the gate.
   case "$TIER" in
     consult) ;;
     act-sandboxed) ;;
     act-full)
-      log "tier 'act-full' is gated behind an explicit per-invocation approval mechanism that is not yet implemented (planned: issue #77 PR 4)."
-      log "refusing to run — no silent escalation (ADR-001 Decision 4). Re-run with --tier consult (or no --tier) for the read-only tier."
-      exit 1 ;;
+      if [ "$APPROVE_FULL" -ne 1 ]; then
+        log "tier 'act-full' is refused: it grants FULL ACCESS (unrestricted write/terminal/network, srt wrapper off) and requires a SECOND, distinct per-invocation approval beyond selecting the tier."
+        log "re-run with BOTH --tier act-full AND --i-approve-full-access to grant it for this one invocation (it persists nothing; ADR-001 Decision 4)."
+        log "refusing — no silent escalation (ADR-001 Decision 4). For read-only review use --tier consult (or no --tier)."
+        exit 1
+      fi
+      # Both signals present: act-full is granted for THIS invocation only. Run
+      # with the srt wrapper off (ADR-001 Decision 3/6): the fail-closed srt
+      # checks are deliberately skipped below, so an approved act-full run is not
+      # blocked merely because srt is absent.
+      WRAPPER_OFF=1 ;;
     *)
       log "unknown tier: $TIER (supported: consult | act-sandboxed | act-full)"
       exit 1 ;;
@@ -745,7 +893,42 @@ main() {
   [ -n "$prompt_file" ] || usage
   [ -f "$prompt_file" ] || { log "prompt file not found: $prompt_file"; exit 1; }
 
-  require_srt
+  # Reject any argument AFTER the provider + prompt file. The option-parse loop
+  # above stops at the FIRST non-flag token (the provider: `*) break`), so gate
+  # flags placed after the provider are never parsed as options — they arrive
+  # here as unconsumed trailing positionals. Silently ignoring them would drop
+  # the requested tier/approval and run at the default `consult`, violating the
+  # "escalation is never silent … never downgraded to consult" invariant
+  # (ADR-001 Decision 4). Refuse loudly instead of downgrading silently.
+  if [ "$#" -gt 2 ]; then
+    shift 2
+    log "unexpected trailing argument(s) after the provider and prompt file: $*"
+    log "gate flags (--tier, --i-approve-full-access, --primary-tree) MUST come BEFORE the provider; placed after it they are not parsed and would be silently dropped."
+    log "refusing rather than silently running at a lower tier (ADR-001 Decision 4). Correct order: consult.sh [--tier <tier>] [--i-approve-full-access] [--primary-tree] <provider> <prompt-file>"
+    exit 1
+  fi
+
+  # Loud-surface any gate flag that has NO EFFECT at the selected tier (no
+  # silent, invisible flags — the same loud-posture philosophy as ADR-001
+  # Decisions 4/7). --primary-tree only opts out of the isolated worktree at
+  # act-full (Decision 8); --i-approve-full-access is the second approval signal
+  # for act-full only and never escalates on its own (Decision 4). Warn (not
+  # refuse) so existing valid invocations are never broken. The act-full gate
+  # above already exited if act-full was requested without approval, so an
+  # APPROVE_FULL=1 that reaches here necessarily sits at a non-act-full tier.
+  if [ "$PRIMARY_TREE_OPTOUT" -eq 1 ] && [ "$TIER" != "act-full" ]; then
+    log "warning: --primary-tree has NO EFFECT at tier '$TIER' — it only opts out of the isolated worktree at act-full (ADR-001 Decision 8). Ignoring it."
+  fi
+  if [ "$APPROVE_FULL" -eq 1 ] && [ "$TIER" != "act-full" ]; then
+    log "warning: --i-approve-full-access has NO EFFECT at tier '$TIER' — it is the second approval signal for act-full only and does NOT escalate the tier (ADR-001 Decision 4). Ignoring it."
+  fi
+
+  # srt is a HARD, fail-closed prerequisite at consult/act-sandboxed (Decisions
+  # 5-6). At act-full the wrapper is intentionally OFF (WRAPPER_OFF), so an
+  # approved run is NOT blocked by srt's absence — skip the srt requirement check.
+  if [ "$WRAPPER_OFF" -ne 1 ]; then
+    require_srt
+  fi
 
   local bin
   bin=$(binary_for "$provider")
@@ -778,30 +961,52 @@ main() {
     exit 3
   fi
 
-  # act-sandboxed: create the isolated worktree write scope AND the
-  # tamper-resistant tripwire state dir BEFORE generating the srt settings — the
-  # worktree goes in the write-allowlist, the tripwire dir in denyWrite (and out
-  # of allowWrite) — then snapshot the guarded trees for the write-scope tripwire.
+  # Acting-tier setup: create the isolated worktree write scope AND the
+  # tamper-resistant tripwire state dir BEFORE running. act-sandboxed always does
+  # this; act-full does it BY DEFAULT (ADR-001 Decision 3/8 — worktree by
+  # default) unless --primary-tree is chosen, which forfeits the isolated scope
+  # and tripwire attribution. (At act-sandboxed the worktree also feeds the srt
+  # write-allowlist; at act-full the wrapper is off so it is purely the
+  # tripwire's clean before/after scope.)
+  local run_tripwire=0
   if [ "$TIER" = "act-sandboxed" ]; then
     setup_worktree
     setup_tripwire_state
+    run_tripwire=1
+  elif [ "$TIER" = "act-full" ]; then
+    # Worktree by default (Decision 3/8); --primary-tree opts out. Set up BEFORE
+    # announcing so a no-repo refusal (which points at --primary-tree) fires
+    # before the "GRANTED" banner rather than after it.
+    if [ "$PRIMARY_TREE_OPTOUT" -ne 1 ]; then
+      setup_worktree
+      setup_tripwire_state
+      run_tripwire=1
+    fi
+    announce_act_full
   fi
 
-  write_srt_settings "$provider"
-  srt_preflight
+  # srt settings + preflight are the wrapper's config and only apply when the
+  # wrapper is ON (consult/act-sandboxed). At act-full the wrapper is off, so
+  # neither is generated and the delegate is launched directly by run_srt.
+  if [ "$WRAPPER_OFF" -ne 1 ]; then
+    write_srt_settings "$provider"
+    srt_preflight
+  fi
 
-  if [ "$TIER" = "act-sandboxed" ]; then
+  if [ "$run_tripwire" -eq 1 ]; then
     tripwire_snapshot
   fi
 
   local prc=0
   "run_$provider" "$prompt_file" || prc=$?
 
-  # act-sandboxed: emit the worktree work product and run the write-scope
-  # tripwire regardless of the delegate's exit status — an out-of-scope write
-  # can happen on a failing run too, and it must still be surfaced loudly.
+  # Acting tiers: emit the work product and run the write-scope tripwire
+  # regardless of the delegate's exit status — an out-of-scope write can happen
+  # on a failing run too, and it must still be surfaced loudly.
   if [ "$TIER" = "act-sandboxed" ]; then
     report_act_sandboxed
+  elif [ "$TIER" = "act-full" ]; then
+    report_act_full
   fi
 
   return "$prc"
