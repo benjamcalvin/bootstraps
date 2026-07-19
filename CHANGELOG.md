@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## second-opinion [1.0.1] - 2026-07-18
+
+### Added
+
+- ADR-001 (`docs/adr/001-task-delegation-privilege-model.md`): task-delegation substrate choice, `consult`/`act-sandboxed`/`act-full` privilege tiers, three-boundary enforcement model, pinned `sandbox-runtime` wrapper, fail-closed posture, allowlist ownership, and risk register (issue #77)
+- README security section cross-links ADR-001 and notes the consult-to-delegate roadmap
+
 ## implement-cli [1.1.4] - 2026-03-15
 
 ### Added

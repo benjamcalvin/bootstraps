@@ -415,3 +415,16 @@ prior one established.
 - Every claim of safety in user-facing docs must link back to the risk
   register above rather than overstating what sandboxes and tripwires
   guarantee.
+
+## Related Documents
+
+### Design Context
+
+- [Issue #77 — feat: generalize second-opinion into a privilege-tiered task-delegation tool](https://github.com/benjamcalvin/bootstraps/issues/77) — The scoping issue this ADR resolves; maintainer comments there settled Decisions 2, 5, and 6.
+- [`plugins/second-opinion/README.md`](../../plugins/second-opinion/README.md) — Security model section documents the outbound-exposure reality this ADR builds on; roadmap note cross-links back to this ADR.
+
+### Code References
+
+- [`plugins/second-opinion/scripts/consult.sh`](../../plugins/second-opinion/scripts/consult.sh) — The delegation primitive Decision 1 generalizes; its exit-code discipline (`0/1/2/3`) is the model for Decision 6's fail-closed errors.
+- [`plugins/second-opinion/skills/second-opinion/SKILL.md`](../../plugins/second-opinion/skills/second-opinion/SKILL.md) — Step 4 tripwire generalized by Decision 8; Step 3/5 mandatory-cleanup rule carried over in least-privilege pass-down; Step 5 synthesis discipline generalized by the inbound-exposure rules.
+- [`plugins/implement-cli/scripts/src/implement_cli/tracking.py`](../../plugins/implement-cli/scripts/src/implement_cli/tracking.py) — Budget/depth-cap patterns inherited as design (not code) for the Claude provider's quota mitigations.
