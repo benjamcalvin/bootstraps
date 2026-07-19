@@ -7,7 +7,7 @@ description: >-
 argument-hint: <brief description of what needs to be done>
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   tags: ["issue", "draft", "planning"]
   author: benjamcalvin
 ---
@@ -25,7 +25,23 @@ Create a GitHub issue for: $ARGUMENTS
 
 Good issues are the single biggest lever for `/implement` quality. A well-crafted issue gives `/implement`'s implementer and reviewers everything they need to succeed autonomously. A vague issue produces vague code.
 
-The downstream consumer of these issues is an AI agent. Every section you write should be optimized for machine comprehension: specific, unambiguous, verifiable, and grounded in concrete code references.
+The downstream consumer of these issues is an AI agent, so every section must be specific, unambiguous, and verifiable. But precision does not mean saturating every sentence with code references — it means putting each kind of detail at its proper altitude, so both a skimming human and an implementing agent can extract what they need.
+
+### Writing at the Right Altitude
+
+An issue descends through three altitude layers, and each section holds exactly one:
+
+- **Behavior** (Problem): what the system does wrong or will do differently, in plain domain language. **No code identifiers of any kind** — no file paths, function names, or line numbers. Test: a contributor who knows the domain but has never read the code understands it completely.
+- **Design** (Solution): the shape of the change in component and operation terms — which components change roles, how the flow differs before and after. Component names are allowed; files, functions, and line numbers are not.
+- **Implementation** (Technical Context): the seams, exact files, patterns to mirror, and constraints. This is the **only** layer where `file.go:line` references and function names belong.
+
+A behavior- or design-layer sentence that seems to need a file reference is a sentence at the wrong altitude: move the reference down to Technical Context, not the sentence up.
+
+Three disciplines keep the layers readable:
+
+1. **One idea per sentence.** A sentence carrying a claim, its mechanism, and a citation is three sentences fighting — split it. Demote parenthetical asides to their own sentence or delete them.
+2. **Citations end clauses; they never interrupt them.** Reference an issue, spec, or guarantee at most once per bullet, at the end. Provenance chains ("deferred from X, first flagged in Y") go in a one-line History section, never woven through the prose.
+3. **The skim test.** Reading only the first sentence of each section must yield a correct summary of the issue at descending altitude. Run this check before presenting the draft.
 
 ### Step 1: Understand the Request
 
@@ -55,12 +71,16 @@ Use when the work fits in one PR (~400 lines or fewer).
 ```markdown
 ## Problem
 
-<What is broken, missing, or suboptimal? Include concrete examples.
-Be specific enough that someone unfamiliar with the codebase understands the gap.>
+<Behavior layer. What is broken, missing, or suboptimal, and why it matters.
+Plain domain language with concrete examples — NO file paths, function names,
+or line numbers. Someone who has never read the code must understand the gap.>
 
 ## Solution
 
-<What should change, at a conceptual level. Describe the target state, not implementation steps.>
+<Design layer. The target state and the shape of the change in component
+terms: which components change roles, how the flow differs before and after.
+Component and operation names allowed; no files, functions, or line numbers.
+Describe the target state, not implementation steps.>
 
 ## Acceptance Criteria
 
@@ -71,7 +91,11 @@ Be specific enough that someone unfamiliar with the codebase understands the gap
 - [ ] The <component> shall <behavior> (for invariants)
 - [ ] If <error condition>, the system shall <fallback/error behavior>
 
-<Each criterion should be independently verifiable. Include negative criteria where important.>
+<Each criterion should be independently verifiable. Include negative criteria
+where important. Name the observable contract precisely (an endpoint, a
+function signature) when the criterion is about it, but keep locational
+detail — file paths, line numbers, patterns to mirror — in Technical Context.
+Cite a spec or guarantee at the end of the bullet, not mid-clause.>
 
 ## Verification
 
@@ -89,6 +113,9 @@ Be specific enough that someone unfamiliar with the codebase understands the gap
 
 ## Technical Context
 
+<Implementation layer — the only section where file paths, function names,
+and line numbers belong.>
+
 - **Key files:** <exact paths to files the implementer must read or modify>
 - **Patterns to follow:** <reference existing analogous code>
 - **Constraints:** <tech stack requirements, no new dependencies, etc.>
@@ -96,6 +123,12 @@ Be specific enough that someone unfamiliar with the codebase understands the gap
 ## References
 
 - <Links to relevant specs, ADRs, existing code, or prior issues>
+
+## History
+
+<Optional, one or two lines. Provenance only: what this was deferred from,
+superseded by, or first flagged in. Keeps the discovery narrative out of the
+sections above. Omit if there is none.>
 ```
 
 #### Template: Large Issue (Multiple PRs)
@@ -160,8 +193,9 @@ Ask: "Can an AI agent write a test from this sentence alone?" If not, add detail
 **5. Include negative criteria when important.**
 - "The migration must NOT modify existing rows"
 
-**6. Reference concrete types, functions, and paths.**
+**6. Name the contract under test precisely.**
 - Instead of "the store method," say "`UserStore.Create(ctx, user)`"
+- But keep *locational* detail (file paths, line numbers, analogous code) in Technical Context — a criterion states the observable contract, not where to find it
 
 ### Step 4: Validate the Draft
 
@@ -175,6 +209,9 @@ Before presenting to the user, verify:
 6. No ambiguity — an AI agent could start implementing without clarifying questions
 7. References are linked
 8. Verification is explicit
+9. **Altitude check:** Problem and Solution contain zero file paths, function names, or line numbers; all code identifiers live in Acceptance Criteria (contracts only) and Technical Context
+10. **Skim test:** the first sentence of each section, read in order, forms a correct summary at descending altitude
+11. **Sentence discipline:** no sentence carries a claim, its mechanism, and a citation at once; provenance lives only in History
 
 Present the draft to the user via `AskUserQuestion` with options to submit as-is, edit, or cancel.
 

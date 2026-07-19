@@ -6,7 +6,7 @@ agent: general-purpose
 argument-hint: <issue-number-or-0> <task description, plan, and instructions>
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   tags: ["implement", "code", "pr", "subagent"]
   author: benjamcalvin
 ---
@@ -138,14 +138,34 @@ Push the branch (first push uses `-u` to set upstream):
 git push -u origin HEAD
 ```
 
-Create the PR. If the issue number is not `0`, include an issue reference after the Summary section:
+Create the PR. If the issue number is not `0`, include an issue reference after the TL;DR section:
 - Use `Closes #N` only when this single PR **fully completes** the issue
 - Use `Part of #N` when this PR is **one of several** addressing the issue (default to this when unsure)
 
+The description descends through altitude layers, and each section holds one:
+the TL;DR is behavior only (plain language, **no file paths, function names,
+or line numbers**), Design is component terms only, and code identifiers
+appear from Implementation Notes down. One idea per sentence; cite an issue or
+spec at the end of a bullet, never mid-clause; keep review chronology ("round
+1 added X") out of the description. Skim test before submitting: the first
+sentence of each section, read in order, must summarize the PR at descending
+altitude.
+
 ```bash
 gh pr create --title "<type>: <imperative summary>" --body "$(cat <<'EOF'
-## Summary
-<1-3 sentences: what and why>
+## TL;DR
+<Behavior layer. 2-4 plain-language sentences: the resulting change and why
+it matters. A reader who has never seen the code must understand it.>
+
+## Design
+<Design layer. The important design choices and their reasons, in component
+terms; identify intentional deviations from a spec here. Omit only when the
+TL;DR leaves no design question open.>
+
+## Implementation Notes
+<Implementation layer — the only sections from here down where file, function,
+and line references belong. The file-level shape of the diff and, when the
+diff is large, the order in which to read it.>
 
 ## Test evidence
 
@@ -157,7 +177,7 @@ gh pr create --title "<type>: <imperative summary>" --body "$(cat <<'EOF'
 <if not applicable: "N/A — no runnable artifacts changed">
 
 ## Review focus
-<areas where review attention is most valuable>
+<the specific decisions reviewers should weigh in on, with file references>
 EOF
 )"
 ```

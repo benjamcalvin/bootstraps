@@ -24,7 +24,7 @@
       "name": "implement-lifecycle",
       "source": "./plugins/implement-lifecycle",
       "description": "Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, merge",
-      "version": "3.2.0",
+      "version": "3.3.0",
       "category": "productivity",
       "tags": ["implement", "review", "pr", "lifecycle", "adversarial", "tdd", "merge"],
       "author": {
@@ -48,7 +48,7 @@
       "name": "issue-management",
       "source": "./plugins/issue-management",
       "description": "Draft, clean up, and refine GitHub issues — optimized for AI agent consumption",
-      "version": "1.0.1",
+      "version": "1.1.0",
       "category": "productivity",
       "tags": ["issue", "draft", "cleanup", "refine", "planning"],
       "author": {
