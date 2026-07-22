@@ -1,0 +1,22 @@
+{
+  "name": "issue-management",
+  "version": "1.0.2",
+  "description": "Draft, clean up, and refine GitHub issues — optimized for AI agent consumption",
+  "author": {
+    "name": "benjamcalvin"
+  },
+  "license": "MIT",
+  "keywords": ["issue", "draft", "cleanup", "refine", "planning"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Issue Management",
+    "shortDescription": "Draft and refine implementation-ready issues.",
+    "longDescription": "Create, clean up, and deepen GitHub issues with clear requirements, acceptance criteria, and implementation context.",
+    "developerName": "benjamcalvin",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": [
+      "Draft an implementation-ready GitHub issue."
+    ]
+  }
+}

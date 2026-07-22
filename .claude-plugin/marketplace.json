@@ -12,7 +12,7 @@
       "name": "bootstrap-docs",
       "source": "./plugins/bootstrap-docs",
       "description": "Set up a comprehensive, AI-readable documentation strategy in any project",
-      "version": "1.4.0",
+      "version": "1.4.1",
       "category": "productivity",
       "tags": ["docs", "documentation", "strategy", "scaffolding"],
       "author": {
@@ -48,7 +48,7 @@
       "name": "issue-management",
       "source": "./plugins/issue-management",
       "description": "Draft, clean up, and refine GitHub issues — optimized for AI agent consumption",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "category": "productivity",
       "tags": ["issue", "draft", "cleanup", "refine", "planning"],
       "author": {
