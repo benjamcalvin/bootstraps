@@ -1,6 +1,6 @@
 # Bootstraps
 
-A Claude Code plugin marketplace of reusable skills, hooks, and project scaffolds.
+A cross-compatible Claude Code and OpenAI Codex plugin marketplace of reusable skills, hooks, and project scaffolds.
 
 ## Prerequisites
 
@@ -14,7 +14,7 @@ export GITHUB_TOKEN=ghp_your_token_here
 
 Without this, plugins still work — you just need to update manually with `/plugin marketplace update bootstraps`.
 
-## Install
+## Install in Claude Code
 
 Add the marketplace to Claude Code:
 
@@ -38,7 +38,19 @@ Or open the interactive plugin manager:
 
 Navigate to the **Discover** tab to browse plugins from this marketplace.
 
-## Install a Plugin
+## Install in Codex
+
+Add the marketplace to Codex CLI:
+
+```sh
+codex plugin marketplace add benjamcalvin/bootstraps
+```
+
+Open the plugin browser with `/plugins`, install a plugin from the **Bootstraps** marketplace, and start a new session so Codex loads its skills.
+
+The Codex marketplace currently includes `bootstrap-docs` and `issue-management`. The other plugins depend on Claude Code-specific agents, hooks, worktree behavior, or the Claude Agent SDK and remain available only through Claude Code.
+
+## Install a Plugin in Claude Code
 
 ```
 /plugin install bootstrap-docs@bootstraps
@@ -81,13 +93,13 @@ Some skills accept arguments:
 /second-opinion staged
 ```
 
-## Update Plugins
+## Update Claude Code Plugins
 
 ```
 /plugin marketplace update bootstraps
 ```
 
-## Uninstall a Plugin
+## Uninstall a Claude Code Plugin
 
 ```
 /plugin uninstall bootstrap-docs@bootstraps
@@ -102,16 +114,16 @@ Some skills accept arguments:
 
 ## Available Plugins
 
-| Plugin | Description |
-|--------|-------------|
-| **bootstrap-docs** | Set up a comprehensive, AI-readable documentation strategy in any project. Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates. |
-| **bootstrap-worktrees** | Set up project-agnostic worktree isolation with per-worktree ports, Docker Compose projects, and config files. Discovers services and generates create/remove scripts plus Claude Code hooks. |
-| **implement-lifecycle** | Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, docs gate, verify, merge. |
-| **implement-cli** | CLI-based variant of the implementation lifecycle using the Python Agent SDK to orchestrate review/address subprocesses with native async parallelism. |
-| **implement-team** | Experimental. Implementation lifecycle re-architected around Claude Code agent-teams — long-lived implementer and reviewer teammates with shared task list and mailbox messaging. |
-| **issue-management** | Draft, clean up, and refine GitHub issues — optimized for AI agent consumption. |
-| **stop-guard** | Stop hook that evaluates task completion via Gemini CLI and blocks premature stops. Opt-in per session via activation marker. |
-| **second-opinion** | Consult external AI CLIs (Codex, Antigravity) headlessly for an independent, read-only second-opinion code review of your changes. |
+| Plugin | Claude Code | Codex | Description |
+|--------|-------------|-------|-------------|
+| **bootstrap-docs** | Yes | Yes | Set up a comprehensive, AI-readable documentation strategy in any project. Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates. |
+| **bootstrap-worktrees** | Yes | No | Set up project-agnostic worktree isolation with per-worktree ports, Docker Compose projects, and config files. Discovers services and generates create/remove scripts plus Claude Code hooks. |
+| **implement-lifecycle** | Yes | No | Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, docs gate, verify, merge. |
+| **implement-cli** | Yes | No | CLI-based variant of the implementation lifecycle using the Python Agent SDK to orchestrate review/address subprocesses with native async parallelism. |
+| **implement-team** | Yes | No | Experimental. Implementation lifecycle re-architected around Claude Code agent-teams — long-lived implementer and reviewer teammates with shared task list and mailbox messaging. |
+| **issue-management** | Yes | Yes | Draft, clean up, and refine GitHub issues — optimized for AI agent consumption. |
+| **stop-guard** | Yes | No | Stop hook that evaluates task completion via Gemini CLI and blocks premature stops. Opt-in per session via activation marker. |
+| **second-opinion** | Yes | No | Consult external AI CLIs (Codex, Antigravity) headlessly for an independent, read-only second-opinion code review of your changes. |
 
 ### implement-lifecycle
 

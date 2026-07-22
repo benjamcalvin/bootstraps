@@ -1,0 +1,32 @@
+{
+  "name": "bootstraps",
+  "interface": {
+    "displayName": "Bootstraps"
+  },
+  "plugins": [
+    {
+      "name": "bootstrap-docs",
+      "source": {
+        "source": "local",
+        "path": "./plugins/bootstrap-docs"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    },
+    {
+      "name": "issue-management",
+      "source": {
+        "source": "local",
+        "path": "./plugins/issue-management"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Native Codex marketplace metadata for `bootstrap-docs` 1.4.1 and `issue-management` 1.1.0
+- Codex manifest and marketplace validation in `validate-all.sh`
+
+### Changed
+
+- Documented the repository's Claude Code/Codex compatibility matrix and installation flows
+
 ## issue-management [1.1.0] - 2026-07-19
 
 ### Changed
