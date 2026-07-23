@@ -107,7 +107,10 @@ SRT_INSTALL="npm install -g ${SRT_PKG}@${SRT_PIN}"
 
 SCRIPT_PATH="${BASH_SOURCE[0]}"
 case "$SCRIPT_PATH" in
-  */*) SCRIPT_PARENT="${SCRIPT_PATH%/*}" ;;
+  */*)
+    SCRIPT_PARENT="${SCRIPT_PATH%/*}"
+    SCRIPT_PARENT="${SCRIPT_PARENT:-/}"
+    ;;
   *) SCRIPT_PARENT="." ;;
 esac
 SCRIPT_DIR="$(cd "$SCRIPT_PARENT" && pwd)"

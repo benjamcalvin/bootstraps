@@ -28,6 +28,10 @@ FAIL=0
 pass() { PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
+# A root-level absolute script path must retain `/` as its parent.
+grep -Fq 'SCRIPT_PARENT="${SCRIPT_PARENT:-/}"' "$CONSULT" \
+  && pass || fail "root-level absolute script path should preserve / as its parent"
+
 # Scratch workspace (stub bins, prompt files). Cleaned on exit.
 WORK="$(mktemp -d -t second-opinion-test.XXXXXX)"
 trap 'rm -rf "$WORK"' EXIT
