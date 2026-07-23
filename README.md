@@ -70,6 +70,8 @@ Choose a scope when prompted:
 
 ## Use a Plugin
 
+### Claude Code
+
 Invoke a plugin's skill as a slash command:
 
 ```
@@ -91,6 +93,17 @@ Some skills accept arguments:
 /cleanup-issue #42
 /refine-issue #42
 /second-opinion staged
+```
+
+### Codex
+
+Invoke the currently published Codex plugins' skills with their plugin-qualified names:
+
+```
+$bootstrap-docs:bootstrap-docs
+$issue-management:draft-issue add user avatar support
+$issue-management:cleanup-issue #42
+$issue-management:refine-issue #42
 ```
 
 ## Update Claude Code Plugins

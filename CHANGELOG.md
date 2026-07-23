@@ -9,12 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Native Codex marketplace metadata for `bootstrap-docs` 1.4.1 and `issue-management` 1.1.1
 - Codex manifest and marketplace validation in `validate-all.sh`
 
 ### Changed
 
 - Documented the repository's Claude Code/Codex compatibility matrix and installation flows
+
+## bootstrap-docs [1.4.1] - 2026-07-22
+
+### Added
+
+- Native Codex plugin metadata for the existing documentation bootstrap skill
 
 ## issue-management [1.1.1] - 2026-07-22
 
