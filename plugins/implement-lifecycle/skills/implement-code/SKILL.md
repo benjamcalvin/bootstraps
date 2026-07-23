@@ -1,9 +1,6 @@
 ---
 name: implement-code
 description: Plan, implement code, tests, and create PR for implement workflow (runs as subagent)
-context: fork
-agent: general-purpose
-argument-hint: <issue-number-or-0> <task description, plan, and instructions>
 license: MIT
 metadata:
   version: "1.1.0"
@@ -13,14 +10,17 @@ metadata:
 
 # Implement
 
-Implement the following task. The first token is the linked issue number (or `0` if none):
+Implement the task supplied by the orchestrator. The first token is the linked issue number, or `0` if none.
 
+```text
 $ARGUMENTS
+```
+
+If the current client leaves `$ARGUMENTS` literal, use the delegation prompt instead.
 
 ## Context
 
-- Current branch: !`git branch --show-current`
-- Recent commits: !`git log --oneline -5`
+At runtime, inspect the current branch, recent commits, repository status, and any referenced issue or specification before making changes.
 
 ## Project Standards
 
@@ -30,7 +30,7 @@ Read project-level instructions if they exist. At minimum, check for `AGENTS.md`
 
 You are the **implementer** for the `/implement` workflow. You explore the codebase, plan, write code, write tests, and create the PR.
 
-Use the **Task tools** (`TaskCreate`, `TaskUpdate`) to track your progress.
+Use the current client's task or plan tracker when available.
 
 ### Step 0: Plan (unless skipped)
 

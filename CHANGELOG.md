@@ -21,6 +21,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Removed the hidden external `dirname` startup dependency when running with a restricted `PATH`
 
+## implement-lifecycle [3.4.0] - 2026-07-22
+
+### Added
+
+- Native Codex plugin metadata, marketplace publication, and delegated reviewer skill adapters
+
+### Changed
+
+- Lifecycle delegation now uses explicit Claude Code named subagents or Codex subagents loading plugin-qualified skills
+- Worker skills no longer depend on implicit fork metadata and remain reusable across clients
+
 ## implement-lifecycle [3.3.2] - 2026-07-22
 
 ### Changed

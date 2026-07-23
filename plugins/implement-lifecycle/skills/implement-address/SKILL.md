@@ -1,9 +1,6 @@
 ---
 name: implement-address
 description: Address filtered review findings for implement workflow (runs as subagent)
-context: fork
-agent: general-purpose
-argument-hint: <pr-number> <round-number> <findings-file-path>
 license: MIT
 metadata:
   version: "2.0.1"
@@ -11,15 +8,19 @@ metadata:
   author: benjamcalvin
 ---
 
-# Address Review Findings — Round $1
+# Address Review Findings
 
-Address filtered review findings on PR #$0, round $1.
+Parse the PR number, round identifier, and findings-file path from the invocation input:
+
+```text
+$ARGUMENTS
+```
+
+If the current client leaves `$ARGUMENTS` literal, use the delegation prompt instead.
 
 ## PR Context
 
-- PR metadata: !`gh pr view $0`
-- PR comments: !`gh pr view $0 --comments 2>/dev/null || echo "NO_COMMENTS"`
-- Filtered findings: !`cat $2`
+At runtime, fetch the PR metadata and comments, then read the supplied findings file before editing.
 
 ## Instructions
 
@@ -27,13 +28,13 @@ You are the **addresser** for the `/implement` workflow. You fix issues identifi
 
 **Guard:** If the findings file is missing, unreadable, or contains no findings, stop immediately and report the issue to the orchestrator. Do not proceed with an empty or absent findings list.
 
-Use the **Task tools** (`TaskCreate`, `TaskUpdate`) to track progress.
+Use the current client's task or plan tracker when available.
 
 ### Step 1: Understand Each Finding
 
 Read the filtered findings in the Context section above. For each finding:
 1. Understand what the reviewer identified and at what severity
-2. Read the relevant code using the Read tool — understand the full context, not just the flagged line
+2. Read the relevant code using the current client's file-reading capability — understand the full context, not just the flagged line
 
 ### Step 2: Address Each Finding
 
@@ -65,7 +66,7 @@ After addressing all findings:
 
 ### Step 4: Commit and Push
 
-- Commit with message format: `fix: address review round $1 — <description>`
+- Commit with message format: `fix: address review round <round> — <description>`
 - Keep fix commits separate when addressing unrelated findings
 - Push to the PR branch:
   ```bash
@@ -76,7 +77,7 @@ After addressing all findings:
 
 Post your summary to the PR:
 ```
-gh pr comment $0 --body "<summary>"
+gh pr comment <pr-number> --body "<summary>"
 ```
 
 Return a summary table:

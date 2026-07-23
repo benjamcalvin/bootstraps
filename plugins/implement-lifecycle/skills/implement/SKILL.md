@@ -2,9 +2,8 @@
 name: implement
 description: >-
   Implementation, review, and merge — full lifecycle or any subset.
-  Lean orchestrator that delegates all heavy work to forked subagents.
-  Triggers: /implement, implement this, build this feature
-argument-hint: <#issue | PR-number | freeform task> [instructions]
+  Lean orchestrator that delegates all heavy work to isolated subagents.
+  Triggers: /implement, $implement-lifecycle:implement, implement this, build this feature
 license: MIT
 metadata:
   version: "3.0.2"
@@ -14,43 +13,60 @@ metadata:
 
 # Implement
 
-Orchestrate the full implementation lifecycle for: $ARGUMENTS
+Orchestrate the full implementation lifecycle using the task supplied with the skill invocation.
 
-## Context
+Claude Code expands the payload below. If the current client leaves it literal, use the user's invoking prompt instead.
 
-- Current branch: !`git branch --show-current`
-- Recent commits: !`git log --oneline -5`
-- Issue (if applicable): !`gh issue view $0 --comments 2>/dev/null || echo "NOT_AN_ISSUE"`
+```text
+$ARGUMENTS
+```
+
+At runtime, inspect the current branch and recent commits. Fetch any referenced issue and its comments before delegating.
 
 ## Instructions
 
 <!-- stop-guard:active -->
 
-You are a **lean orchestrator** — a supervisor who delegates, not an implementer. You invoke forked skills for all heavy work and referee review findings. **You MUST NOT use the Edit or Write tools to modify source code, tests, or documentation.** You delegate all implementation to the assigned skills. You may use Bash for git/gh commands and to run tests or verification commands, and Read/Grep/Glob for refereeing — but never use Edit or Write to change code yourself.
+You are a **lean orchestrator** — a supervisor who delegates, not an implementer. Every heavy phase runs in an isolated delegated agent; worker skills define the work but do not create that isolation themselves. **You MUST NOT use file-editing tools to modify source code, tests, or documentation.** You may use the shell for git/gh commands and tests, and the current client's read/search capabilities for refereeing, but never edit the codebase under review yourself.
 
 **Permitted carve-out — orchestration scratch files:** Writing non-source orchestration files (e.g. the `/tmp/implement-findings-*.md` findings files described in Phase 4) via Bash is expected and allowed. The prohibition targets modifying the codebase under review — source, tests, and docs — not writing your own scratch/findings files to `/tmp`.
 
 **Drive forward autonomously.** When you have a plan (from the user or an issue), execute all phases without pausing for approval between them. Do not ask "shall I proceed to the next phase?" — just proceed. Only stop to ask the user when you hit a genuine ambiguity, a blocking decision outside the task's scope, or an escalation condition listed below.
 
-**You MUST use the Task tools** (`TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`) throughout.
+Use the current client's task or plan tracker throughout when available.
 
 **Task tracking rules:**
-1. **Bootstrap immediately.** Create a task for each phase before starting. Each needs `subject` (imperative), `activeForm` (continuous), and `description`.
+1. **Bootstrap immediately.** Create a task for each phase before starting, using the fields the current client supports.
 2. **One in_progress at a time.** Mark `in_progress` before starting, `completed` the moment it finishes.
 3. **Break down dynamically.** Add sub-tasks when entering a phase or when unexpected work surfaces.
 4. **Keep the list truthful.** Delete irrelevant tasks, update descriptions if scope changes.
 
 ---
 
+### Client delegation adapters
+
+Keep the lifecycle semantics below identical in both clients and map each delegation to the client's native boundary:
+
+| Phase | Claude Code | Codex |
+|-------|-------------|-------|
+| Implement | Invoke the `implement-code` named subagent | Spawn a subagent whose prompt begins `Use $implement-lifecycle:implement-code` |
+| Address | Invoke the `implement-address` named subagent | Spawn a subagent whose prompt begins `Use $implement-lifecycle:implement-address` |
+| Review/docs | Invoke the matching `review-*` named subagent | Spawn one subagent per specialty whose prompt begins `Use $implement-lifecycle:review-<specialty>` |
+| Verify | Invoke the `verify` named subagent | Spawn a subagent whose prompt begins `Use $implement-lifecycle:verify` |
+
+Pass the complete payload shown at each call site. Do not assume the delegated agent inherits scratch context from the orchestrator. Launch independent specialist reviewers in parallel and wait for all selected reviewers before refereeing.
+
+---
+
 ### Entry Point
 
-Parse `$ARGUMENTS` to determine **what to work on** and **what to do**.
+Parse the invocation input to determine **what to work on** and **what to do**.
 
 **Step 1 — Identify the target** from the leading token:
 
-1. **`#N` (issue number):** The issue body is in Context above. Extract the task description and acceptance criteria.
+1. **`#N` (issue number):** Fetch its body and comments, then extract the task description and acceptance criteria.
 2. **Bare number:** Run `gh pr view <number> --json number,title,state --jq '.'`. If it matches an open PR, record the PR number.
-3. **Freeform text:** Treat the entire `$ARGUMENTS` as the task description.
+3. **Freeform text:** Treat the entire invocation input as the task description.
 
 **Step 2 — Determine scope** from any trailing instructions:
 
@@ -71,7 +87,7 @@ The table above is illustrative, not exhaustive. Interpret the user's intent and
 
 ### Phase 1–3: Plan, Implement & Create PR
 
-**CRITICAL: You MUST NOT write code or edit files yourself.** You are the supervisor — you delegate all implementation to the `implement-code` skill, which runs in a forked context. If you find yourself about to use Edit or Write, stop — you are violating the orchestrator contract. Delegate it instead.
+**CRITICAL: You MUST NOT write code or edit files yourself.** Delegate all implementation through the client adapter above.
 
 Planning is handled internally by `implement-code`. Do **not** invoke a separate planning step — this eliminates the seam where the orchestrator might pause for approval between planning and coding.
 
@@ -79,10 +95,10 @@ Decide whether the task needs planning and pass appropriate instructions:
 - **Needs planning** (ambiguous, touches multiple modules, unclear acceptance criteria): pass the task description without "skip planning"
 - **Skip planning** (clear, scoped tasks like "fix the typo in config.go"): include "skip planning" in the instructions
 
-**Delegate to the implementer** by invoking the forked skill:
+**Delegate to the implementer** through the client adapter:
 
 ```
-Skill tool → skill: "implement-code", args: "<issue-number-or-0> <task description, acceptance criteria, and optional instructions>"
+Payload: <issue-number-or-0> <task description, acceptance criteria, and optional instructions>
 ```
 
 Pass the full context: task description, acceptance criteria from the issue (if any), and any optional user instructions. If there's a linked issue, pass the issue number as the first arg; otherwise pass `0`.
@@ -121,7 +137,7 @@ git fetch origin "$BASE_BRANCH"
 git rebase "origin/$BASE_BRANCH"
 ```
 
-If conflicts arise, resolving them is a **permitted git-mechanical carve-out** to the no-Edit/Write contract: rebase-conflict resolution is part of the git/gh work you already own and cannot be cleanly delegated to a forked skill mid-rebase, so you may edit the conflicted files to complete the rebase. Keep it strictly mechanical — reconcile the two sides of each conflict, do not fold in new implementation. Then run the full test suite to catch integration breakage. Force-push the rebased branch:
+If conflicts arise, resolving them is a **permitted git-mechanical carve-out** to the no-edit contract. Keep it strictly mechanical, then run the full test suite and force-push the rebased branch:
 
 ```bash
 git push --force-with-lease
@@ -152,13 +168,10 @@ Use judgment from the PR summary, changed-file list, and issue/spec context:
 - Include **`review-testing`** when tests changed, new behavior was added, or existing behavior changed without obvious regression coverage.
 - Skip reviewers whose specialty clearly does not apply; do not summon them just for ritual coverage.
 
-**Always invoke selected reviewers in parallel using multiple Agent tool calls in a single response:**
+**Always invoke selected reviewers in parallel through the client adapter:**
 
 ```
-Agent tool → agent: "review-correctness", prompt: "Review PR #<pr-number>, round <round-number>"
-Agent tool → agent: "review-security", prompt: "Review PR #<pr-number>, round <round-number>"
-Agent tool → agent: "review-architecture", prompt: "Review PR #<pr-number>, round <round-number>"
-Agent tool → agent: "review-testing", prompt: "Review PR #<pr-number>, round <round-number>"
+Payload: Review PR #<pr-number>, round <round-number>
 ```
 
 Each reviewer fetches PR context, posts findings to GitHub, and returns them to you. In round 2 and later, tell reviewers to focus on unresolved accepted findings, the latest fix delta, and regressions introduced by accepted fixes. They must not reopen rejected findings or speculatively harden unrelated surfaces.
@@ -236,7 +249,7 @@ EOF
 #### Step D: Invoke Addresser
 
 ```
-Skill tool → skill: "implement-address", args: "<pr-number> <round-number> /tmp/implement-findings-pr-<PR>-round-<N>.md"
+Payload: <pr-number> <round-number> /tmp/implement-findings-pr-<PR>-round-<N>.md
 ```
 
 The addresser will fix issues, run tests, commit, push, and return a summary.
@@ -278,7 +291,7 @@ After the code review/address loop converges, run the docs curation gate. **This
 #### Step A: Invoke Docs Reviewer
 
 ```
-Agent tool → agent: "review-docs", prompt: "Review PR #<pr-number> for documentation compliance, round <round-number>"
+Payload: Review PR #<pr-number> for documentation compliance, round <round-number>
 ```
 
 The docs reviewer fetches PR context, maps code changes to existing documentation, and identifies gaps — not just inaccuracies in changed docs, but missing docs for new behavior and stale docs contradicted by code changes.
@@ -326,7 +339,7 @@ EOF
 ```
 
 ```
-Skill tool → skill: "implement-address", args: "<pr-number> docs-<round-number> /tmp/implement-docs-findings-pr-<PR>-round-<N>.md"
+Payload: <pr-number> docs-<round-number> /tmp/implement-docs-findings-pr-<PR>-round-<N>.md
 ```
 
 #### Step D: Evaluate Continuation
@@ -340,7 +353,7 @@ Re-invoke the docs reviewer to verify fixes. The round counter starts from round
 After the review loop completes, invoke the verification agent to test the PR's changes with real-world execution before merging:
 
 ```
-Skill tool → skill: "verify", args: "<pr-number>"
+Payload: <pr-number>
 ```
 
 The verification agent will classify the change type, devise a verification plan, execute it, and report structured evidence. If **PASS** or **N/A**, proceed to Phase 6. If the verdict is **FAIL**, delegate the fixes — do **not** fix the code yourself.
@@ -361,7 +374,7 @@ EOF
 Then invoke the addresser with that file path, using a `verify-<round-number>` round token (analogous to Phase 4.5's `docs-<N>`):
 
 ```
-Skill tool → skill: "implement-address", args: "<pr-number> verify-<round-number> /tmp/implement-verify-findings-pr-<PR>-round-<N>.md"
+Payload: <pr-number> verify-<round-number> /tmp/implement-verify-findings-pr-<PR>-round-<N>.md
 ```
 
 The round counter starts from round 1 (independent of Phase 4 rounds) and increments each FAIL → address → re-verify cycle. After the addresser pushes fixes, re-invoke `verify` and repeat until **PASS** or **N/A**, then proceed to Phase 6.
@@ -370,8 +383,10 @@ The round counter starts from round 1 (independent of Phase 4 rounds) and increm
 
 ### Phase 6: Merge & Finalize
 
+Invoke `merge-pr` in Claude Code or `$implement-lifecycle:merge-pr` in Codex:
+
 ```
-Skill tool → skill: "merge-pr", args: "<pr-number>"
+Payload: <pr-number>
 ```
 
 This validates the PR, squash-merges it, deletes the branch, and posts updates on linked issues.

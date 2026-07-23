@@ -4,7 +4,6 @@ description: >-
   Merge a PR and update upstream GitHub issues with progress.
   Validates readiness, squash-merges, deletes branch, and posts issue updates.
   Triggers: /merge-pr, merge this PR
-argument-hint: <pr-number>
 license: MIT
 metadata:
   version: "1.0.0"
@@ -14,13 +13,17 @@ metadata:
 
 # Merge PR and Update Issues
 
-Merge PR #$ARGUMENTS and update all linked GitHub issues with what was delivered.
+Merge the PR supplied with the invocation and update linked GitHub issues with what was delivered.
+
+```text
+$ARGUMENTS
+```
+
+If the current client leaves `$ARGUMENTS` literal, use the user's invoking prompt instead.
 
 ## PR Context
 
-- PR metadata: !`gh pr view $ARGUMENTS --json number,title,body,state,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,headRefName,baseRefName,additions,deletions,changedFiles`
-- PR comments: !`gh pr view $ARGUMENTS --comments 2>/dev/null || echo "NO_COMMENTS"`
-- PR checks: !`gh pr checks $ARGUMENTS 2>/dev/null || echo "NO_CHECKS"`
+At runtime, parse the PR number and fetch its metadata, comments, and checks.
 
 ## Instructions
 
@@ -31,7 +34,7 @@ Check that the PR is safe to merge. For each check, determine pass/fail:
 1. **State** — PR must be `OPEN`. If already merged or closed, report and stop.
 2. **Merge conflicts** — `mergeable` must not be `CONFLICTING`. If conflicts exist, report and stop.
 3. **CI status** — All status checks must pass. If any check is failing, report which ones and stop.
-4. **PR standards** — Invoke the `pr-check` skill against the PR. All checks must pass (WARN is acceptable, FAIL is not). Fix any failures if possible; otherwise report what needs to be fixed and stop.
+4. **PR standards** — Invoke `pr-check` in Claude Code or `$implement-lifecycle:pr-check` in Codex against the PR. All checks must pass (WARN is acceptable, FAIL is not). Fix any failures if possible; otherwise report what needs to be fixed and stop.
 5. **Review decision** — Check `reviewDecision` and `baseRefName`:
    - If `CHANGES_REQUESTED`, stop and report.
    - If merging to `main` or `master`: require `APPROVED`. If `REVIEW_REQUIRED` or empty/null, escalate to the user and wait for explicit confirmation.
@@ -46,7 +49,7 @@ Check that the PR is safe to merge. For each check, determine pass/fail:
 Squash-merge the PR and delete the remote branch:
 
 ```
-gh pr merge $ARGUMENTS --squash --delete-branch
+gh pr merge <pr-number> --squash --delete-branch
 ```
 
 If the merge fails, report the error and stop.
