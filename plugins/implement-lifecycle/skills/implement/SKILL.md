@@ -6,7 +6,7 @@ description: >-
   Triggers: /implement, $implement-lifecycle:implement, implement this, build this feature
 license: MIT
 metadata:
-  version: "3.2.2"
+  version: "3.2.3"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -33,7 +33,9 @@ You are a **lean orchestrator**. Your job is to coordinate — not to implement,
 
 Use the current client's task or plan tracker throughout when one is available. In Claude Code, use the Task tools. In Codex, use the plan-tracking capability. Do not block the workflow merely because a client exposes no tracker.
 
-Before delegating, read and use the shared [`assets/dispatch-contract.sh`](assets/dispatch-contract.sh) contract. Resolve worker targets from it instead of reconstructing client-specific names. Use its `transition` command to validate required worker results before advancing between implementation, review, addressing, docs, verification, merge, and completion. Resolve each selected reviewer set with one `targets` call, then launch every returned target in parallel. The contract validates real skill entry points and fails closed on missing results; it does not launch workers or authorize side effects.
+Before delegating, read and use the shared [`assets/dispatch-contract.sh`](assets/dispatch-contract.sh) contract. Resolve worker targets from it instead of reconstructing client-specific names. Use its `transition` command to validate each worker's documented output before advancing between implementation, review, addressing, docs, verification, merge, and completion. Pass each complete, unmodified worker response as one shell argument; do not translate responses into private `KEY=value` values. Resolve the explicit selected reviewer set with one `targets` call, launch every returned target in parallel, wait for all of them, then validate exactly that set with `transition review --reviewers <names...> -- <outputs...>` in the same order. The contract validates Claude named reviewer agents versus Codex skill wrappers and fails closed on missing, empty, extra, or malformed results; it does not launch workers or authorize side effects.
+
+The transition contract consumes the output forms already required by each worker: `PR_NUMBER: <number>` from `implement-code`; categorized reviewer Markdown and its `### Summary`; the addresser's result table plus non-empty `Tests` and `Commits`; `### Verdict: PASS / FAIL / PARTIAL / N/A` from verification; and the `## Merge Complete` summary. A failed contract check is a blocked transition, never permission to infer success.
 
 **Task tracking rules:**
 1. **Bootstrap immediately.** Create an item for each phase before starting, using the fields supported by the current client's tracker. With Claude Code Task tools, provide `subject` (imperative), `activeForm` (continuous), and `description`.
@@ -168,6 +170,8 @@ $implement-lifecycle:review-testing Review PR #<pr-number>, round <round-number>
 ```
 
 Each reviewer fetches PR context, posts findings to GitHub, and returns them to you.
+
+Record the selected reviewer names without the `review-` prefix (for example, `correctness testing`). After every selected worker returns, pass those names and the corresponding complete outputs to the shared contract. Do not require results from reviewers that were not selected, and do not advance with a partial selected set.
 
 #### Step B: Referee Evaluation
 
