@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Documented the repository's Claude Code/Codex compatibility matrix and installation flows
 
+## implement-lifecycle [3.3.2] - 2026-07-22
+
+### Changed
+
+- Adversarial review now requires proportional remedies, a convergence stop after three non-clean rounds dominated by review-introduced complexity, and a five-round default cap unless the user explicitly authorizes more
+
 ## bootstrap-docs [1.4.1] - 2026-07-22
 
 ### Added

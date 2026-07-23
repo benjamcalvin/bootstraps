@@ -69,12 +69,20 @@ Flag when the PR introduces changes that may warrant an Architecture Decision Re
 
 Only flag ADR triggers when the change is genuinely architectural. Do not flag routine code additions that follow existing patterns.
 
+## Finding Contract
+
+Every finding must name a concrete reader-facing error or omission and the acceptance criterion, documented invariant, or existing behavior it contradicts. Suggest the smallest documentation correction within the PR's original scope; the referee may accept the concern without accepting your remedy. Do not use documentation review to introduce a new architecture, public interface, or unrelated documentation project.
+
+Use **Recommended** only for concrete, in-scope gaps fixable without a new abstraction. Minor observations must not be framed as reasons to continue the review loop.
+
 ## Round Context
 
 Check the round number from your prompt. If this is round 2 or later, read the PR comments for previous "Docs Compliance Gate Round <N> — Referee Decisions" comments. Do NOT repeat addressed or rejected findings. Focus on:
 - New documentation issues introduced by previous fixes
-- Issues missed in prior rounds
+- Unresolved accepted findings and the latest fix delta
 - Whether previously-addressed findings were actually fixed correctly
+
+Do not expand later rounds into speculative documentation work unrelated to the original task.
 
 ## Anti-Patterns (Avoid)
 
