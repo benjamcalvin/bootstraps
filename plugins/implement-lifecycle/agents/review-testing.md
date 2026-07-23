@@ -108,4 +108,4 @@ Return findings in exactly this structure:
 ### Summary
 <1-2 sentence assessment focused on test adequacy and quality>
 
-Omit any category that has no findings. If test coverage and quality look solid, say so explicitly.
+Use only these headings, in this order, at most once each. Omit any empty finding category, put finding bullets only inside its category, and finish with exactly one non-empty `### Summary`. If test coverage and quality look solid, say so explicitly in that summary.

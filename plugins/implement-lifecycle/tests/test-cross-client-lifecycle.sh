@@ -21,6 +21,8 @@ assert_rejected() {
 review_output() {
   reviewer=$1
   findings=$2
+  category=${3:-Action Required}
+  label_override=${4:-}
   case "$reviewer" in
     correctness) label=Correctness ;;
     security) label=Security ;;
@@ -28,8 +30,9 @@ review_output() {
     testing) label=Testing ;;
     docs) label=Docs ;;
   esac
+  [ -z "$label_override" ] || label=$label_override
   if [ "$findings" -gt 0 ]; then
-    printf '### Action Required\n'
+    printf '### %s\n' "$category"
     index=1
     while [ "$index" -le "$findings" ]; do
       printf -- '- **[%s]** Finding %s with file:line and details\n' "$label" "$index"
@@ -38,6 +41,17 @@ review_output() {
     printf '\n'
   fi
   printf '### Summary\n%s review complete.\n' "$label"
+}
+
+verification_output() {
+  verdict=$1
+  printf '## End-to-End Verification — PR #731\n\n### Verdict: %s\n\n' "$verdict"
+  if [ "$verdict" = FAIL ] || [ "$verdict" = PARTIAL ]; then
+    printf '### Issues Found\n- **[Verification]** End-to-end flow failed at app:42; expected success but observed failure.\n\n'
+  else
+    printf '### Issues Found\nNone\n\n'
+  fi
+  printf '### Holistic Assessment\nSynthetic verification complete.\n'
 }
 
 address_output() {
@@ -68,6 +82,10 @@ dispatch_stub() {
   payload=$3
   target=$(bash "$CONTRACT" target "$client" "$worker")
   printf '%s|%s|%s\n' "$client" "$target" "$payload" >> "$DISPATCH_LOG"
+  if [[ "$worker" = review-* ]] && [ -n "${REVIEW_BARRIER_DIR:-}" ]; then
+    : > "$REVIEW_BARRIER_DIR/${REVIEW_BARRIER_MEMBER}.ready"
+    while [ ! -f "$REVIEW_BARRIER_DIR/release" ]; do sleep 0.01; done
+  fi
   case "$worker|$payload" in
     implement-code*) RESULT=$'PR_NUMBER: 731\nPR_TITLE: feat: synthetic acceptance\nSUMMARY: Implemented.' ;;
     review-correctness*"round 1") RESULT=$(review_output correctness 2) ;;
@@ -78,7 +96,7 @@ dispatch_stub() {
     implement-address*) RESULT=$(address_output) ;;
     review-docs*"round 1") RESULT=$(review_output docs 1) ;;
     review-docs*"round 2") RESULT=$(review_output docs 0) ;;
-    verify*) RESULT=$'## End-to-End Verification — PR #731\n\n### Verdict: PASS\n\n### Evidence\nVerified.' ;;
+    verify*) RESULT=$(verification_output "${VERIFY_VERDICT:-PASS}") ;;
     merge-pr*) RESULT=$(merge_output) ;;
     *) fail "unhandled controlled dispatch: $worker $payload" ;;
   esac
@@ -87,7 +105,8 @@ dispatch_stub() {
 run_review_batch() {
   client=$1
   round=$2
-  shift 2
+  accepted=$3
+  shift 3
   selected=("$@")
   workers=()
   for reviewer in "${selected[@]}"; do workers+=("review-$reviewer"); done
@@ -97,21 +116,38 @@ run_review_batch() {
 
   results=()
   pids=()
+  barrier_dir=$(mktemp -d "$TMP_DIR/reviewer-barrier.XXXXXX")
   for reviewer in "${selected[@]}"; do
     result_file="$TMP_DIR/$client-$reviewer-$round.result"
     (
       DISPATCH_LOG="$TMP_DIR/$client-$reviewer-$round.log"
+      REVIEW_BARRIER_DIR=$barrier_dir
+      REVIEW_BARRIER_MEMBER=$reviewer
       dispatch_stub "$client" "review-$reviewer" "Review PR #731, round $round"
       printf '%s\n' "$RESULT" > "$result_file"
     ) &
     pids+=("$!")
   done
+  attempts=0
+  while :; do
+    ready=0
+    for reviewer in "${selected[@]}"; do
+      [ -f "$barrier_dir/$reviewer.ready" ] && ready=$((ready + 1))
+    done
+    [ "$ready" -eq "${#selected[@]}" ] && break
+    attempts=$((attempts + 1))
+    [ "$attempts" -lt 500 ] || fail "$client reviewer stubs did not overlap at the synchronization barrier"
+    sleep 0.01
+  done
+  : > "$barrier_dir/release"
   for pid in "${pids[@]}"; do wait "$pid"; done
   for reviewer in "${selected[@]}"; do
     cat "$TMP_DIR/$client-$reviewer-$round.log" >> "$DISPATCH_LOG"
     results+=("$(cat "$TMP_DIR/$client-$reviewer-$round.result")")
   done
-  bash "$CONTRACT" transition review --reviewers "${selected[@]}" -- "${results[@]}"
+  raw_count=$(bash "$CONTRACT" validate review --reviewers "${selected[@]}" -- "${results[@]}")
+  [ "$raw_count" -ge "$accepted" ] || fail "$client accepted reviewer count exceeds validated raw count"
+  bash "$CONTRACT" transition review --accepted-count "$accepted" --reviewers "${selected[@]}" -- "${results[@]}"
 }
 
 run_lifecycle() {
@@ -120,30 +156,40 @@ run_lifecycle() {
   state=$(bash "$CONTRACT" transition implement "$RESULT")
   assert_equal "$state" review "$client implementation result propagation"
 
-  state=$(run_review_batch "$client" 1 correctness security architecture testing)
-  assert_equal "$state" address "$client findings drive address transition"
+  state=$(run_review_batch "$client" 1 2 correctness security architecture testing)
+  assert_equal "$state" address "$client mixed accepted and rejected findings drive address transition"
   dispatch_stub "$client" implement-address "731 1 /tmp/implement-findings-pr-731-round-1.md"
   state=$(bash "$CONTRACT" transition address "$RESULT")
   assert_equal "$state" review "$client addresser result continues review"
 
-  state=$(run_review_batch "$client" 2 correctness security architecture testing)
+  state=$(run_review_batch "$client" 2 0 correctness security architecture testing)
   assert_equal "$state" docs "$client clean reviewer results open docs gate"
   dispatch_stub "$client" review-docs "Review PR #731 for documentation compliance, round 1"
-  state=$(bash "$CONTRACT" transition docs "$RESULT")
+  assert_equal "$(bash "$CONTRACT" validate docs -- "$RESULT")" 1 "$client raw docs validation with findings"
+  state=$(bash "$CONTRACT" transition docs --accepted-count 1 -- "$RESULT")
   assert_equal "$state" docs-address "$client docs findings drive address transition"
   dispatch_stub "$client" implement-address "731 docs-1 /tmp/implement-docs-findings-pr-731-round-1.md"
   state=$(bash "$CONTRACT" transition docs-address "$RESULT")
   assert_equal "$state" docs "$client docs addresser result continues docs review"
   dispatch_stub "$client" review-docs "Review PR #731 for documentation compliance, round 2"
-  state=$(bash "$CONTRACT" transition docs "$RESULT")
+  assert_equal "$(bash "$CONTRACT" validate docs -- "$RESULT")" 0 "$client raw clean docs validation"
+  state=$(bash "$CONTRACT" transition docs --accepted-count 0 -- "$RESULT")
   assert_equal "$state" verify "$client clean docs result opens verification"
+  VERIFY_VERDICT=FAIL
   dispatch_stub "$client" verify 731
   state=$(bash "$CONTRACT" transition verify "$RESULT")
-  assert_equal "$state" merge "$client PASS verdict opens merge gate"
-  state=$(bash "$CONTRACT" transition verify $'### Verdict: FAIL\n')
-  assert_equal "$state" address "$client FAIL verdict returns to addressing"
-  state=$(bash "$CONTRACT" transition verify $'### Verdict: PARTIAL\n')
-  assert_equal "$state" address "$client PARTIAL verdict returns to addressing"
+  assert_equal "$state" verification-address "$client FAIL verdict opens verification-specific addressing"
+  verification_findings="$TMP_DIR/implement-verification-findings-pr-731-round-1.md"
+  printf '# Verification Findings — Round 1\n\n| # | Finding | Severity | Details |\n|---|---------|----------|---------|\n| 1 | End-to-end flow failed | Action Required | app:42 expected success but observed failure. |\n' > "$verification_findings"
+  dispatch_stub "$client" implement-address "731 verification-1 $verification_findings"
+  state=$(bash "$CONTRACT" transition verification-address "$RESULT")
+  assert_equal "$state" verify "$client verification addresser result requires reverification"
+  VERIFY_VERDICT=PASS
+  dispatch_stub "$client" verify 731
+  state=$(bash "$CONTRACT" transition verify "$RESULT")
+  assert_equal "$state" merge "$client PASS reverification opens merge gate"
+  state=$(bash "$CONTRACT" transition verify "$(verification_output PARTIAL)")
+  assert_equal "$state" verification-address "$client PARTIAL verdict opens verification-specific addressing"
   state=$(bash "$CONTRACT" transition verify $'### Verdict: N/A\n')
   assert_equal "$state" merge "$client N/A verdict opens merge gate"
   dispatch_stub "$client" merge-pr 731
@@ -151,9 +197,9 @@ run_lifecycle() {
   assert_equal "$state" complete "$client merge result completes lifecycle"
 
   # Explicit one- and multi-reviewer subsets are dispatched in parallel by the same path.
-  state=$(run_review_batch "$client" 1 correctness)
+  state=$(run_review_batch "$client" 1 1 correctness)
   assert_equal "$state" address "$client one-reviewer selection"
-  state=$(run_review_batch "$client" 2 security testing)
+  state=$(run_review_batch "$client" 2 0 security testing)
   assert_equal "$state" docs "$client multi-reviewer selection"
 }
 
@@ -163,6 +209,7 @@ for client in claude codex; do
   [ "$client" = codex ] && prefix='$implement-lifecycle:'
   assert_logged "$client|${prefix}implement-code|0 synthetic acceptance task" "$client implementation payload"
   assert_logged "$client|${prefix}implement-address|731 1 /tmp/implement-findings-pr-731-round-1.md" "$client address payload"
+  assert_logged "$client|${prefix}implement-address|731 verification-1 $TMP_DIR/implement-verification-findings-pr-731-round-1.md" "$client verification address payload"
   assert_logged "$client|${prefix}review-docs|Review PR #731 for documentation compliance, round 1" "$client docs payload"
   assert_logged "$client|${prefix}verify|731" "$client verification payload"
   assert_logged "$client|${prefix}merge-pr|731" "$client merge payload"
@@ -172,6 +219,27 @@ done
 assert_equal "$(bash "$CONTRACT" target claude review-correctness)" review-correctness "Claude named reviewer entry point"
 assert_equal "$(bash "$CONTRACT" target codex review-correctness)" '$implement-lifecycle:review-correctness' "Codex reviewer skill entry point"
 
+# Raw envelopes are validated independently; explicit post-referee counts control transitions.
+RAW_TWO=$(review_output correctness 2)
+assert_equal "$(bash "$CONTRACT" transition review --accepted-count 0 --reviewers correctness -- "$RAW_TWO")" docs "all code findings rejected by referee"
+assert_equal "$(bash "$CONTRACT" transition review --accepted-count 1 --reviewers correctness -- "$RAW_TWO")" address "mixed accepted and rejected code findings"
+assert_equal "$(bash "$CONTRACT" transition review --accepted-count 0 --reviewers correctness -- "$(review_output correctness 0)")" docs "zero raw code findings"
+DOCS_TWO=$(review_output docs 2)
+assert_equal "$(bash "$CONTRACT" transition docs --accepted-count 0 -- "$DOCS_TWO")" verify "all docs findings rejected by referee"
+assert_equal "$(bash "$CONTRACT" transition docs --accepted-count 1 -- "$DOCS_TWO")" docs-address "mixed accepted and rejected docs findings"
+assert_equal "$(bash "$CONTRACT" transition docs --accepted-count 0 -- "$(review_output docs 0)")" verify "zero raw docs findings"
+
+# Every documented category and security/requirements label is accepted in its valid position.
+assert_equal "$(bash "$CONTRACT" transition review --accepted-count 1 --reviewers correctness -- "$(review_output correctness 1 Recommended)")" address "Recommended category"
+assert_equal "$(bash "$CONTRACT" transition review --accepted-count 1 --reviewers architecture -- "$(review_output architecture 1 Minor)")" address "Minor category"
+assert_equal "$(bash "$CONTRACT" transition review --accepted-count 1 --reviewers security -- "$(review_output security 1 Recommended Requirements)")" address "Requirements label"
+assert_equal "$(bash "$CONTRACT" transition docs --accepted-count 1 -- "$(review_output docs 1 Recommended)")" docs-address "docs Recommended category"
+assert_equal "$(bash "$CONTRACT" transition docs --accepted-count 1 -- "$(review_output docs 1 Minor)")" docs-address "docs Minor category"
+ORDERED_REVIEW=$'### Action Required\n- **[Security]** Required.\n### Recommended\n- **[Requirements]** Recommended.\n### Minor\n- **[Security]** Minor.\n### Summary\nSecurity and requirements review complete.'
+assert_equal "$(bash "$CONTRACT" validate review --reviewers security -- "$ORDERED_REVIEW")" 3 "all ordered reviewer categories"
+ORDERED_DOCS=$'### Action Required\n- **[Docs]** Required.\n### Recommended\n- **[Docs]** Recommended.\n### Minor\n- **[Docs]** Minor.\n### Summary\nDocumentation review complete.'
+assert_equal "$(bash "$CONTRACT" validate docs -- "$ORDERED_DOCS")" 3 "all ordered docs categories"
+
 # Every phase fails closed for missing, empty, malformed, duplicate, partial, or extra results.
 GOOD_REVIEW=$(review_output correctness 0)
 GOOD_ADDRESS=$(address_output)
@@ -180,31 +248,42 @@ assert_rejected "empty implementation output" bash "$CONTRACT" transition implem
 assert_rejected "zero PR number" bash "$CONTRACT" transition implement 'PR_NUMBER: 0'
 assert_rejected "malformed PR number" bash "$CONTRACT" transition implement 'PR_NUMBER: abc'
 assert_rejected "duplicate PR number" bash "$CONTRACT" transition implement $'PR_NUMBER: 1\nPR_NUMBER: 2'
-assert_rejected "missing reviewer selection" bash "$CONTRACT" transition review "$GOOD_REVIEW"
-assert_rejected "empty reviewer selection" bash "$CONTRACT" transition review --reviewers -- "$GOOD_REVIEW"
-assert_rejected "missing reviewer output" bash "$CONTRACT" transition review --reviewers correctness --
-assert_rejected "empty reviewer output" bash "$CONTRACT" transition review --reviewers correctness -- ""
-assert_rejected "partial selected reviewer output" bash "$CONTRACT" transition review --reviewers correctness testing -- "$GOOD_REVIEW"
-assert_rejected "extra reviewer output" bash "$CONTRACT" transition review --reviewers correctness -- "$GOOD_REVIEW" "$GOOD_REVIEW"
-assert_rejected "duplicate reviewer" bash "$CONTRACT" transition review --reviewers correctness correctness -- "$GOOD_REVIEW" "$GOOD_REVIEW"
-assert_rejected "unknown reviewer" bash "$CONTRACT" transition review --reviewers docs -- "$(review_output docs 0)"
-assert_rejected "mismatched reviewer tag" bash "$CONTRACT" transition review --reviewers correctness -- "$(review_output testing 1)"
-assert_rejected "malformed reviewer output" bash "$CONTRACT" transition review --reviewers correctness -- '### Summary'
-for phase in address docs-address; do
+assert_rejected "missing accepted reviewer count" bash "$CONTRACT" transition review --reviewers correctness -- "$GOOD_REVIEW"
+assert_rejected "invalid accepted reviewer count" bash "$CONTRACT" transition review --accepted-count nope --reviewers correctness -- "$GOOD_REVIEW"
+assert_rejected "accepted count above raw reviewer findings" bash "$CONTRACT" transition review --accepted-count 1 --reviewers correctness -- "$GOOD_REVIEW"
+assert_rejected "empty reviewer selection" bash "$CONTRACT" transition review --accepted-count 0 --reviewers -- "$GOOD_REVIEW"
+assert_rejected "missing reviewer output" bash "$CONTRACT" transition review --accepted-count 0 --reviewers correctness --
+assert_rejected "empty reviewer output" bash "$CONTRACT" transition review --accepted-count 0 --reviewers correctness -- ""
+assert_rejected "partial selected reviewer output" bash "$CONTRACT" transition review --accepted-count 0 --reviewers correctness testing -- "$GOOD_REVIEW"
+assert_rejected "extra reviewer output" bash "$CONTRACT" transition review --accepted-count 0 --reviewers correctness -- "$GOOD_REVIEW" "$GOOD_REVIEW"
+assert_rejected "duplicate reviewer" bash "$CONTRACT" transition review --accepted-count 0 --reviewers correctness correctness -- "$GOOD_REVIEW" "$GOOD_REVIEW"
+assert_rejected "unknown reviewer" bash "$CONTRACT" transition review --accepted-count 0 --reviewers docs -- "$(review_output docs 0)"
+assert_rejected "mismatched reviewer tag" bash "$CONTRACT" transition review --accepted-count 1 --reviewers correctness -- "$(review_output testing 1)"
+assert_rejected "malformed reviewer output" bash "$CONTRACT" transition review --accepted-count 0 --reviewers correctness -- '### Summary'
+assert_rejected "out-of-order reviewer categories" bash "$CONTRACT" transition review --accepted-count 0 --reviewers correctness -- $'### Minor\n- **[Correctness]** Minor.\n### Recommended\n- **[Correctness]** Recommended.\n### Summary\nDone.'
+assert_rejected "duplicate reviewer category" bash "$CONTRACT" transition review --accepted-count 0 --reviewers correctness -- $'### Recommended\n- **[Correctness]** First.\n### Recommended\n- **[Correctness]** Second.\n### Summary\nDone.'
+assert_rejected "empty reviewer category" bash "$CONTRACT" transition review --accepted-count 0 --reviewers correctness -- $'### Action Required\n\n### Summary\nDone.'
+assert_rejected "finding after reviewer summary" bash "$CONTRACT" transition review --accepted-count 0 --reviewers correctness -- $'### Summary\nDone.\n### Action Required\n- **[Correctness]** Late.'
+for phase in address docs-address verification-address; do
   assert_rejected "missing $phase output" bash "$CONTRACT" transition "$phase"
   assert_rejected "empty $phase output" bash "$CONTRACT" transition "$phase" ""
   assert_rejected "malformed $phase output" bash "$CONTRACT" transition "$phase" '| # | Finding | Action | Details |'
   assert_rejected "unsuccessful $phase result" bash "$CONTRACT" transition "$phase" "${GOOD_ADDRESS/Applied/Escalated}"
 done
-assert_rejected "missing docs output" bash "$CONTRACT" transition docs
-assert_rejected "empty docs output" bash "$CONTRACT" transition docs ""
-assert_rejected "malformed docs output" bash "$CONTRACT" transition docs "$(review_output correctness 1)"
+assert_rejected "missing docs accepted count" bash "$CONTRACT" transition docs -- "$(review_output docs 0)"
+assert_rejected "empty docs output" bash "$CONTRACT" transition docs --accepted-count 0 -- ""
+assert_rejected "malformed docs output" bash "$CONTRACT" transition docs --accepted-count 0 -- "$(review_output correctness 1)"
+assert_rejected "accepted docs count above raw findings" bash "$CONTRACT" transition docs --accepted-count 1 -- "$(review_output docs 0)"
+assert_rejected "out-of-order docs categories" bash "$CONTRACT" transition docs --accepted-count 0 -- $'### Minor\n- **[Docs]** Minor.\n### Recommended\n- **[Docs]** Recommended.\n### Summary\nDone.'
+assert_rejected "duplicate docs category" bash "$CONTRACT" transition docs --accepted-count 0 -- $'### Recommended\n- **[Docs]** First.\n### Recommended\n- **[Docs]** Second.\n### Summary\nDone.'
+assert_rejected "empty docs category" bash "$CONTRACT" transition docs --accepted-count 0 -- $'### Action Required\n\n### Summary\nDone.'
 assert_rejected "missing verification output" bash "$CONTRACT" transition verify
 assert_rejected "empty verification output" bash "$CONTRACT" transition verify ""
 assert_rejected "unknown verification verdict" bash "$CONTRACT" transition verify '### Verdict: UNKNOWN'
 assert_rejected "duplicate verification verdict" bash "$CONTRACT" transition verify $'### Verdict: PASS\n### Verdict: FAIL'
+assert_rejected "FAIL verification without structured issues" bash "$CONTRACT" transition verify $'### Verdict: FAIL\n### Issues Found\nNone'
 assert_rejected "missing merge output" bash "$CONTRACT" transition merge
 assert_rejected "empty merge output" bash "$CONTRACT" transition merge ""
 assert_rejected "malformed merge output" bash "$CONTRACT" transition merge $'## Merge Complete\n**PR:** #0 — bad\n**Merged to:** main'
 
-echo "PASS: documented worker outputs, client-specific entry points, dynamic parallel reviewer subsets, and fail-closed lifecycle transitions are covered."
+echo "PASS: strict worker outputs, referee-driven transitions, verification recovery, client entry points, and deterministic parallel reviewer dispatch are covered."

@@ -5,7 +5,7 @@ set -euo pipefail
 PLUGIN_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 
 usage() {
-  echo "usage: $0 target <claude|codex> <worker> | targets <claude|codex> <worker>... | transition <phase> [--reviewers <reviewer>...] -- <worker-output>..." >&2
+  echo "usage: $0 target <claude|codex> <worker> | targets <claude|codex> <worker>... | validate <review|docs> [--reviewers <reviewer>...] -- <worker-output>... | transition <phase> [--accepted-count <count>] [--reviewers <reviewer>...] -- <worker-output>..." >&2
   exit 2
 }
 
@@ -87,28 +87,105 @@ reviewer_label() {
 parse_review_count() {
   reviewer=$1
   output=${2-}
-  require_nonempty_output "$reviewer reviewer" "$output"
-  label=$(reviewer_label "$reviewer")
-  printf '%s\n' "$output" | grep -Eq '^### Summary[[:space:]]*$' || {
-    echo "malformed $reviewer reviewer output: missing ### Summary" >&2
+  require_nonempty_output "$reviewer reviewer" "$output" || return 2
+  label=$(reviewer_label "$reviewer") || return 2
+  printf '%s\n' "$output" | awk -v reviewer="$reviewer" -v labels="$label" '
+    function fail(message) {
+      failed = 1
+      print "malformed " reviewer " reviewer output: " message > "/dev/stderr"
+      exit 2
+    }
+    function close_category() {
+      if (in_category && category_findings == 0) fail("empty category")
+    }
+    BEGIN { last_rank = 0; findings = 0 }
+    /^### / {
+      if ($0 == "### Action Required") rank = 1
+      else if ($0 == "### Recommended") rank = 2
+      else if ($0 == "### Minor") rank = 3
+      else if ($0 == "### Summary") rank = 4
+      else fail("unsupported category")
+      if (rank <= last_rank) fail("categories must be unique and ordered")
+      close_category()
+      last_rank = rank
+      if (rank == 4) {
+        summary_seen = 1
+        in_category = 0
+      } else {
+        in_category = 1
+        category_findings = 0
+      }
+      next
+    }
+    /^[[:space:]]*$/ { next }
+    {
+      if (last_rank == 0) fail("content before first category")
+      if (summary_seen) {
+        if ($0 ~ /^- /) fail("finding bullet outside a finding category")
+        summary_nonempty = 1
+        next
+      }
+      if (!in_category) fail("content outside a finding category")
+      expected = "^- \\*\\*\\[(" labels ")\\]\\*\\* .+"
+      if ($0 !~ expected) fail("category contains a malformed or mismatched finding")
+      category_findings++
+      findings++
+    }
+    END {
+      if (failed) exit 2
+      close_category()
+      if (!summary_seen) fail("missing final ### Summary")
+      if (!summary_nonempty) fail("empty summary")
+      print findings
+    }
+  '
+}
+
+validate_accepted_count() {
+  accepted=${1-}
+  raw=$2
+  case "$accepted" in ''|*[!0-9]*) echo "accepted finding count must be a non-negative integer" >&2; return 2 ;; esac
+  [ "$accepted" -le "$raw" ] || {
+    echo "accepted finding count cannot exceed validated raw findings" >&2
     return 2
   }
-  printf '%s\n' "$output" | awk '/^### Summary[[:space:]]*$/{if (getline > 0 && $0 ~ /[^[:space:]]/) found=1} END{exit !found}' || {
-    echo "malformed $reviewer reviewer output: empty summary" >&2
-    return 2
-  }
-  invalid_headings=$(printf '%s\n' "$output" | grep '^### ' | grep -Ev '^### (Action Required|Recommended|Minor|Summary)[[:space:]]*$' || true)
-  [ -z "$invalid_headings" ] || {
-    echo "malformed $reviewer reviewer output: unsupported category" >&2
-    return 2
-  }
-  findings=$(printf '%s\n' "$output" | grep -Ec "^- \*\*\[($label)\]\*\* .+" || true)
-  bullets=$(printf '%s\n' "$output" | grep -Ec '^- ' || true)
-  [ "$findings" -eq "$bullets" ] || {
-    echo "malformed $reviewer reviewer output: finding tag does not match reviewer" >&2
-    return 2
-  }
-  printf '%s\n' "$findings"
+}
+
+parse_review_batch() {
+  [ "${1-}" = --reviewers ] || { echo "review validation requires --reviewers" >&2; return 2; }
+  shift
+  reviewers=()
+  while [ "$#" -gt 0 ] && [ "$1" != -- ]; do reviewers+=("$1"); shift; done
+  [ "${1-}" = -- ] || { echo "review validation requires -- before outputs" >&2; return 2; }
+  shift
+  [ "${#reviewers[@]}" -gt 0 ] || { echo "review validation requires one or more reviewers" >&2; return 2; }
+  [ "$#" -eq "${#reviewers[@]}" ] || { echo "review validation requires exactly one output per selected reviewer" >&2; return 2; }
+  outputs=("$@")
+  total=0
+  seen=' '
+  index=0
+  for reviewer in "${reviewers[@]}"; do
+    case "$reviewer" in correctness|security|architecture|testing) ;; *) echo "invalid code reviewer: $reviewer" >&2; return 2 ;; esac
+    case "$seen" in *" $reviewer "*) echo "duplicate selected reviewer: $reviewer" >&2; return 2 ;; esac
+    seen="$seen$reviewer "
+    count=$(parse_review_count "$reviewer" "${outputs[$index]}") || return 2
+    total=$((total + count))
+    index=$((index + 1))
+  done
+  printf '%s\n' "$total"
+}
+
+validate_outputs() {
+  phase=$1
+  shift
+  case "$phase" in
+    review) parse_review_batch "$@" ;;
+    docs)
+      [ "${1-}" = -- ] && [ "$#" -eq 2 ] || { echo "docs validation requires -- <output>" >&2; return 2; }
+      parse_review_count docs "$2"
+      ;;
+    *) echo "unknown validation phase: $phase" >&2; return 2 ;;
+  esac
 }
 
 parse_addressed() {
@@ -137,7 +214,26 @@ parse_verdict() {
   [ "$(printf '%s\n' "$verdict" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 1 ] || {
     echo "verification output must contain exactly one ### Verdict" >&2; return 2;
   }
-  case "$verdict" in PASS|FAIL|PARTIAL|N/A) printf '%s\n' "$verdict" ;; *) echo "unsupported verification verdict: $verdict" >&2; return 2 ;; esac
+  case "$verdict" in
+    FAIL|PARTIAL)
+      issue_count=$(printf '%s\n' "$output" | awk '
+        /^### Issues Found[[:space:]]*$/ { headings++; in_issues = 1; next }
+        /^### / { in_issues = 0 }
+        in_issues && /^- \*\*\[Verification\]\*\* .+/ { findings++ }
+        in_issues && /^- / && $0 !~ /^- \*\*\[Verification\]\*\* .+/ { malformed = 1 }
+        END {
+          if (headings != 1 || malformed || findings < 1) exit 2
+          print findings
+        }
+      ') || {
+        echo "verification $verdict output requires one or more structured issues under exactly one ### Issues Found heading" >&2
+        return 2
+      }
+      printf '%s\n' "$verdict"
+      ;;
+    PASS|N/A) printf '%s\n' "$verdict" ;;
+    *) echo "unsupported verification verdict: $verdict" >&2; return 2 ;;
+  esac
 }
 
 parse_merged() {
@@ -164,28 +260,12 @@ transition() {
       echo review
       ;;
     review)
-      [ "${1-}" = --reviewers ] || { echo "review transition requires --reviewers" >&2; return 2; }
-      shift
-      reviewers=()
-      while [ "$#" -gt 0 ] && [ "$1" != -- ]; do reviewers+=("$1"); shift; done
-      [ "${1-}" = -- ] || { echo "review transition requires -- before outputs" >&2; return 2; }
-      shift
-      [ "${#reviewers[@]}" -gt 0 ] || { echo "review transition requires one or more reviewers" >&2; return 2; }
-      [ "$#" -eq "${#reviewers[@]}" ] || { echo "review transition requires exactly one output per selected reviewer" >&2; return 2; }
-      outputs=("$@")
-      total=0
-      seen=' '
-      index=0
-      for reviewer in "${reviewers[@]}"; do
-        case "$reviewer" in correctness|security|architecture|testing) ;; *) echo "invalid code reviewer: $reviewer" >&2; return 2 ;; esac
-        case "$seen" in *" $reviewer "*) echo "duplicate selected reviewer: $reviewer" >&2; return 2 ;; esac
-        seen="$seen$reviewer "
-        output=${outputs[$index]}
-        count=$(parse_review_count "$reviewer" "$output")
-        total=$((total + count))
-        index=$((index + 1))
-      done
-      if [ "$total" -eq 0 ]; then echo docs; else echo address; fi
+      [ "${1-}" = --accepted-count ] && [ "$#" -ge 2 ] || { echo "review transition requires --accepted-count" >&2; return 2; }
+      accepted=$2
+      shift 2
+      total=$(parse_review_batch "$@") || return 2
+      validate_accepted_count "$accepted" "$total"
+      if [ "$accepted" -eq 0 ]; then echo docs; else echo address; fi
       ;;
     address)
       [ "$#" -eq 1 ] || { echo "address transition requires exactly one output" >&2; return 2; }
@@ -193,9 +273,13 @@ transition() {
       echo review
       ;;
     docs)
-      [ "$#" -eq 1 ] || { echo "docs transition requires exactly one output" >&2; return 2; }
-      count=$(parse_review_count docs "$1")
-      if [ "$count" -eq 0 ]; then echo verify; else echo docs-address; fi
+      [ "${1-}" = --accepted-count ] && [ "$#" -eq 4 ] && [ "${3-}" = -- ] || {
+        echo "docs transition requires --accepted-count <count> -- <output>" >&2; return 2;
+      }
+      accepted=$2
+      count=$(parse_review_count docs "$4") || return 2
+      validate_accepted_count "$accepted" "$count"
+      if [ "$accepted" -eq 0 ]; then echo verify; else echo docs-address; fi
       ;;
     docs-address)
       [ "$#" -eq 1 ] || { echo "docs-address transition requires exactly one output" >&2; return 2; }
@@ -205,7 +289,12 @@ transition() {
     verify)
       [ "$#" -eq 1 ] || { echo "verify transition requires exactly one output" >&2; return 2; }
       verdict=$(parse_verdict "$1")
-      case "$verdict" in PASS|N/A) echo merge ;; FAIL|PARTIAL) echo address ;; esac
+      case "$verdict" in PASS|N/A) echo merge ;; FAIL|PARTIAL) echo verification-address ;; esac
+      ;;
+    verification-address)
+      [ "$#" -eq 1 ] || { echo "verification-address transition requires exactly one output" >&2; return 2; }
+      parse_addressed "$1"
+      echo verify
       ;;
     merge)
       [ "$#" -eq 1 ] || { echo "merge transition requires exactly one output" >&2; return 2; }
@@ -226,6 +315,12 @@ case "${1:-}" in
     client=$2
     shift 2
     for worker in "$@"; do target "$client" "$worker"; done
+    ;;
+  validate)
+    [ "$#" -ge 4 ] || usage
+    phase=$2
+    shift 2
+    validate_outputs "$phase" "$@"
     ;;
   transition)
     [ "$#" -ge 3 ] || usage

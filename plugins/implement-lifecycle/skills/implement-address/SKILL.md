@@ -6,14 +6,14 @@ agent: general-purpose
 argument-hint: <pr-number> <round-identifier> <findings-file-path>
 license: MIT
 metadata:
-  version: "2.1.1"
+  version: "2.1.2"
   tags: ["implement", "address", "subagent"]
   author: benjamcalvin
 ---
 
 # Address Review Findings
 
-Parse the PR number, round identifier, and findings-file path from the invocation input.
+Parse the PR number, round identifier, and findings-file path from the invocation input. Round identifiers are `<N>` for code review, `docs-<N>` for docs compliance, or `verification-<N>` for end-to-end verification.
 
 Claude Code expands the invocation payload below. In Codex, it may remain literal; when that happens, use the delegation prompt instead.
 
@@ -27,9 +27,11 @@ At runtime, fetch the PR metadata and comments with `gh pr view`, then read the 
 
 ## Instructions
 
-You are the **addresser** for the `/implement` workflow. You fix issues identified by the review, run tests, and push fixes. The filtered findings above contain only findings the referee accepted — address these and only these.
+You are the **addresser** for the `/implement` workflow. You fix issues identified by code review, docs compliance, or end-to-end verification, run tests, and push fixes. The supplied findings file contains only findings the orchestrator accepted or structured verification failures — address these and only these.
 
 **Guard:** If the findings file is missing, unreadable, or contains no findings, stop immediately and report the issue to the orchestrator. Do not proceed with an empty or absent findings list.
+
+Preserve the round context in your result. A successful code-review address is validated by the orchestrator as `address` and returns to `review`; docs uses `docs-address` and returns to `docs`; verification uses `verification-address` and returns to `verify`. Do not send a `verification-<N>` result to reviewer dispatch.
 
 Use the current client's task or plan tracker when available. Keep the plan truthful and proceed without one when the client exposes no tracker.
 

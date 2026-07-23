@@ -9,7 +9,7 @@ agent: general-purpose
 argument-hint: <pr-number>
 license: MIT
 metadata:
-  version: "1.1.1"
+  version: "1.1.2"
   tags: ["verify", "e2e", "integration", "subagent"]
   author: benjamcalvin
 ---
@@ -185,7 +185,9 @@ Return findings in this structure:
 **Result:** PASS / FAIL — <system degrades gracefully>
 
 ### Issues Found
-<list any bugs, regressions, or inconsistencies discovered — or "None">
+- **[Verification]** <for each failure: behavior, scenario/evidence, expected versus actual, and relevant file or flow>
+
+Use one bullet per independently addressable issue for a **FAIL** or **PARTIAL** verdict. Those verdicts require at least one non-empty structured bullet because the orchestrator converts them into the verification findings artifact. For **PASS**, write `None`. Do not use **N/A** except for the pure documentation case below.
 
 ### Holistic Assessment
 <1-3 sentences: Does the system work correctly as a whole after this change?

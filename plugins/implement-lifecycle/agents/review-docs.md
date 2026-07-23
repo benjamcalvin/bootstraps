@@ -105,4 +105,4 @@ Return findings in exactly this structure:
 ### Summary
 <1-2 sentence assessment focused on documentation accuracy and compliance>
 
-Omit any category that has no findings. If documentation is accurate and complete, say so explicitly.
+Use only these headings, in this order, at most once each. Omit any empty finding category, put finding bullets only inside its category, and finish with exactly one non-empty `### Summary`. If documentation is accurate and complete, say so explicitly in that summary.
