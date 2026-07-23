@@ -4,25 +4,26 @@ description: >-
   End-to-end verification of a PR's changes in the real running system (runs as subagent).
   Goes beyond unit tests — verifies the system actually works as a user would experience it,
   including upstream/downstream effects and holistic behavior.
-context: fork
-agent: general-purpose
-argument-hint: <pr-number>
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   tags: ["verify", "e2e", "integration", "subagent"]
   author: benjamcalvin
 ---
 
 # End-to-End Verification
 
-Verify PR #$ARGUMENTS works in the real, running system — not in isolation.
+Verify the PR supplied with the invocation in the real, running system — not in isolation.
+
+Claude Code expands the invocation payload below. In Codex, it may remain literal; when that happens, use the delegation prompt instead.
+
+```text
+$ARGUMENTS
+```
 
 ## PR Context
 
-- PR metadata: !`gh pr view $ARGUMENTS`
-- PR comments: !`gh pr view $ARGUMENTS --comments 2>/dev/null || echo "NO_COMMENTS"`
-- Changed files: !`gh pr view $ARGUMENTS --json files --jq '.files[] | "\(.path) (+\(.additions)/-\(.deletions))"'`
+At runtime, parse the PR number and fetch its metadata, comments, and changed-file summary with `gh pr view`.
 
 ## Instructions
 
@@ -30,7 +31,7 @@ You are the **verification agent** for the implementation lifecycle. Unit tests 
 
 You are the last line of defense before merge. Be thorough.
 
-Use the **Task tools** (`TaskCreate`, `TaskUpdate`) to track progress.
+Use the current client's task or plan tracker when available. Keep the plan truthful and proceed without one when the client exposes no tracker.
 
 ### Step 1: Understand the Change Holistically
 
@@ -39,7 +40,7 @@ Read the PR description, changed files, and linked issues. Answer these question
 1. **What behavior changed?** — Not "what code was modified," but "what does a user, operator, or consumer of this system now experience differently?" Even internal changes have observable effects somewhere.
 2. **What are the upstream inputs?** — What triggers this code? User action, API call, cron job, event, other service?
 3. **What are the downstream effects?** — What does this code produce that other parts of the system consume? Database writes, API responses, files, events, logs, metrics?
-4. **What existing flows touch this code?** — Use Grep/Read to trace callers and consumers. What end-to-end paths run through the changed code?
+4. **What existing flows touch this code?** — Use the current client's search and file-reading capabilities to trace callers and consumers. What end-to-end paths run through the changed code?
 5. **What could break that isn't obvious?** — Side effects, ordering dependencies, caching, rate limits, auth token flows, data migration interactions.
 6. **What is directly observable?** — Every change affects *something* concrete. Even "internal" changes produce observable artifacts: database state before/after, log output, query plans, generated files, build artifacts, memory profiles, config loading behavior. Find the observable surface.
 
@@ -124,11 +125,7 @@ If a verification step fails:
 
 ### Step 5: Report Findings
 
-Post your verification results to the PR:
-
-```
-gh pr comment $ARGUMENTS --body "<results>"
-```
+Write the verification results to a temporary Markdown file and post them with `gh pr comment <pr-number> --body-file <path>`.
 
 Return findings in this structure:
 

@@ -1,0 +1,22 @@
+{
+  "name": "implement-lifecycle",
+  "version": "3.2.0",
+  "description": "Cross-client implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, verify, merge",
+  "author": {
+    "name": "benjamcalvin"
+  },
+  "license": "MIT",
+  "keywords": ["implement", "review", "pr", "lifecycle", "adversarial", "tdd", "merge"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Implement Lifecycle",
+    "shortDescription": "Implement, review, verify, and merge changes.",
+    "longDescription": "Run a complete implementation lifecycle with delegated coding, parallel specialist review, an address loop, documentation checks, end-to-end verification, and merge handling.",
+    "developerName": "benjamcalvin",
+    "category": "Developer Tools",
+    "capabilities": ["Read", "Write", "Interactive"],
+    "defaultPrompt": [
+      "Use $implement-lifecycle:implement to complete this task."
+    ]
+  }
+}

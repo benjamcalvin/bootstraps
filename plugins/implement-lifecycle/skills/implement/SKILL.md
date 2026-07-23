@@ -3,24 +3,25 @@ name: implement
 description: >-
   Implementation, review, and merge — full lifecycle or any subset.
   Lean orchestrator that delegates all heavy work to forked subagents.
-  Triggers: /implement, implement this, build this feature
-argument-hint: <#issue | PR-number | freeform task> [instructions]
+  Triggers: /implement, $implement-lifecycle:implement, implement this, build this feature
 license: MIT
 metadata:
-  version: "3.0.0"
+  version: "3.2.0"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
 
 # Implement
 
-Orchestrate the full implementation lifecycle for: $ARGUMENTS
+Orchestrate the full implementation lifecycle using the task supplied with the skill invocation.
 
-## Context
+Claude Code expands the invocation payload below. In Codex, it may remain literal; when that happens, use the user's invoking prompt instead.
 
-- Current branch: !`git branch --show-current`
-- Recent commits: !`git log --oneline -5`
-- Issue (if applicable): !`gh issue view $0 --comments 2>/dev/null || echo "NOT_AN_ISSUE"`
+```text
+$ARGUMENTS
+```
+
+At runtime, inspect the current branch and recent commits. If the leading input is an issue number, fetch the issue and comments with `gh issue view` before planning the workflow.
 
 ## Instructions
 
@@ -30,25 +31,34 @@ You are a **lean orchestrator**. Your job is to coordinate — not to implement,
 
 **Drive forward autonomously.** When you have a plan (from the user or an issue), execute all phases without pausing for approval between them. Do not ask "shall I proceed to the next phase?" — just proceed. Only stop to ask the user when you hit a genuine ambiguity, a blocking decision outside the task's scope, or an escalation condition listed below.
 
-**You MUST use the Task tools** (`TaskCreate`, `TaskUpdate`, `TaskList`, `TaskGet`) throughout.
+Use the current client's task or plan tracker throughout when one is available. In Claude Code, use the Task tools. In Codex, use the plan-tracking capability. Do not block the workflow merely because a client exposes no tracker.
 
 **Task tracking rules:**
-1. **Bootstrap immediately.** Create a task for each phase before starting. Each needs `subject` (imperative), `activeForm` (continuous), and `description`.
+1. **Bootstrap immediately.** Create an item for each phase before starting, using the fields supported by the current client's tracker. With Claude Code Task tools, provide `subject` (imperative), `activeForm` (continuous), and `description`.
 2. **One in_progress at a time.** Mark `in_progress` before starting, `completed` the moment it finishes.
 3. **Break down dynamically.** Add sub-tasks when entering a phase or when unexpected work surfaces.
 4. **Keep the list truthful.** Delete irrelevant tasks, update descriptions if scope changes.
 
 ---
 
+### Cross-client delegation
+
+Always delegate implementation, addressing, verification, and specialist review work. Use the mechanism exposed by the current client:
+
+- **Claude Code:** invoke the unqualified skill name or named reviewer agent, such as `implement-code` or `review-correctness`.
+- **Codex:** spawn a subagent and explicitly invoke the plugin-namespaced skill, such as `$implement-lifecycle:implement-code` or `$implement-lifecycle:review-correctness`. Ask Codex to run independent reviewer subagents in parallel and wait for all results.
+
+Pass the complete task or PR context in every delegation prompt. Do not assume a child receives the parent's local notes.
+
 ### Entry Point
 
-Parse `$ARGUMENTS` to determine **what to work on** and **what to do**.
+Parse the invocation input to determine **what to work on** and **what to do**.
 
 **Step 1 — Identify the target** from the leading token:
 
-1. **`#N` (issue number):** The issue body is in Context above. Extract the task description and acceptance criteria.
+1. **`#N` (issue number):** Fetch the issue body and comments with `gh issue view`, then extract the task description and acceptance criteria.
 2. **Bare number:** Run `gh pr view <number> --json number,title,state --jq '.'`. If it matches an open PR, record the PR number.
-3. **Freeform text:** Treat the entire `$ARGUMENTS` as the task description.
+3. **Freeform text:** Treat the entire invocation input as the task description.
 
 **Step 2 — Determine scope** from any trailing instructions:
 
@@ -75,25 +85,23 @@ Decide whether the task needs planning and pass appropriate instructions:
 - **Needs planning** (ambiguous, touches multiple modules, unclear acceptance criteria): pass the task description without "skip planning"
 - **Skip planning** (clear, scoped tasks like "fix the typo in config.go"): include "skip planning" in the instructions
 
-Invoke the implementer:
+Delegate to the implementer. In Claude Code, use `implement-code`. In Codex, explicitly tell the subagent to use `$implement-lifecycle:implement-code`:
 
 ```
-Skill tool → skill: "implement-code", args: "<issue-number-or-0> <task description, acceptance criteria, and optional instructions>"
+Payload: <issue-number-or-0> <task description, acceptance criteria, and optional instructions>
 ```
 
 Pass the full context: task description, acceptance criteria from the issue (if any), and any optional user instructions. If there's a linked issue, pass the issue number as the first arg; otherwise pass `0`.
 
 The implementer will plan internally (if needed), write code, write tests, and return the **PR number** and a summary. Record the PR number for Phase 4.
 
-**Update linked issues.** If the original task was a GitHub issue, post a progress comment:
-```
-gh issue comment <N> --body "$(cat <<'EOF'
+**Update linked issues.** If the original task was a GitHub issue, write this progress comment to a temporary Markdown file and post it with `gh issue comment <N> --body-file <path>`:
+
+```md
 ## In Progress
 
 Implementation PR created: #<pr-number> — <PR title>
 Entering adversarial review phase.
-EOF
-)"
 ```
 
 ---
@@ -148,13 +156,13 @@ Use judgment from the PR summary, changed-file list, and issue/spec context:
 - Include **`review-testing`** when tests changed, new behavior was added, or existing behavior changed without obvious regression coverage.
 - Skip reviewers whose specialty clearly does not apply; do not summon them just for ritual coverage.
 
-**Always invoke selected reviewers in parallel using multiple Agent tool calls in a single response:**
+**Always invoke selected reviewers in parallel.** Use named reviewer agents in Claude Code. In Codex, spawn one subagent per selected specialty and explicitly invoke its matching plugin-namespaced skill:
 
 ```
-Agent tool → agent: "review-correctness", prompt: "Review PR #<pr-number>, round <round-number>"
-Agent tool → agent: "review-security", prompt: "Review PR #<pr-number>, round <round-number>"
-Agent tool → agent: "review-architecture", prompt: "Review PR #<pr-number>, round <round-number>"
-Agent tool → agent: "review-testing", prompt: "Review PR #<pr-number>, round <round-number>"
+$implement-lifecycle:review-correctness Review PR #<pr-number>, round <round-number>
+$implement-lifecycle:review-security Review PR #<pr-number>, round <round-number>
+$implement-lifecycle:review-architecture Review PR #<pr-number>, round <round-number>
+$implement-lifecycle:review-testing Review PR #<pr-number>, round <round-number>
 ```
 
 Each reviewer fetches PR context, posts findings to GitHub, and returns them to you.
@@ -184,10 +192,9 @@ Produce a **filtered action plan** containing only accepted findings.
 
 #### Step C: Post Referee Decisions & Write Findings File
 
-Post referee decisions to GitHub for the audit trail:
+Write referee decisions to a temporary Markdown file and post them with `gh pr comment <number> --body-file <path>` for the audit trail:
 
-```
-gh pr comment <number> --body "$(cat <<'EOF'
+```md
 ## Review Round <N> — Referee Decisions
 
 | # | Finding | Reviewer Severity | Decision | Reasoning |
@@ -196,28 +203,22 @@ gh pr comment <number> --body "$(cat <<'EOF'
 | ... | ... | ... | ... | ... |
 
 **Findings forwarded to addresser:** <count>
-EOF
-)"
 ```
 
-Write the filtered findings (accepted only) to a temp file for the addresser:
+Write the filtered findings (accepted only) to a temp file for the addresser using the current client's file-editing capability:
 
-```bash
-cat > /tmp/implement-findings-pr-<PR>-round-<N>.md <<'EOF'
+```md
 # Filtered Findings — Round <N>
 
 | # | Finding | Severity | Details |
 |---|---------|----------|---------|
 | 1 | <description> | <severity> | <file:line + what to fix> |
 | ... | ... | ... | ... |
-EOF
 ```
 
 #### Step D: Invoke Addresser
 
-```
-Skill tool → skill: "implement-address", args: "<pr-number> <round-number> /tmp/implement-findings-pr-<PR>-round-<N>.md"
-```
+Delegate to a subagent using `implement-address` in Claude Code or `$implement-lifecycle:implement-address` in Codex, with `<pr-number> <round-number> /tmp/implement-findings-pr-<PR>-round-<N>.md`.
 
 The addresser will fix issues, run tests, commit, push, and return a summary.
 
@@ -227,8 +228,9 @@ The addresser has pushed fixes. Check the escalation limit, then continue.
 
 1. **Check escalation limit:** If this was round 10 or higher, escalate — do **not** continue to another round:
 
-```
-gh pr comment <number> --body "$(cat <<'EOF'
+Write this escalation comment to a temporary Markdown file and post it with `gh pr comment <number> --body-file <path>`:
+
+```md
 ## Escalation — Review Loop Limit
 
 <N> review rounds completed without convergence.
@@ -237,8 +239,6 @@ gh pr comment <number> --body "$(cat <<'EOF'
 <list each unresolved item with context on what was attempted>
 
 Requesting human review.
-EOF
-)"
 ```
 
 Then stop and inform the user directly.
@@ -255,9 +255,7 @@ After the code review/address loop converges, run the docs curation gate. **This
 
 #### Step A: Invoke Docs Reviewer
 
-```
-Agent tool → agent: "review-docs", prompt: "Review PR #<pr-number> for documentation compliance, round <round-number>"
-```
+Use the named `review-docs` agent in Claude Code. In Codex, spawn a subagent and explicitly invoke `$implement-lifecycle:review-docs` with: `Review PR #<pr-number> for documentation compliance, round <round-number>`.
 
 The docs reviewer fetches PR context, maps code changes to existing documentation, and identifies gaps — not just inaccuracies in changed docs, but missing docs for new behavior and stale docs contradicted by code changes.
 
@@ -274,10 +272,9 @@ Apply the same accept/reject evaluation as Phase 4. Read the relevant docs and c
 
 #### Step C: Post Referee Decisions & Invoke Addresser
 
-Post referee decisions to GitHub (same table format as Phase 4):
+Write referee decisions to a temporary Markdown file and post them with `gh pr comment <number> --body-file <path>`:
 
-```
-gh pr comment <number> --body "$(cat <<'EOF'
+```md
 ## Docs Compliance Gate Round <N> — Referee Decisions
 
 | # | Finding | Reviewer Severity | Decision | Reasoning |
@@ -286,26 +283,20 @@ gh pr comment <number> --body "$(cat <<'EOF'
 | ... | ... | ... | ... | ... |
 
 **Findings forwarded to addresser:** <count>
-EOF
-)"
 ```
 
 Write findings to a temp file and invoke the addresser:
 
-```bash
-cat > /tmp/implement-docs-findings-pr-<PR>-round-<N>.md <<'EOF'
+```md
 # Docs Compliance Findings — Round <N>
 
 | # | Finding | Severity | Details |
 |---|---------|----------|---------|
 | 1 | <description> | <severity> | <file:line + what to fix> |
 | ... | ... | ... | ... |
-EOF
 ```
 
-```
-Skill tool → skill: "implement-address", args: "<pr-number> docs-<round-number> /tmp/implement-docs-findings-pr-<PR>-round-<N>.md"
-```
+Delegate to a subagent using `implement-address` in Claude Code or `$implement-lifecycle:implement-address` in Codex, with `<pr-number> docs-<round-number> /tmp/implement-docs-findings-pr-<PR>-round-<N>.md`.
 
 #### Step D: Evaluate Continuation
 
@@ -317,9 +308,7 @@ Re-invoke the docs reviewer to verify fixes. The round counter starts from round
 
 After the review loop completes, invoke the verification agent to test the PR's changes with real-world execution before merging:
 
-```
-Skill tool → skill: "verify", args: "<pr-number>"
-```
+Delegate to a subagent using `verify` in Claude Code or `$implement-lifecycle:verify` in Codex, with `<pr-number>`.
 
 The verification agent will classify the change type, devise a verification plan, execute it, and report structured evidence. If the verdict is **FAIL**, address the issues (invoke the addresser or fix directly) and re-verify. If **PASS** or **N/A**, proceed to Phase 6.
 
@@ -327,9 +316,7 @@ The verification agent will classify the change type, devise a verification plan
 
 ### Phase 6: Merge & Finalize
 
-```
-Skill tool → skill: "merge-pr", args: "<pr-number>"
-```
+Use `merge-pr` in Claude Code or `$implement-lifecycle:merge-pr` in Codex with `<pr-number>` in the main thread. Merging is an external state change, so honor the current client's approval and repository-policy requirements.
 
 This validates the PR, squash-merges it, deletes the branch, and posts updates on linked issues.
 

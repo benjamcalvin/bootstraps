@@ -1,0 +1,4 @@
+interface:
+  display_name: "Check Pull Request"
+  short_description: "Validate pull request standards"
+  default_prompt: "Use $implement-lifecycle:pr-check to validate this pull request against repository standards."

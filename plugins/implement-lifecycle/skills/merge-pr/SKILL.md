@@ -4,23 +4,26 @@ description: >-
   Merge a PR and update upstream GitHub issues with progress.
   Validates readiness, squash-merges, deletes branch, and posts issue updates.
   Triggers: /merge-pr, merge this PR
-argument-hint: <pr-number>
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   tags: ["merge", "pr", "issues"]
   author: benjamcalvin
 ---
 
 # Merge PR and Update Issues
 
-Merge PR #$ARGUMENTS and update all linked GitHub issues with what was delivered.
+Merge the PR supplied with the invocation and update linked GitHub issues with what was delivered.
+
+Claude Code expands the invocation payload below. In Codex, it may remain literal; when that happens, use the user's invoking prompt instead.
+
+```text
+$ARGUMENTS
+```
 
 ## PR Context
 
-- PR metadata: !`gh pr view $ARGUMENTS --json number,title,body,state,mergeable,mergeStateStatus,reviewDecision,statusCheckRollup,headRefName,baseRefName,additions,deletions,changedFiles`
-- PR comments: !`gh pr view $ARGUMENTS --comments 2>/dev/null || echo "NO_COMMENTS"`
-- PR checks: !`gh pr checks $ARGUMENTS 2>/dev/null || echo "NO_CHECKS"`
+At runtime, parse the PR number and fetch its metadata, comments, and checks with `gh pr view` and `gh pr checks`.
 
 ## Instructions
 
@@ -31,7 +34,7 @@ Check that the PR is safe to merge. For each check, determine pass/fail:
 1. **State** — PR must be `OPEN`. If already merged or closed, report and stop.
 2. **Merge conflicts** — `mergeable` must not be `CONFLICTING`. If conflicts exist, report and stop.
 3. **CI status** — All status checks must pass. If any check is failing, report which ones and stop.
-4. **PR standards** — Invoke the `pr-check` skill against the PR. All checks must pass (WARN is acceptable, FAIL is not). Fix any failures if possible; otherwise report what needs to be fixed and stop.
+4. **PR standards** — Use `pr-check` in Claude Code or `$implement-lifecycle:pr-check` in Codex against the PR. All checks must pass (WARN is acceptable, FAIL is not). Fix any failures if possible; otherwise report what needs to be fixed and stop.
 5. **Review decision** — Check `reviewDecision` and `baseRefName`:
    - If `CHANGES_REQUESTED`, stop and report.
    - If merging to `main` or `master`: require `APPROVED`. If `REVIEW_REQUIRED` or empty/null, escalate to the user and wait for explicit confirmation.
@@ -46,7 +49,7 @@ Check that the PR is safe to merge. For each check, determine pass/fail:
 Squash-merge the PR and delete the remote branch:
 
 ```
-gh pr merge $ARGUMENTS --squash --delete-branch
+gh pr merge <pr-number> --squash --delete-branch
 ```
 
 If the merge fails, report the error and stop.
@@ -57,11 +60,10 @@ If the merge fails, report the error and stop.
    - **Closing references:** `Closes #N`, `Fixes #N`, `Resolves #N` (case-insensitive) — the PR fully addresses the issue
    - **Partial references:** `Relates to #N`, `Part of #N` — the PR partially addresses or relates to the issue
 
-2. **For each referenced issue**, fetch with `gh issue view <N> --json state,title` and post an update:
+2. **For each referenced issue**, fetch with `gh issue view <N> --json state,title`, write the appropriate update to a temporary Markdown file, and post it with `gh issue comment <N> --body-file <path>`:
 
    **For closing references** (issue should be auto-closed by GitHub):
-   ```
-   gh issue comment <N> --body "$(cat <<'EOF'
+   ```md
    ## Delivered
 
    **PR:** #<pr-number> — <PR title>
@@ -70,13 +72,10 @@ If the merge fails, report the error and stop.
    - <bullet summary extracted from PR description and diff>
 
    This PR fully addresses this issue.
-   EOF
-   )"
    ```
 
    **For partial references:**
-   ```
-   gh issue comment <N> --body "$(cat <<'EOF'
+   ```md
    ## Progress Update
 
    **PR:** #<pr-number> — <PR title>
@@ -86,8 +85,6 @@ If the merge fails, report the error and stop.
 
    ### Remaining work
    <What this issue still needs. If unclear, state "See issue description for remaining scope.">
-   EOF
-   )"
    ```
 
 3. **If no issues are referenced**, skip this step.

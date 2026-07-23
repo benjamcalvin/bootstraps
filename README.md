@@ -48,7 +48,13 @@ codex plugin marketplace add benjamcalvin/bootstraps
 
 Open the plugin browser with `/plugins`, install a plugin from the **Bootstraps** marketplace, and start a new session so Codex loads its skills.
 
-The Codex marketplace currently includes `bootstrap-docs` and `issue-management`. The other plugins depend on Claude Code-specific agents, hooks, worktree behavior, or the Claude Agent SDK and remain available only through Claude Code.
+The Codex marketplace currently includes `bootstrap-docs`, `implement-lifecycle`, and `issue-management`. The other plugins depend on Claude Code-specific hooks, worktree behavior, agent teams, or the Claude Agent SDK and remain available only through Claude Code.
+
+Install the lifecycle plugin directly with:
+
+```sh
+codex plugin add implement-lifecycle@bootstraps
+```
 
 ## Install a Plugin in Claude Code
 
@@ -69,7 +75,7 @@ Choose a scope when prompted:
 
 ## Use a Plugin
 
-Invoke a plugin's skill as a slash command:
+In Claude Code, invoke a plugin's skill as a slash command:
 
 ```
 /bootstrap-docs
@@ -89,6 +95,16 @@ Some skills accept arguments:
 /draft-issue add user avatar support
 /cleanup-issue #42
 /refine-issue #42
+```
+
+In Codex, mention the plugin-namespaced skill with `$`:
+
+```text
+$implement-lifecycle:implement #42
+$implement-lifecycle:implement fix the login bug
+$implement-lifecycle:implement 17 just review
+$implement-lifecycle:merge-pr 17
+$implement-lifecycle:pr-check 17
 ```
 
 ## Update Claude Code Plugins
@@ -115,7 +131,7 @@ Some skills accept arguments:
 |--------|-------------|-------|-------------|
 | **bootstrap-docs** | Yes | Yes | Set up a comprehensive, AI-readable documentation strategy in any project. Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates. |
 | **bootstrap-worktrees** | Yes | No | Set up project-agnostic worktree isolation with per-worktree ports, Docker Compose projects, and Claude Code hooks. |
-| **implement-lifecycle** | Yes | No | Full implementation lifecycle with Claude Code reviewer agents and an adversarial review loop. |
+| **implement-lifecycle** | Yes | Yes | Full implementation lifecycle with delegated implementation, parallel specialist review, verification, and merge. |
 | **implement-cli** | Yes | No | CLI-based lifecycle using the Claude Agent SDK to orchestrate review/address subprocesses. |
 | **implement-team** | Yes | No | Experimental lifecycle built around Claude Code agent-teams. |
 | **issue-management** | Yes | Yes | Draft, clean up, and refine GitHub issues for AI agent consumption. |
@@ -123,7 +139,7 @@ Some skills accept arguments:
 
 ### implement-lifecycle
 
-Provides 6 skills and 5 reviewer agents for the complete implementation lifecycle:
+Provides 11 cross-client skills plus 5 Claude Code reviewer-agent wrappers for the complete implementation lifecycle. Claude Code uses the named agents during review; Codex delegates to subagents that load the corresponding reviewer skills.
 
 **Skills:**
 
@@ -141,10 +157,10 @@ Provides 6 skills and 5 reviewer agents for the complete implementation lifecycl
 | `implement-address` | Address filtered review findings from the referee's action plan. |
 | `verify` | End-to-end verification — exercises the real running system, checks downstream effects, regression tests existing flows. |
 
-**Reviewer agents** (invoked in parallel during the review loop):
+**Portable reviewer roles** (invoked in parallel during the review loop):
 
-| Agent | Focus |
-|-------|-------|
+| Agent/skill | Focus |
+|-------------|-------|
 | `review-correctness` | Logic bugs, edge cases, error handling, race conditions |
 | `review-security` | AuthZ, injection risks, PII handling, spec conformance |
 | `review-architecture` | Pattern consistency, module boundaries, coupling, forward-looking design |

@@ -1,26 +1,26 @@
 ---
 name: implement-code
 description: Plan, implement code, tests, and create PR for implement workflow (runs as subagent)
-context: fork
-agent: general-purpose
-argument-hint: <issue-number-or-0> <task description, plan, and instructions>
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   tags: ["implement", "code", "pr", "subagent"]
   author: benjamcalvin
 ---
 
 # Implement
 
-Implement the following task. The first token is the linked issue number (or `0` if none):
+Implement the task supplied by the orchestrator. The first token is the linked issue number, or `0` when there is none.
 
+Claude Code expands the invocation payload below. In Codex, it may remain literal; when that happens, use the delegation prompt instead.
+
+```text
 $ARGUMENTS
+```
 
 ## Context
 
-- Current branch: !`git branch --show-current`
-- Recent commits: !`git log --oneline -5`
+At runtime, inspect the current branch, recent commits, repository status, and any referenced issue or specification before making changes.
 
 ## Project Standards
 
@@ -30,7 +30,7 @@ Read project-level instructions if they exist. At minimum, check for `AGENTS.md`
 
 You are the **implementer** for the `/implement` workflow. You explore the codebase, plan, write code, write tests, and create the PR.
 
-Use the **Task tools** (`TaskCreate`, `TaskUpdate`) to track your progress.
+Use the current client's task or plan tracker when available. Keep the plan truthful and proceed without one when the client exposes no tracker.
 
 ### Step 0: Plan (unless skipped)
 
@@ -39,7 +39,7 @@ If the task description includes "skip planning" or "just implement", or if the 
 Otherwise, plan the implementation before writing code:
 
 1. **Understand the task.** Read the task description carefully. If specs, ADRs, or issues are referenced, read them. Identify what needs to change and any ambiguities.
-2. **Explore the codebase.** Use Glob, Grep, and Read to understand which modules and files are relevant, existing patterns, test structure, and dependencies between affected modules. Focus on the areas the task touches — don't explore exhaustively.
+2. **Explore the codebase.** Use the current client's search and file-reading capabilities to understand which modules and files are relevant, existing patterns, test structure, and dependencies between affected modules. Focus on the areas the task touches — don't explore exhaustively.
 3. **Define acceptance criteria.** Write verifiable criteria — each one testable (provably true or false after implementation). Be specific.
 4. **Identify test cases.** List the tests that must pass: happy path, edge cases, error cases, and regression tests if modifying existing behavior.
 5. **Plan the implementation.** Identify files to create or modify, the minimum viable approach, dependencies between changes, and any risks.
@@ -142,8 +142,9 @@ Create the PR. If the issue number is not `0`, include an issue reference after 
 - Use `Closes #N` only when this single PR **fully completes** the issue
 - Use `Part of #N` when this PR is **one of several** addressing the issue (default to this when unsure)
 
-```bash
-gh pr create --title "<type>: <imperative summary>" --body "$(cat <<'EOF'
+Create a temporary Markdown file with this body using the current client's file-editing capability:
+
+```md
 ## Summary
 <1-3 sentences: what and why>
 
@@ -158,9 +159,9 @@ gh pr create --title "<type>: <imperative summary>" --body "$(cat <<'EOF'
 
 ## Review focus
 <areas where review attention is most valuable>
-EOF
-)"
 ```
+
+Then run `gh pr create --title "<type>: <imperative summary>" --body-file <path>`.
 
 ### Step 9: Return Result
 

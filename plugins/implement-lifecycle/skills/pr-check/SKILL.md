@@ -4,10 +4,9 @@ description: >-
   Validate a PR against PR standards before requesting review.
   Checks branch naming, title, description, sizing, commits, and references.
   Triggers: /pr-check, check this PR, validate PR
-argument-hint: [pr-number]
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   tags: ["pr", "check", "standards", "validation"]
   author: benjamcalvin
 ---
@@ -16,16 +15,19 @@ metadata:
 
 Pre-flight validation for PRs.
 
+Claude Code expands the optional invocation payload below. In Codex, it may remain literal; when that happens, use the user's invoking prompt. If no PR number is supplied, inspect the PR associated with the current branch when available.
+
+```text
+$ARGUMENTS
+```
+
 ## Context
 
-- Current branch: !`git branch --show-current`
-- PR data: !`gh pr view $ARGUMENTS --json title,body,additions,deletions,changedFiles,commits,baseRefName,number 2>/dev/null || echo "NO_PR_FOUND"`
-- PR comments: !`gh pr view $ARGUMENTS --comments 2>/dev/null || echo "NO_COMMENTS"`
-- Commits since main: !`git log --oneline main..HEAD`
+At runtime, inspect the current branch and fetch available PR metadata and comments with `gh pr view`. Determine the PR's actual base branch, then inspect commits and the diff relative to that base; do not assume the base is `main`.
 
 ## Instructions
 
-Validate the current PR against each standard below. If no PR number was provided and `NO_PR_FOUND` appears above, check only what can be validated locally (branch name, commits, diff size) and note that no PR exists yet.
+Validate the current PR against each standard below. If no PR exists, check only what can be validated locally (branch name, commits, diff size) and note that no PR exists yet.
 
 For each check, output one of:
 - **PASS** — Meets the standard
