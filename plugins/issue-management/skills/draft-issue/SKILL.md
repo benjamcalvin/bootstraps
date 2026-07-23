@@ -7,7 +7,7 @@ description: >-
 argument-hint: <brief description of what needs to be done>
 license: MIT
 metadata:
-  version: "1.1.0"
+  version: "1.1.1"
   tags: ["issue", "draft", "planning"]
   author: benjamcalvin
 ---

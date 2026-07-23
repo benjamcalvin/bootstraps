@@ -7,6 +7,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")"
 
 ERRORS=0
 WARNINGS=0
+CODEX_MARKETPLACE_VALID=false
 
 echo "=== Bootstraps Plugin Validation ==="
 echo ""
@@ -26,6 +27,44 @@ fi
 
 echo ""
 
+# Check .agents/plugins/marketplace.json exists and is valid JSON
+if [ ! -f ".agents/plugins/marketplace.json" ]; then
+  echo "ERROR: .agents/plugins/marketplace.json not found"
+  ERRORS=$((ERRORS + 1))
+else
+  if ! jq . .agents/plugins/marketplace.json > /dev/null 2>&1; then
+    echo "ERROR: .agents/plugins/marketplace.json is not valid JSON"
+    ERRORS=$((ERRORS + 1))
+  else
+    if ! jq -e '
+      type == "object" and
+      (.plugins | type == "array") and
+      all(.plugins[];
+        type == "object" and
+        (.name | type == "string" and length > 0) and
+        (.source | type == "object") and
+        (.source.source == "local") and
+        (.source.path | type == "string" and startswith("./plugins/"))
+      )
+    ' .agents/plugins/marketplace.json > /dev/null 2>&1; then
+      echo "ERROR: .agents/plugins/marketplace.json has an invalid marketplace shape or non-local plugin source"
+      ERRORS=$((ERRORS + 1))
+    else
+      CODEX_MARKETPLACE_VALID=true
+      echo "OK: .agents/plugins/marketplace.json is valid JSON with local plugin sources"
+
+      while IFS= read -r codex_plugin_name; do
+        if [ ! -d "plugins/$codex_plugin_name" ]; then
+          echo "ERROR: Codex marketplace references missing plugin: $codex_plugin_name"
+          ERRORS=$((ERRORS + 1))
+        fi
+      done < <(jq -r '.plugins[].name' .agents/plugins/marketplace.json)
+    fi
+  fi
+fi
+
+echo ""
+
 # Validate each plugin
 for plugin_dir in plugins/*/; do
   plugin_name=$(basename "$plugin_dir")
@@ -35,6 +74,7 @@ for plugin_dir in plugins/*/; do
   name=""
   desc=""
   version=""
+  codex_version=""
 
   # Check plugin.json
   if [ ! -f "$plugin_dir/.claude-plugin/plugin.json" ]; then
@@ -149,6 +189,67 @@ for plugin_dir in plugins/*/; do
       echo "  WARN: Not listed in .claude-plugin/marketplace.json"
       WARNINGS=$((WARNINGS + 1))
     fi
+  fi
+
+  # Validate every native Codex manifest, independent of marketplace membership.
+  codex_listed=false
+  if [ "$CODEX_MARKETPLACE_VALID" = true ] && jq -e --arg name "$plugin_name" '.plugins[] | select(.name == $name)' .agents/plugins/marketplace.json > /dev/null 2>&1; then
+    codex_listed=true
+  fi
+
+  if [ -f "$plugin_dir/.codex-plugin/plugin.json" ]; then
+    if ! jq . "$plugin_dir/.codex-plugin/plugin.json" > /dev/null 2>&1; then
+      echo "  ERROR: .codex-plugin/plugin.json is not valid JSON"
+      ERRORS=$((ERRORS + 1))
+    else
+      codex_name=$(jq -r '.name // empty' "$plugin_dir/.codex-plugin/plugin.json")
+      codex_version=$(jq -r '.version // empty' "$plugin_dir/.codex-plugin/plugin.json")
+      codex_desc=$(jq -r '.description // empty' "$plugin_dir/.codex-plugin/plugin.json")
+      codex_author=$(jq -r '.author.name // empty' "$plugin_dir/.codex-plugin/plugin.json")
+      codex_display_name=$(jq -r '.interface.displayName // empty' "$plugin_dir/.codex-plugin/plugin.json")
+
+      if [ "$codex_name" != "$plugin_name" ]; then
+        echo "  ERROR: Codex plugin name must match directory ($codex_name != $plugin_name)"
+        ERRORS=$((ERRORS + 1))
+      fi
+      if [ -z "$codex_version" ] || [ -z "$codex_desc" ] || [ -z "$codex_author" ] || [ -z "$codex_display_name" ]; then
+        echo "  ERROR: Codex plugin manifest is missing required metadata"
+        ERRORS=$((ERRORS + 1))
+      else
+        echo "  OK: .codex-plugin/plugin.json has required metadata"
+      fi
+      if [ -n "$version" ] && [ "$codex_version" != "$version" ]; then
+        echo "  ERROR: Version mismatch — Claude=$version, Codex=$codex_version"
+        ERRORS=$((ERRORS + 1))
+      elif [ -n "$version" ]; then
+        echo "  OK: Claude and Codex versions in sync ($version)"
+      fi
+    fi
+  elif [ "$codex_listed" = true ]; then
+    echo "  ERROR: Listed in Codex marketplace but missing .codex-plugin/plugin.json"
+    ERRORS=$((ERRORS + 1))
+  fi
+
+  # Marketplace membership and entry policy are separate from manifest validity.
+  if [ "$codex_listed" = true ]; then
+    expected_source="./plugins/$plugin_name"
+    codex_source=$(jq -r --arg name "$plugin_name" '.plugins[] | select(.name == $name) | .source.path // empty' .agents/plugins/marketplace.json)
+    codex_installation=$(jq -r --arg name "$plugin_name" '.plugins[] | select(.name == $name) | .policy.installation // empty' .agents/plugins/marketplace.json)
+    codex_authentication=$(jq -r --arg name "$plugin_name" '.plugins[] | select(.name == $name) | .policy.authentication // empty' .agents/plugins/marketplace.json)
+    codex_category=$(jq -r --arg name "$plugin_name" '.plugins[] | select(.name == $name) | .category // empty' .agents/plugins/marketplace.json)
+
+    if [ "$codex_source" != "$expected_source" ]; then
+      echo "  ERROR: Codex marketplace source must be $expected_source"
+      ERRORS=$((ERRORS + 1))
+    elif [ -z "$codex_installation" ] || [ -z "$codex_authentication" ] || [ -z "$codex_category" ]; then
+      echo "  ERROR: Codex marketplace entry is missing policy or category"
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "  OK: Listed in .agents/plugins/marketplace.json"
+    fi
+  elif [ -f "$plugin_dir/.codex-plugin/plugin.json" ] && [ "$CODEX_MARKETPLACE_VALID" = true ]; then
+    echo "  WARN: Has a Codex manifest but is not listed in the Codex marketplace"
+    WARNINGS=$((WARNINGS + 1))
   fi
 
   echo ""

@@ -1,0 +1,22 @@
+{
+  "name": "bootstrap-docs",
+  "version": "1.4.1",
+  "description": "Set up a comprehensive, AI-readable documentation strategy in any project",
+  "author": {
+    "name": "benjamcalvin"
+  },
+  "license": "MIT",
+  "keywords": ["docs", "documentation", "strategy", "scaffolding"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Bootstrap Docs",
+    "shortDescription": "Create an AI-readable documentation structure.",
+    "longDescription": "Set up AGENTS.md guidance, specifications, ADRs, plans, standards, and other structured project documentation.",
+    "developerName": "benjamcalvin",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": [
+      "Set up an AI-readable documentation strategy for this project."
+    ]
+  }
+}
