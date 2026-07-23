@@ -141,27 +141,27 @@ $issue-management:refine-issue #42
 
 ### implement-lifecycle
 
-Provides 6 skills and 5 reviewer agents for the complete implementation lifecycle:
+Provides a shared lifecycle orchestrator, two utility skills, three delegated worker roles, and five specialist review roles across Claude Code and Codex:
 
 **Skills:**
 
 | Skill | Description |
 |-------|-------------|
 | `/implement` / `$implement-lifecycle:implement` | Lean orchestrator — 6-phase lifecycle (plan → implement → PR → review loop → verify → merge). Accepts `#issue`, PR number, or freeform task. Supports trailing instructions like "just review" or "skip planning". |
-| `/merge-pr` | Validate, squash-merge, delete branch, and update linked GitHub issues with delivery status. |
-| `/pr-check` | Pre-flight PR validation — branch naming, title, description, sizing, commits, references. |
+| `/merge-pr` / `$implement-lifecycle:merge-pr` | Validate, squash-merge, delete branch, and update linked GitHub issues with delivery status. |
+| `/pr-check` / `$implement-lifecycle:pr-check` | Pre-flight PR validation — branch naming, title, description, sizing, commits, references. |
 
-**Subagent skills** (invoked by the orchestrator, not directly):
+**Delegated worker roles** (invoked by the orchestrator, not directly):
 
-| Skill | Description |
+| Role | Description |
 |-------|-------------|
 | `implement-code` | Explore codebase, plan, write tests first, implement, self-review, commit, and create PR. |
 | `implement-address` | Address filtered review findings from the referee's action plan. |
 | `verify` | End-to-end verification — exercises the real running system, checks downstream effects, regression tests existing flows. |
 
-**Reviewer agents** (invoked in parallel during the review loop):
+**Specialist review roles** (invoked in parallel during the review loop):
 
-| Agent | Focus |
+| Role | Focus |
 |-------|-------|
 | `review-correctness` | Logic bugs, edge cases, error handling, race conditions |
 | `review-security` | AuthZ, injection risks, PII handling, spec conformance |
@@ -170,6 +170,8 @@ Provides 6 skills and 5 reviewer agents for the complete implementation lifecycl
 | `review-docs` | Docs compliance gate (Phase 4.5) — missing docs for new behavior, stale docs contradicted by code changes, frontmatter/cross-link correctness |
 
 Heavy phases always run in isolated delegated agents. Claude Code invokes the plugin's named subagents; Codex spawns subagents that load the matching `$implement-lifecycle:<skill>`. The worker skills are reusable prompts and do not depend on inherited or forked skill context.
+
+Codex CLI 0.145.0 note: full lifecycle delegation works in a standard Codex session; headless `codex exec --ephemeral` sessions fail to initialize spawned subagents.
 
 ### implement-cli
 
