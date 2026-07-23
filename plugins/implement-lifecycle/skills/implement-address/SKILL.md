@@ -6,7 +6,7 @@ agent: general-purpose
 argument-hint: <pr-number> <round-identifier> <findings-file-path>
 license: MIT
 metadata:
-  version: "2.1.2"
+  version: "2.1.3"
   tags: ["implement", "address", "subagent"]
   author: benjamcalvin
 ---
@@ -86,7 +86,12 @@ Return a summary table:
 
 | # | Finding | Action | Details |
 |---|---------|--------|---------|
-| 1 | <brief description> | Applied / Partially applied / Rejected / Escalated | <what was done and why> |
+| <exact finding ID from the supplied file> | <brief description> | Applied / Partially applied / Rejected / Escalated | <what was done and why> |
 
-**Tests:** <command> — <result>
-**Commits:** <list of fix commit messages>
+Include exactly one row for every supplied finding ID and no other rows. A successful result may use only `Applied` or `Partially applied`; report any rejection or escalation as a blocked/unsuccessful result instead of implying completion.
+
+**Tests:** <command(s)> — PASS
+**Commits:**
+- `<7-40 character commit SHA>` — `<commit message>`
+
+Report the explicit `PASS` token only when every listed command passed. Include at least one real commit SHA and its message; never report `none`, an uncommitted change, or only a proposed commit message.

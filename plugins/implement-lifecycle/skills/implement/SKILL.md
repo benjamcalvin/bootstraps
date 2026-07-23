@@ -6,7 +6,7 @@ description: >-
   Triggers: /implement, $implement-lifecycle:implement, implement this, build this feature
 license: MIT
 metadata:
-  version: "3.2.4"
+  version: "3.2.5"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -35,7 +35,7 @@ Use the current client's task or plan tracker throughout when one is available. 
 
 Before delegating, read and use the shared [`assets/dispatch-contract.sh`](assets/dispatch-contract.sh) contract. Resolve worker targets from it instead of reconstructing client-specific names. Use its `validate` command for raw reviewer/docs envelopes and its `transition` command for every state change. Pass each complete, unmodified worker response as one shell argument; do not translate responses into private `KEY=value` values. Resolve the explicit selected reviewer set with one `targets` call, launch every returned target in parallel, wait for all of them, then validate exactly that set with `validate review --reviewers <names...> -- <outputs...>` in the same order. Only after refereeing, call `transition review --accepted-count <count> --reviewers <names...> -- <outputs...>`. For docs, use `validate docs -- <output>` before refereeing and `transition docs --accepted-count <count> -- <output>` afterward. Raw finding counts never choose a transition; the explicit post-referee accepted count does. The contract validates Claude named reviewer agents versus Codex skill wrappers and fails closed on missing, empty, extra, malformed, or inconsistent results; it does not launch workers or authorize side effects.
 
-The transition contract consumes the output forms already required by each worker: `PR_NUMBER: <number>` from `implement-code`; categorized reviewer Markdown and its `### Summary`; the addresser's result table plus non-empty `Tests` and `Commits`; `### Verdict: PASS / FAIL / PARTIAL / N/A` from verification; and the `## Merge Complete` summary. A failed contract check is a blocked transition, never permission to infer success.
+The transition contract consumes the output forms already required by each worker: `PR_NUMBER: <number>` from `implement-code`; categorized reviewer Markdown with a final plain-prose `### Summary`; an addresser table whose unique IDs exactly match the forwarded findings plus explicit passing tests and real commit IDs/messages; the complete PR-correlated verification envelope; and the PR-correlated `## Merge Complete` summary. A failed contract check is a blocked transition, never permission to infer success.
 
 **Task tracking rules:**
 1. **Bootstrap immediately.** Create an item for each phase before starting, using the fields supported by the current client's tracker. With Claude Code Task tools, provide `subject` (imperative), `activeForm` (continuous), and `description`.
@@ -229,6 +229,7 @@ Write the filtered findings (accepted only) to a temp file for the addresser usi
 Delegate to a subagent using `implement-address` in Claude Code or `$implement-lifecycle:implement-address` in Codex, with `<pr-number> <round-number> /tmp/implement-findings-pr-<PR>-round-<N>.md`.
 
 The addresser will fix issues, run tests, commit, push, and return a summary.
+Pass the accepted finding IDs to the result gate exactly as written in the filtered file: `transition address --finding-ids <id...> -- <complete-output>`. Advance only when every expected ID appears exactly once as Applied or Partially applied, tests explicitly pass, and at least one real commit is reported.
 
 #### Step E: Next Round
 
@@ -309,6 +310,7 @@ Write findings to a temp file and invoke the addresser:
 ```
 
 Delegate to a subagent using `implement-address` in Claude Code or `$implement-lifecycle:implement-address` in Codex, with `<pr-number> docs-<round-number> /tmp/implement-docs-findings-pr-<PR>-round-<N>.md`.
+Validate its response with `transition docs-address --finding-ids <accepted-id...> -- <complete-output>` before returning to docs review.
 
 #### Step D: Evaluate Continuation
 
@@ -322,7 +324,7 @@ After the review loop completes, invoke the verification agent to test the PR's 
 
 Delegate to a subagent using `verify` in Claude Code or `$implement-lifecycle:verify` in Codex, with `<pr-number>`.
 
-The verification agent will classify the change type, devise a verification plan, execute it, and report structured evidence. Pass its complete response to `transition verify`. A **PASS** or **N/A** returns `merge`. A **FAIL** or **PARTIAL** must contain one or more `- **[Verification]** ...` entries under `### Issues Found` and returns `verification-address`.
+The verification agent will classify the change type, devise a verification plan, execute it, and report structured evidence. Pass its complete response to `transition verify --pr <pr-number> -- <output>`. A **PASS** requires the documented system-flow, evidence, `Issues Found: None`, and holistic-assessment envelope; **N/A** requires the exact pure-documentation envelope. A **FAIL** or **PARTIAL** must contain one or more `- **[Verification]** ...` entries under `### Issues Found` and returns `verification-address`. Every verdict heading must identify the active PR.
 
 For `verification-address`, write the reported issues to `/tmp/implement-verification-findings-pr-<PR>-round-<N>.md`:
 
@@ -334,7 +336,7 @@ For `verification-address`, write the reported issues to `/tmp/implement-verific
 | 1 | <failed behavior> | Action Required | <scenario, evidence, expected/actual, and relevant file or flow> |
 ```
 
-Delegate `implement-address` with `<pr-number> verification-<N> /tmp/implement-verification-findings-pr-<PR>-round-<N>.md`. Validate the successful addresser response with `transition verification-address <output>`; its only successful next state is `verify`. Increment the verification round and invoke the verifier again. Repeat until **PASS**/**N/A**, or escalate after round 10 with the unresolved verification issues. Never route verification fixes back through code review unless a later reviewer round is separately requested.
+Delegate `implement-address` with `<pr-number> verification-<N> /tmp/implement-verification-findings-pr-<PR>-round-<N>.md`. Validate the successful addresser response with `transition verification-address --finding-ids <verification-id...> -- <output>`; its only successful next state is `verify`. Increment the verification round and invoke the verifier again. Repeat until **PASS**/**N/A**, or escalate after round 10 with the unresolved verification issues. Never route verification fixes back through code review unless a later reviewer round is separately requested.
 
 ---
 
@@ -343,6 +345,7 @@ Delegate `implement-address` with `<pr-number> verification-<N> /tmp/implement-v
 Use `merge-pr` in Claude Code or `$implement-lifecycle:merge-pr` in Codex with `<pr-number>` in the main thread. Merging is an external state change, so honor the current client's approval and repository-policy requirements.
 
 This validates the PR, squash-merges it, deletes the branch, and posts updates on linked issues.
+Pass its complete result through `transition merge --pr <pr-number> -- <output>` and complete the lifecycle only when the reported PR matches the active PR.
 
 Report the result to the user.
 

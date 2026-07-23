@@ -49,19 +49,28 @@ verification_output() {
   if [ "$verdict" = FAIL ] || [ "$verdict" = PARTIAL ]; then
     printf '### Issues Found\n- **[Verification]** End-to-end flow failed at app:42; expected success but observed failure.\n\n'
   else
+    printf '### System Flow Verified\nTrigger through downstream outcome completed.\n\n### Evidence\n#### Happy path\n**Result:** PASS — complete flow succeeded.\n\n'
     printf '### Issues Found\nNone\n\n'
   fi
   printf '### Holistic Assessment\nSynthetic verification complete.\n'
 }
 
+na_verification_output() {
+  printf '## End-to-End Verification — PR #731\n\n### Verdict: N/A\n\nPure documentation change — no code, configuration, or build artifacts affected.\n'
+}
+
 address_output() {
+  ids=("${@:-1}")
   cat <<'EOF'
 | # | Finding | Action | Details |
 |---|---------|--------|---------|
-| 1 | Contract issue | Applied | Updated and verified. |
+EOF
+  for id in "${ids[@]}"; do printf '| %s | Contract issue | Applied | Updated and verified. |\n' "$id"; done
+  cat <<'EOF'
 
-**Tests:** ./validate-all.sh — passed
-**Commits:** fix: address review round 3 — contract
+**Tests:** ./validate-all.sh — PASS
+**Commits:**
+- `abcdef1` — `fix: address lifecycle contract`
 EOF
 }
 
@@ -159,7 +168,7 @@ run_lifecycle() {
   state=$(run_review_batch "$client" 1 2 correctness security architecture testing)
   assert_equal "$state" address "$client mixed accepted and rejected findings drive address transition"
   dispatch_stub "$client" implement-address "731 1 /tmp/implement-findings-pr-731-round-1.md"
-  state=$(bash "$CONTRACT" transition address "$RESULT")
+  state=$(bash "$CONTRACT" transition address --finding-ids 1 3 -- "$(address_output 1 3)")
   assert_equal "$state" review "$client addresser result continues review"
 
   state=$(run_review_batch "$client" 2 0 correctness security architecture testing)
@@ -169,7 +178,7 @@ run_lifecycle() {
   state=$(bash "$CONTRACT" transition docs --accepted-count 1 -- "$RESULT")
   assert_equal "$state" docs-address "$client docs findings drive address transition"
   dispatch_stub "$client" implement-address "731 docs-1 /tmp/implement-docs-findings-pr-731-round-1.md"
-  state=$(bash "$CONTRACT" transition docs-address "$RESULT")
+  state=$(bash "$CONTRACT" transition docs-address --finding-ids 1 -- "$RESULT")
   assert_equal "$state" docs "$client docs addresser result continues docs review"
   dispatch_stub "$client" review-docs "Review PR #731 for documentation compliance, round 2"
   assert_equal "$(bash "$CONTRACT" validate docs -- "$RESULT")" 0 "$client raw clean docs validation"
@@ -177,23 +186,23 @@ run_lifecycle() {
   assert_equal "$state" verify "$client clean docs result opens verification"
   VERIFY_VERDICT=FAIL
   dispatch_stub "$client" verify 731
-  state=$(bash "$CONTRACT" transition verify "$RESULT")
+  state=$(bash "$CONTRACT" transition verify --pr 731 -- "$RESULT")
   assert_equal "$state" verification-address "$client FAIL verdict opens verification-specific addressing"
   verification_findings="$TMP_DIR/implement-verification-findings-pr-731-round-1.md"
   printf '# Verification Findings — Round 1\n\n| # | Finding | Severity | Details |\n|---|---------|----------|---------|\n| 1 | End-to-end flow failed | Action Required | app:42 expected success but observed failure. |\n' > "$verification_findings"
   dispatch_stub "$client" implement-address "731 verification-1 $verification_findings"
-  state=$(bash "$CONTRACT" transition verification-address "$RESULT")
+  state=$(bash "$CONTRACT" transition verification-address --finding-ids 1 -- "$RESULT")
   assert_equal "$state" verify "$client verification addresser result requires reverification"
   VERIFY_VERDICT=PASS
   dispatch_stub "$client" verify 731
-  state=$(bash "$CONTRACT" transition verify "$RESULT")
+  state=$(bash "$CONTRACT" transition verify --pr 731 -- "$RESULT")
   assert_equal "$state" merge "$client PASS reverification opens merge gate"
-  state=$(bash "$CONTRACT" transition verify "$(verification_output PARTIAL)")
+  state=$(bash "$CONTRACT" transition verify --pr 731 -- "$(verification_output PARTIAL)")
   assert_equal "$state" verification-address "$client PARTIAL verdict opens verification-specific addressing"
-  state=$(bash "$CONTRACT" transition verify $'### Verdict: N/A\n')
+  state=$(bash "$CONTRACT" transition verify --pr 731 -- "$(na_verification_output)")
   assert_equal "$state" merge "$client N/A verdict opens merge gate"
   dispatch_stub "$client" merge-pr 731
-  state=$(bash "$CONTRACT" transition merge "$RESULT")
+  state=$(bash "$CONTRACT" transition merge --pr 731 -- "$RESULT")
   assert_equal "$state" complete "$client merge result completes lifecycle"
 
   # Explicit one- and multi-reviewer subsets are dispatched in parallel by the same path.
@@ -239,6 +248,9 @@ ORDERED_REVIEW=$'### Action Required\n- **[Security]** Required.\n### Recommende
 assert_equal "$(bash "$CONTRACT" validate review --reviewers security -- "$ORDERED_REVIEW")" 3 "all ordered reviewer categories"
 ORDERED_DOCS=$'### Action Required\n- **[Docs]** Required.\n### Recommended\n- **[Docs]** Recommended.\n### Minor\n- **[Docs]** Minor.\n### Summary\nDocumentation review complete.'
 assert_equal "$(bash "$CONTRACT" validate docs -- "$ORDERED_DOCS")" 3 "all ordered docs categories"
+MULTILINE_SUMMARY=$'### Summary\nFirst prose sentence.\nSecond prose sentence.'
+assert_equal "$(bash "$CONTRACT" validate review --reviewers correctness -- "$MULTILINE_SUMMARY")" 0 "multiline plain-prose review summary"
+assert_equal "$(bash "$CONTRACT" validate docs -- "$MULTILINE_SUMMARY")" 0 "multiline plain-prose docs summary"
 
 # Every phase fails closed for missing, empty, malformed, duplicate, partial, or extra results.
 GOOD_REVIEW=$(review_output correctness 0)
@@ -264,11 +276,25 @@ assert_rejected "out-of-order reviewer categories" bash "$CONTRACT" transition r
 assert_rejected "duplicate reviewer category" bash "$CONTRACT" transition review --accepted-count 0 --reviewers correctness -- $'### Recommended\n- **[Correctness]** First.\n### Recommended\n- **[Correctness]** Second.\n### Summary\nDone.'
 assert_rejected "empty reviewer category" bash "$CONTRACT" transition review --accepted-count 0 --reviewers correctness -- $'### Action Required\n\n### Summary\nDone.'
 assert_rejected "finding after reviewer summary" bash "$CONTRACT" transition review --accepted-count 0 --reviewers correctness -- $'### Summary\nDone.\n### Action Required\n- **[Correctness]** Late.'
+for structure in '#### Heading' '- bullet' '* bullet' '+ bullet' '1. numbered' '2) numbered' '> quote' '```text' '~~~text' '---' '| table |' '<!-- comment -->' '<div>HTML</div>' $'    indented code'; do
+  assert_rejected "review summary Markdown structure: $structure" bash "$CONTRACT" validate review --reviewers correctness -- "$(printf '### Summary\n%s\n' "$structure")"
+  assert_rejected "docs summary Markdown structure: $structure" bash "$CONTRACT" validate docs -- "$(printf '### Summary\n%s\n' "$structure")"
+done
 for phase in address docs-address verification-address; do
   assert_rejected "missing $phase output" bash "$CONTRACT" transition "$phase"
-  assert_rejected "empty $phase output" bash "$CONTRACT" transition "$phase" ""
-  assert_rejected "malformed $phase output" bash "$CONTRACT" transition "$phase" '| # | Finding | Action | Details |'
-  assert_rejected "unsuccessful $phase result" bash "$CONTRACT" transition "$phase" "${GOOD_ADDRESS/Applied/Escalated}"
+  assert_rejected "missing $phase finding IDs" bash "$CONTRACT" transition "$phase" -- "$GOOD_ADDRESS"
+  assert_rejected "empty $phase output" bash "$CONTRACT" transition "$phase" --finding-ids 1 -- ""
+  assert_rejected "malformed $phase output" bash "$CONTRACT" transition "$phase" --finding-ids 1 -- '| # | Finding | Action | Details |'
+  assert_rejected "unsuccessful $phase result" bash "$CONTRACT" transition "$phase" --finding-ids 1 -- "${GOOD_ADDRESS/Applied/Escalated}"
+  assert_rejected "missing expected $phase row" bash "$CONTRACT" transition "$phase" --finding-ids 1 2 -- "$GOOD_ADDRESS"
+  assert_rejected "extra $phase row" bash "$CONTRACT" transition "$phase" --finding-ids 2 -- "$GOOD_ADDRESS"
+  assert_rejected "duplicate expected $phase ID" bash "$CONTRACT" transition "$phase" --finding-ids 1 1 -- "$GOOD_ADDRESS"
+  assert_rejected "duplicate result $phase ID" bash "$CONTRACT" transition "$phase" --finding-ids 1 2 -- "$(address_output 1 1)"
+  assert_rejected "failed $phase tests" bash "$CONTRACT" transition "$phase" --finding-ids 1 -- "${GOOD_ADDRESS/— PASS/— FAIL}"
+  assert_rejected "ambiguous $phase tests" bash "$CONTRACT" transition "$phase" --finding-ids 1 -- "${GOOD_ADDRESS/ — PASS/}"
+  assert_rejected "duplicate $phase tests" bash "$CONTRACT" transition "$phase" --finding-ids 1 -- "$GOOD_ADDRESS"$'\n**Tests:** another — PASS'
+  assert_rejected "missing $phase commit" bash "$CONTRACT" transition "$phase" --finding-ids 1 -- "$(printf '%s\n' "$GOOD_ADDRESS" | sed '/^- `abcdef1`/d')"
+  assert_rejected "none $phase commit" bash "$CONTRACT" transition "$phase" --finding-ids 1 -- "${GOOD_ADDRESS/- \`abcdef1\` — \`fix: address lifecycle contract\`/- none}"
 done
 assert_rejected "missing docs accepted count" bash "$CONTRACT" transition docs -- "$(review_output docs 0)"
 assert_rejected "empty docs output" bash "$CONTRACT" transition docs --accepted-count 0 -- ""
@@ -278,12 +304,25 @@ assert_rejected "out-of-order docs categories" bash "$CONTRACT" transition docs 
 assert_rejected "duplicate docs category" bash "$CONTRACT" transition docs --accepted-count 0 -- $'### Recommended\n- **[Docs]** First.\n### Recommended\n- **[Docs]** Second.\n### Summary\nDone.'
 assert_rejected "empty docs category" bash "$CONTRACT" transition docs --accepted-count 0 -- $'### Action Required\n\n### Summary\nDone.'
 assert_rejected "missing verification output" bash "$CONTRACT" transition verify
-assert_rejected "empty verification output" bash "$CONTRACT" transition verify ""
-assert_rejected "unknown verification verdict" bash "$CONTRACT" transition verify '### Verdict: UNKNOWN'
-assert_rejected "duplicate verification verdict" bash "$CONTRACT" transition verify $'### Verdict: PASS\n### Verdict: FAIL'
-assert_rejected "FAIL verification without structured issues" bash "$CONTRACT" transition verify $'### Verdict: FAIL\n### Issues Found\nNone'
+assert_rejected "empty verification output" bash "$CONTRACT" transition verify --pr 731 -- ""
+assert_rejected "invalid expected verification PR" bash "$CONTRACT" transition verify --pr 0 -- "$(verification_output PASS)"
+assert_rejected "mismatched verification PR" bash "$CONTRACT" transition verify --pr 732 -- "$(verification_output PASS)"
+assert_rejected "duplicate verification heading" bash "$CONTRACT" transition verify --pr 731 -- "$(verification_output PASS)"$'\n## End-to-End Verification — PR #731'
+assert_rejected "unknown verification verdict" bash "$CONTRACT" transition verify --pr 731 -- $'## End-to-End Verification — PR #731\n### Verdict: UNKNOWN'
+assert_rejected "duplicate verification verdict" bash "$CONTRACT" transition verify --pr 731 -- $'## End-to-End Verification — PR #731\n### Verdict: PASS\n### Verdict: FAIL'
+assert_rejected "FAIL verification without structured issues" bash "$CONTRACT" transition verify --pr 731 -- $'## End-to-End Verification — PR #731\n### Verdict: FAIL\n### Issues Found\nNone'
+assert_rejected "bare PASS verification" bash "$CONTRACT" transition verify --pr 731 -- $'## End-to-End Verification — PR #731\n### Verdict: PASS'
+assert_rejected "PASS verification without evidence" bash "$CONTRACT" transition verify --pr 731 -- "$(verification_output PASS | sed '/### Evidence/,/### Issues Found/{ /### Evidence/!{ /### Issues Found/!d; }; }')"
+assert_rejected "PASS verification with heading-only evidence" bash "$CONTRACT" transition verify --pr 731 -- "$(verification_output PASS | sed '/\*\*Result:\*\*/d')"
+assert_rejected "PASS verification with failure evidence" bash "$CONTRACT" transition verify --pr 731 -- "$(verification_output PASS)"$'\nResult: FAIL'
+assert_rejected "PASS verification with failed scenario result" bash "$CONTRACT" transition verify --pr 731 -- "$(verification_output PASS | sed 's/\*\*Result:\*\* PASS/\*\*Result:\*\* FAIL/')"
+assert_rejected "PASS verification with structured issue" bash "$CONTRACT" transition verify --pr 731 -- "$(verification_output PASS)"$'\n- **[Verification]** Contradictory failure.'
+assert_rejected "duplicate PASS issues section" bash "$CONTRACT" transition verify --pr 731 -- "$(verification_output PASS)"$'\n### Issues Found\nNone'
+assert_rejected "non-pure-doc N/A" bash "$CONTRACT" transition verify --pr 731 -- $'## End-to-End Verification — PR #731\n\n### Verdict: N/A\n\nNo testing needed.'
 assert_rejected "missing merge output" bash "$CONTRACT" transition merge
-assert_rejected "empty merge output" bash "$CONTRACT" transition merge ""
-assert_rejected "malformed merge output" bash "$CONTRACT" transition merge $'## Merge Complete\n**PR:** #0 — bad\n**Merged to:** main'
+assert_rejected "empty merge output" bash "$CONTRACT" transition merge --pr 731 -- ""
+assert_rejected "malformed merge output" bash "$CONTRACT" transition merge --pr 731 -- $'## Merge Complete\n**PR:** #0 — bad\n**Merged to:** main'
+assert_rejected "mismatched merge PR" bash "$CONTRACT" transition merge --pr 732 -- "$(merge_output)"
+assert_rejected "duplicate merge PR" bash "$CONTRACT" transition merge --pr 731 -- "$(merge_output)"$'\n**PR:** #731 — duplicate'
 
 echo "PASS: strict worker outputs, referee-driven transitions, verification recovery, client entry points, and deterministic parallel reviewer dispatch are covered."

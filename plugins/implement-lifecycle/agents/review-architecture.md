@@ -95,4 +95,4 @@ Return findings in exactly this structure:
 ### Summary
 <1-2 sentence assessment focused on architectural fit and long-term health>
 
-Use only these headings, in this order, at most once each. Omit any empty finding category, put finding bullets only inside its category, and finish with exactly one non-empty `### Summary`. If the architecture looks solid, say so explicitly in that summary.
+Use only these headings, in this order, at most once each. Omit any empty finding category, put finding bullets only inside its category, and finish with exactly one non-empty `### Summary`. Every non-blank summary line must be plain prose beginning with a letter or digit; do not use headings, lists, blockquotes, fences, rules, tables, HTML, or indented code there. If the architecture looks solid, say so explicitly in that summary.

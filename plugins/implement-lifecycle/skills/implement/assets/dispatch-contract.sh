@@ -5,7 +5,7 @@ set -euo pipefail
 PLUGIN_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 
 usage() {
-  echo "usage: $0 target <claude|codex> <worker> | targets <claude|codex> <worker>... | validate <review|docs> [--reviewers <reviewer>...] -- <worker-output>... | transition <phase> [--accepted-count <count>] [--reviewers <reviewer>...] -- <worker-output>..." >&2
+  echo "usage: $0 target <claude|codex> <worker> | targets <claude|codex> <worker>... | validate <review|docs> [--reviewers <reviewer>...] -- <worker-output>... | transition <phase> [--accepted-count <count>] [--finding-ids <id>...] [--pr <number>] [--reviewers <reviewer>...] -- <worker-output>..." >&2
   exit 2
 }
 
@@ -121,7 +121,10 @@ parse_review_count() {
     {
       if (last_rank == 0) fail("content before first category")
       if (summary_seen) {
-        if ($0 ~ /^- /) fail("finding bullet outside a finding category")
+        # Summary is prose, not another Markdown container. Requiring an
+        # alphanumeric first character rejects headings, every list form,
+        # quotes, fences, rules, tables, indented code, and HTML structure.
+        if ($0 !~ /^[[:alnum:]]/ || $0 ~ /^[0-9]+[.)][[:space:]]/ || $0 ~ /<[^>]*>/) fail("summary must contain plain prose lines")
         summary_nonempty = 1
         next
       }
@@ -188,28 +191,65 @@ validate_outputs() {
   esac
 }
 
+parse_finding_ids() {
+  [ "${1-}" = --finding-ids ] || { echo "address transition requires --finding-ids" >&2; return 2; }
+  shift
+  FINDING_IDS=()
+  seen=' '
+  while [ "$#" -gt 0 ] && [ "$1" != -- ]; do
+    case "$1" in ''|*[!0-9]*|0) echo "finding IDs must be positive integers" >&2; return 2 ;; esac
+    case "$seen" in *" $1 "*) echo "duplicate expected finding ID: $1" >&2; return 2 ;; esac
+    FINDING_IDS+=("$1")
+    seen="$seen$1 "
+    shift
+  done
+  [ "${#FINDING_IDS[@]}" -gt 0 ] || { echo "address transition requires one or more finding IDs" >&2; return 2; }
+  [ "${1-}" = -- ] || { echo "address transition requires -- before output" >&2; return 2; }
+  shift
+  [ "$#" -eq 1 ] || { echo "address transition requires exactly one output" >&2; return 2; }
+  ADDRESS_OUTPUT=$1
+}
+
 parse_addressed() {
   output=${1-}
+  shift
+  expected_ids=("$@")
   require_nonempty_output addresser "$output"
   printf '%s\n' "$output" | grep -Fq '| # | Finding | Action | Details |' || {
     echo "malformed addresser output: missing summary table" >&2; return 2;
   }
-  rows=$(printf '%s\n' "$output" | grep -Ec '^\| [0-9]+ \|' || true)
-  successful_rows=$(printf '%s\n' "$output" | grep -Ec '^\| [0-9]+ \| .+ \| (Applied|Partially applied) \| .+ \|$' || true)
-  [ "$rows" -gt 0 ] && [ "$successful_rows" -eq "$rows" ] || {
+  rows=$(printf '%s\n' "$output" | grep -E '^\| [0-9]+ \|' || true)
+  row_count=$(printf '%s\n' "$rows" | sed '/^$/d' | wc -l | tr -d ' ')
+  successful_rows=$(printf '%s\n' "$rows" | grep -Ec '^\| [0-9]+ \| .+ \| (Applied|Partially applied) \| .+ \|$' || true)
+  [ "$row_count" -eq "${#expected_ids[@]}" ] && [ "$successful_rows" -eq "$row_count" ] || {
     echo "malformed or unsuccessful addresser output: every finding must be Applied or Partially applied" >&2; return 2;
   }
-  printf '%s\n' "$output" | grep -Eq '^\*\*Tests:\*\* .+' || {
-    echo "malformed addresser output: missing test result" >&2; return 2;
+  actual_ids=$(printf '%s\n' "$rows" | sed -E 's/^\| ([0-9]+) \|.*$/\1/' | sort -n)
+  expected_sorted=$(printf '%s\n' "${expected_ids[@]}" | sort -n)
+  [ "$actual_ids" = "$expected_sorted" ] || {
+    echo "malformed addresser output: result rows must match the expected finding IDs exactly" >&2; return 2;
   }
-  printf '%s\n' "$output" | grep -Eq '^\*\*Commits:\*\* .+' || {
-    echo "malformed addresser output: missing commit result" >&2; return 2;
+  [ "$(printf '%s\n' "$output" | grep -Ec '^\*\*Tests:\*\*' || true)" -eq 1 ] &&
+    [ "$(printf '%s\n' "$output" | grep -Ec '^\*\*Tests:\*\* .+ — PASS$' || true)" -eq 1 ] || {
+    echo "malformed addresser output: require exactly one explicit passing Tests result" >&2; return 2;
+  }
+  [ "$(printf '%s\n' "$output" | grep -Ec '^\*\*Commits:\*\*[[:space:]]*$' || true)" -eq 1 ] &&
+    ! printf '%s\n' "$output" | grep -Eiq '^\*\*Commits:\*\*.*none|^- +none([[:space:]]|$)' || {
+    echo "malformed addresser output: require one non-empty Commits section" >&2; return 2;
+  }
+  printf '%s\n' "$output" | grep -Eq '^- `?[0-9a-f]{7,40}`? — `?[^`[:space:]][^`]*`?$' || {
+    echo "malformed addresser output: require at least one real commit identifier and message" >&2; return 2;
   }
 }
 
 parse_verdict() {
-  output=${1-}
+  expected_pr=$1
+  output=${2-}
   require_nonempty_output verification "$output"
+  heading_pr=$(printf '%s\n' "$output" | sed -n 's/^## End-to-End Verification — PR #\([0-9][0-9]*\) *$/\1/p')
+  [ "$(printf '%s\n' "$heading_pr" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 1 ] && [ "$heading_pr" = "$expected_pr" ] || {
+    echo "verification output must contain exactly one heading for expected PR #$expected_pr" >&2; return 2;
+  }
   verdict=$(printf '%s\n' "$output" | sed -n 's/^### Verdict: *//p' | sed 's/ *$//')
   [ "$(printf '%s\n' "$verdict" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 1 ] || {
     echo "verification output must contain exactly one ### Verdict" >&2; return 2;
@@ -231,19 +271,50 @@ parse_verdict() {
       }
       printf '%s\n' "$verdict"
       ;;
-    PASS|N/A) printf '%s\n' "$verdict" ;;
+    PASS)
+      printf '%s\n' "$output" | awk '
+        function fail() { exit 2 }
+        /^### / {
+          if ($0 == "### Verdict: PASS") rank = 1
+          else if ($0 == "### System Flow Verified") rank = 2
+          else if ($0 == "### Evidence") rank = 3
+          else if ($0 == "### Issues Found") rank = 4
+          else if ($0 == "### Holistic Assessment") rank = 5
+          else fail()
+          if (rank <= last || seen[rank]++) fail()
+          last = rank; section = rank; next
+        }
+        /^[[:space:]]*$/ { next }
+        section == 2 && $0 !~ /^#/ { flow = 1 }
+        section == 3 && $0 !~ /^#/ { evidence = 1 }
+        section == 3 && $0 ~ /^\*\*Result:\*\* PASS([[:space:]]|$)/ { passing_result = 1 }
+        $0 ~ /^(\*\*)?Result:(\*\*)? (FAIL|PARTIAL)([[:space:]]|$)/ { contradiction = 1 }
+        section == 4 { if ($0 == "None") none++; else contradiction = 1 }
+        section == 5 && $0 !~ /^#/ { assessment = 1 }
+        /- \*\*\[Verification\]\*\*/ { contradiction = 1 }
+        END { if (last != 5 || !flow || !evidence || !passing_result || none != 1 || !assessment || contradiction) exit 2 }
+      ' || { echo "verification PASS output requires complete, ordered, non-contradictory success evidence" >&2; return 2; }
+      printf '%s\n' "$verdict"
+      ;;
+    N/A)
+      expected=$(printf '## End-to-End Verification — PR #%s\n\n### Verdict: N/A\n\nPure documentation change — no code, configuration, or build artifacts affected.' "$expected_pr")
+      [ "$output" = "$expected" ] || { echo "verification N/A output must use the documented pure-documentation envelope exactly" >&2; return 2; }
+      printf '%s\n' "$verdict"
+      ;;
     *) echo "unsupported verification verdict: $verdict" >&2; return 2 ;;
   esac
 }
 
 parse_merged() {
-  output=${1-}
+  expected_pr=$1
+  output=${2-}
   require_nonempty_output merge "$output"
   printf '%s\n' "$output" | grep -Eq '^## Merge Complete[[:space:]]*$' || {
     echo "malformed merge output: missing success heading" >&2; return 2;
   }
-  printf '%s\n' "$output" | grep -Eq '^\*\*PR:\*\* #[1-9][0-9]* .+' || {
-    echo "malformed merge output: missing positive PR number" >&2; return 2;
+  merged_pr=$(printf '%s\n' "$output" | sed -n 's/^\*\*PR:\*\* #\([1-9][0-9]*\) .*/\1/p')
+  [ "$(printf '%s\n' "$merged_pr" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 1 ] && [ "$merged_pr" = "$expected_pr" ] || {
+    echo "malformed merge output: require exactly one expected PR #$expected_pr" >&2; return 2;
   }
   printf '%s\n' "$output" | grep -Eq '^\*\*Merged to:\*\* .+' || {
     echo "malformed merge output: missing base branch" >&2; return 2;
@@ -268,8 +339,8 @@ transition() {
       if [ "$accepted" -eq 0 ]; then echo docs; else echo address; fi
       ;;
     address)
-      [ "$#" -eq 1 ] || { echo "address transition requires exactly one output" >&2; return 2; }
-      parse_addressed "$1"
+      parse_finding_ids "$@" || return 2
+      parse_addressed "$ADDRESS_OUTPUT" "${FINDING_IDS[@]}"
       echo review
       ;;
     docs)
@@ -282,23 +353,25 @@ transition() {
       if [ "$accepted" -eq 0 ]; then echo verify; else echo docs-address; fi
       ;;
     docs-address)
-      [ "$#" -eq 1 ] || { echo "docs-address transition requires exactly one output" >&2; return 2; }
-      parse_addressed "$1"
+      parse_finding_ids "$@" || return 2
+      parse_addressed "$ADDRESS_OUTPUT" "${FINDING_IDS[@]}"
       echo docs
       ;;
     verify)
-      [ "$#" -eq 1 ] || { echo "verify transition requires exactly one output" >&2; return 2; }
-      verdict=$(parse_verdict "$1")
+      [ "${1-}" = --pr ] && [ "$#" -eq 4 ] && [ "${3-}" = -- ] || { echo "verify transition requires --pr <positive-integer> -- <output>" >&2; return 2; }
+      case "$2" in ''|*[!0-9]*|0) echo "verify transition requires a positive PR number" >&2; return 2 ;; esac
+      verdict=$(parse_verdict "$2" "$4")
       case "$verdict" in PASS|N/A) echo merge ;; FAIL|PARTIAL) echo verification-address ;; esac
       ;;
     verification-address)
-      [ "$#" -eq 1 ] || { echo "verification-address transition requires exactly one output" >&2; return 2; }
-      parse_addressed "$1"
+      parse_finding_ids "$@" || return 2
+      parse_addressed "$ADDRESS_OUTPUT" "${FINDING_IDS[@]}"
       echo verify
       ;;
     merge)
-      [ "$#" -eq 1 ] || { echo "merge transition requires exactly one output" >&2; return 2; }
-      parse_merged "$1"
+      [ "${1-}" = --pr ] && [ "$#" -eq 4 ] && [ "${3-}" = -- ] || { echo "merge transition requires --pr <positive-integer> -- <output>" >&2; return 2; }
+      case "$2" in ''|*[!0-9]*|0) echo "merge transition requires a positive PR number" >&2; return 2 ;; esac
+      parse_merged "$2" "$4"
       echo complete
       ;;
     *) echo "unknown lifecycle phase: $phase" >&2; return 2 ;;

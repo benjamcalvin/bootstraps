@@ -9,7 +9,7 @@ agent: general-purpose
 argument-hint: <pr-number>
 license: MIT
 metadata:
-  version: "1.1.2"
+  version: "1.1.3"
   tags: ["verify", "e2e", "integration", "subagent"]
   author: benjamcalvin
 ---
@@ -193,6 +193,8 @@ Use one bullet per independently addressable issue for a **FAIL** or **PARTIAL**
 <1-3 sentences: Does the system work correctly as a whole after this change?
 Any concerns about interactions, side effects, or downstream impact?>
 ```
+
+For **PASS**, include every section above exactly once and in that order. `System Flow Verified`, `Evidence`, and `Holistic Assessment` must each be non-empty; `Issues Found` must contain only `None`. Do not return PASS alongside failed evidence or structured verification issues. The PR number in the heading must exactly match the requested PR.
 
 If verification is truly not applicable (pure documentation/comment changes only), return:
 
