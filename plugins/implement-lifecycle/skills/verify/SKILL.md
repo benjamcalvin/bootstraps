@@ -194,7 +194,9 @@ Use one bullet per independently addressable issue for a **FAIL** or **PARTIAL**
 Any concerns about interactions, side effects, or downstream impact?>
 ```
 
-For **PASS**, include every section above exactly once and in that order. `System Flow Verified`, `Evidence`, and `Holistic Assessment` must each be non-empty; `Issues Found` must contain only `None`. Do not return PASS alongside failed evidence or structured verification issues. The PR number in the heading must exactly match the requested PR.
+For **PASS**, **FAIL**, and **PARTIAL**, include every section above exactly once and in that order. `System Flow Verified`, `Evidence`, and `Holistic Assessment` must each be non-empty, and the PR number in the heading must exactly match the requested PR. Every scenario must end in an explicit `**Result:** PASS`, `FAIL`, or `PARTIAL`; never emit `UNKNOWN` anywhere.
+
+The evidence and issue sections must agree with the verdict. PASS requires at least one passing scenario, no failed or partial scenario, and `Issues Found` containing only `None`. FAIL requires at least one failed scenario and one or more structured verification issues, with no `None`. PARTIAL requires at least one failed or partial scenario and one or more structured verification issues, with no `None`. A contradictory or incomplete report is invalid even when the top-level verdict looks plausible.
 
 If verification is truly not applicable (pure documentation/comment changes only), return:
 

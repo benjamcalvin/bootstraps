@@ -82,16 +82,28 @@ After addressing all findings:
 
 Write the summary to a temporary Markdown file and post it with `gh pr comment <pr-number> --body-file <path>`.
 
-Return a summary table:
+Return one ordered result envelope:
 
+## Address Result
+**PR:** #<requested PR number>
+**Round:** <exact requested round identifier>
+**Phase:** <code / docs / verification>
+
+### Findings
 | # | Finding | Action | Details |
 |---|---------|--------|---------|
 | <exact finding ID from the supplied file> | <brief description> | Applied / Partially applied / Rejected / Escalated | <what was done and why> |
 
 Include exactly one row for every supplied finding ID and no other rows. A successful result may use only `Applied` or `Partially applied`; report any rejection or escalation as a blocked/unsuccessful result instead of implying completion.
 
-**Tests:** <command(s)> — PASS
-**Commits:**
+### Tests
+- **Command:** `<exact command(s) run>`
+- **Result:** <brief concrete result, such as test counts or validator success>
+- **Status:** PASS
+
+### Commits
 - `<7-40 character commit SHA>` — `<commit message>`
 
-Report the explicit `PASS` token only when every listed command passed. Include at least one real commit SHA and its message; never report `none`, an uncommitted change, or only a proposed commit message.
+Use every heading and identity field exactly once and in the shown order. The PR, round, and phase must match the invocation: numeric rounds use `code`, `docs-N` uses `docs`, and `verification-N` uses `verification`. Keep finding rows in the supplied order. Include exactly one Tests section with one non-empty command, one concrete result, and explicit `PASS` only when every listed command passed. Include exactly one Commits section containing only one or more real commit SHA/message rows; never put commit bullets elsewhere or report `none`, an uncommitted change, or only a proposed commit message.
+
+This structural envelope cannot prove that reported work is honest. It must nevertheless contain no contradictory, missing, duplicated, or misplaced finding, test, or commit evidence; the orchestrator rejects such output closed.

@@ -6,7 +6,7 @@ description: >-
   Triggers: /implement, $implement-lifecycle:implement, implement this, build this feature
 license: MIT
 metadata:
-  version: "3.2.5"
+  version: "3.2.6"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -33,7 +33,7 @@ You are a **lean orchestrator**. Your job is to coordinate — not to implement,
 
 Use the current client's task or plan tracker throughout when one is available. In Claude Code, use the Task tools. In Codex, use the plan-tracking capability. Do not block the workflow merely because a client exposes no tracker.
 
-Before delegating, read and use the shared [`assets/dispatch-contract.sh`](assets/dispatch-contract.sh) contract. Resolve worker targets from it instead of reconstructing client-specific names. Use its `validate` command for raw reviewer/docs envelopes and its `transition` command for every state change. Pass each complete, unmodified worker response as one shell argument; do not translate responses into private `KEY=value` values. Resolve the explicit selected reviewer set with one `targets` call, launch every returned target in parallel, wait for all of them, then validate exactly that set with `validate review --reviewers <names...> -- <outputs...>` in the same order. Only after refereeing, call `transition review --accepted-count <count> --reviewers <names...> -- <outputs...>`. For docs, use `validate docs -- <output>` before refereeing and `transition docs --accepted-count <count> -- <output>` afterward. Raw finding counts never choose a transition; the explicit post-referee accepted count does. The contract validates Claude named reviewer agents versus Codex skill wrappers and fails closed on missing, empty, extra, malformed, or inconsistent results; it does not launch workers or authorize side effects.
+Before delegating, read and use the shared [`assets/dispatch-contract.sh`](assets/dispatch-contract.sh) contract. Resolve worker targets from it instead of reconstructing client-specific names. Use its `validate` command for raw reviewer/docs envelopes and its `transition` command for every state change. Pass each complete, unmodified worker response as one shell argument; do not translate responses into private `KEY=value` values. Resolve the explicit selected reviewer set with one `targets` call, launch every returned target in parallel, wait for all of them, then validate exactly that set with `validate review --pr <PR> --round <N> --reviewers <names...> -- <outputs...>` in the same order. Only after refereeing, call `transition review --pr <PR> --round <N> --accepted-count <count> --reviewers <names...> -- <outputs...>`. For docs, use `validate docs --pr <PR> --round <N> -- <output>` before refereeing and `transition docs --pr <PR> --round <N> --accepted-count <count> -- <output>` afterward. Raw finding counts never choose a transition; the explicit post-referee accepted count does. The contract validates Claude named reviewer agents versus Codex skill wrappers and fails closed on missing, empty, extra, malformed, stale, or inconsistent results; it does not launch workers or authorize side effects.
 
 The transition contract consumes the output forms already required by each worker: `PR_NUMBER: <number>` from `implement-code`; categorized reviewer Markdown with a final plain-prose `### Summary`; an addresser table whose unique IDs exactly match the forwarded findings plus explicit passing tests and real commit IDs/messages; the complete PR-correlated verification envelope; and the PR-correlated `## Merge Complete` summary. A failed contract check is a blocked transition, never permission to infer success.
 
@@ -171,7 +171,7 @@ $implement-lifecycle:review-testing Review PR #<pr-number>, round <round-number>
 
 Each reviewer fetches PR context, posts findings to GitHub, and returns them to you.
 
-Record the selected reviewer names without the `review-` prefix (for example, `correctness testing`). After every selected worker returns, pass those names and the corresponding complete outputs to `validate review`. Record the returned raw finding count for the audit trail, but do not use it to choose the next phase. Do not require results from reviewers that were not selected, and do not advance with a partial selected set.
+Record the selected reviewer names without the `review-` prefix (for example, `correctness testing`). After every selected worker returns, pass the active PR, current round, those names, and the corresponding complete outputs to `validate review`. Record the returned raw finding count for the audit trail, but do not use it to choose the next phase. Do not require results from reviewers that were not selected, and do not advance with a partial selected set.
 
 #### Step B: Referee Evaluation
 
@@ -192,7 +192,7 @@ For each finding, decide:
 
 Produce a **filtered action plan** containing only accepted findings.
 
-Count that filtered plan and call `transition review --accepted-count <count> --reviewers <selected-names...> -- <complete-outputs...>`. The accepted count must not exceed the validated raw count. Follow the returned state: `address` for one or more accepted findings, or `docs` for zero. This explicitly covers rounds where every raw finding is rejected; those rounds exit cleanly without invoking the addresser.
+Count that filtered plan and call `transition review --pr <PR> --round <N> --accepted-count <count> --reviewers <selected-names...> -- <complete-outputs...>`. The accepted count must not exceed the validated raw count. Follow the returned state: `address` for one or more accepted findings, or `docs` for zero. This explicitly covers rounds where every raw finding is rejected; those rounds exit cleanly without invoking the addresser.
 
 **Referee mindset:** Think like a principal engineer. Good review isn't just about catching bugs — it's about raising the bar. When the reviewer identifies a legitimate improvement (consolidating duplication, using a more idiomatic API, improving test structure), accept it if it's in scope and doesn't incur technical debt. "Recommended" doesn't mean "optional" — it means "the code would be better for it." Embrace going the extra mile on quality; reject only what is truly out of scope, incorrect, or adds unnecessary complexity.
 
@@ -229,7 +229,7 @@ Write the filtered findings (accepted only) to a temp file for the addresser usi
 Delegate to a subagent using `implement-address` in Claude Code or `$implement-lifecycle:implement-address` in Codex, with `<pr-number> <round-number> /tmp/implement-findings-pr-<PR>-round-<N>.md`.
 
 The addresser will fix issues, run tests, commit, push, and return a summary.
-Pass the accepted finding IDs to the result gate exactly as written in the filtered file: `transition address --finding-ids <id...> -- <complete-output>`. Advance only when every expected ID appears exactly once as Applied or Partially applied, tests explicitly pass, and at least one real commit is reported.
+Pass the active identity and accepted finding IDs to the result gate exactly as written in the filtered file: `transition address --pr <PR> --round <N> --finding-ids <id...> -- <complete-output>`. Advance only when every expected ID appears exactly once in order as Applied or Partially applied, tests explicitly pass, and at least one real commit is reported.
 
 #### Step E: Next Round
 
@@ -268,7 +268,7 @@ Use the named `review-docs` agent in Claude Code. In Codex, spawn a subagent and
 
 The docs reviewer fetches PR context, maps code changes to existing documentation, and identifies gaps — not just inaccuracies in changed docs, but missing docs for new behavior and stale docs contradicted by code changes.
 
-Immediately validate the complete docs response with `validate docs -- <output>`. Record its raw finding count, but do not use that raw count to choose the next phase.
+Immediately validate the complete docs response with `validate docs --pr <PR> --round <N> -- <output>`. Record its raw finding count, but do not use that raw count to choose the next phase.
 
 #### Step B: Referee Evaluation
 
@@ -279,7 +279,7 @@ Apply the same accept/reject evaluation as Phase 4. Read the relevant docs and c
 | **Accept** (default) | Finding has merit — you verified by reading the docs/code | Include in addresser action plan at the reviewer's original severity |
 | **Reject** | Finding is incorrect, irrelevant, or demands docs for trivial changes | Exclude from action plan; record your reasoning |
 
-Count the accepted docs findings and call `transition docs --accepted-count <count> -- <complete-output>`. Follow `docs-address` when the count is positive and `verify` when it is zero, including when all raw docs findings were rejected.
+Count the accepted docs findings and call `transition docs --pr <PR> --round <N> --accepted-count <count> -- <complete-output>`. Follow `docs-address` when the count is positive and `verify` when it is zero, including when all raw docs findings were rejected.
 
 **If zero findings survive filtering**, post a brief PR comment — `"Docs Compliance Gate: no actionable findings — proceeding to verification."` — then skip to Phase 5.
 
@@ -310,7 +310,7 @@ Write findings to a temp file and invoke the addresser:
 ```
 
 Delegate to a subagent using `implement-address` in Claude Code or `$implement-lifecycle:implement-address` in Codex, with `<pr-number> docs-<round-number> /tmp/implement-docs-findings-pr-<PR>-round-<N>.md`.
-Validate its response with `transition docs-address --finding-ids <accepted-id...> -- <complete-output>` before returning to docs review.
+Validate its response with `transition docs-address --pr <PR> --round docs-<N> --finding-ids <accepted-id...> -- <complete-output>` before returning to docs review.
 
 #### Step D: Evaluate Continuation
 
@@ -336,7 +336,7 @@ For `verification-address`, write the reported issues to `/tmp/implement-verific
 | 1 | <failed behavior> | Action Required | <scenario, evidence, expected/actual, and relevant file or flow> |
 ```
 
-Delegate `implement-address` with `<pr-number> verification-<N> /tmp/implement-verification-findings-pr-<PR>-round-<N>.md`. Validate the successful addresser response with `transition verification-address --finding-ids <verification-id...> -- <output>`; its only successful next state is `verify`. Increment the verification round and invoke the verifier again. Repeat until **PASS**/**N/A**, or escalate after round 10 with the unresolved verification issues. Never route verification fixes back through code review unless a later reviewer round is separately requested.
+Delegate `implement-address` with `<pr-number> verification-<N> /tmp/implement-verification-findings-pr-<PR>-round-<N>.md`. Validate the successful addresser response with `transition verification-address --pr <PR> --round verification-<N> --finding-ids <verification-id...> -- <output>`; its only successful next state is `verify`. Increment the verification round and invoke the verifier again. Repeat until **PASS**/**N/A**, or escalate after round 10 with the unresolved verification issues. Never route verification fixes back through code review unless a later reviewer round is separately requested.
 
 ---
 
@@ -345,7 +345,7 @@ Delegate `implement-address` with `<pr-number> verification-<N> /tmp/implement-v
 Use `merge-pr` in Claude Code or `$implement-lifecycle:merge-pr` in Codex with `<pr-number>` in the main thread. Merging is an external state change, so honor the current client's approval and repository-policy requirements.
 
 This validates the PR, squash-merges it, deletes the branch, and posts updates on linked issues.
-Pass its complete result through `transition merge --pr <pr-number> -- <output>` and complete the lifecycle only when the reported PR matches the active PR.
+Fetch and retain the PR title and base branch immediately before merge. Pass its complete result through `transition merge --pr <pr-number> --base <base-branch> --title <exact-title> -- <output>` and complete the lifecycle only when the report exactly matches all expected metadata and contains the full ordered merge envelope.
 
 Report the result to the user.
 

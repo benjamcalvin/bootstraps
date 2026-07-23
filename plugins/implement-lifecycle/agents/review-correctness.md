@@ -75,6 +75,12 @@ gh pr review <pr-number> --comment --body "<findings>"
 
 Return findings in exactly this structure:
 
+## Review Result
+**PR:** #<requested PR number>
+**Round:** <requested positive round number>
+**Type:** code
+**Reviewer:** correctness
+
 ### Action Required
 - **[Correctness]** Description with specific file:line references and explanation of the bug/risk
 

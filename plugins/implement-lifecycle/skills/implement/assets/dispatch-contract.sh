@@ -5,7 +5,7 @@ set -euo pipefail
 PLUGIN_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)
 
 usage() {
-  echo "usage: $0 target <claude|codex> <worker> | targets <claude|codex> <worker>... | validate <review|docs> [--reviewers <reviewer>...] -- <worker-output>... | transition <phase> [--accepted-count <count>] [--finding-ids <id>...] [--pr <number>] [--reviewers <reviewer>...] -- <worker-output>..." >&2
+  echo "usage: $0 target <claude|codex> <worker> | targets <claude|codex> <worker>... | validate <review|docs> --pr <number> --round <number> [--reviewers <reviewer>...] -- <worker-output>... | transition <phase> [--accepted-count <count>] [--finding-ids <id>...] [--pr <number>] [--round <identifier>] [--base <branch>] [--title <title>] [--reviewers <reviewer>...] -- <worker-output>..." >&2
   exit 2
 }
 
@@ -61,6 +61,18 @@ require_nonempty_output() {
   fi
 }
 
+require_round_identifier() {
+  phase=$1
+  value=$2
+  case "$phase" in
+    code) suffix=$value ;;
+    docs) case "$value" in docs-*) suffix=${value#docs-} ;; *) return 2 ;; esac ;;
+    verification) case "$value" in verification-*) suffix=${value#verification-} ;; *) return 2 ;; esac ;;
+    *) return 2 ;;
+  esac
+  case "$suffix" in ''|*[!0-9]*|0) return 2 ;; esac
+}
+
 parse_pr_number() {
   output=${1-}
   require_nonempty_output implementation "$output"
@@ -86,10 +98,13 @@ reviewer_label() {
 
 parse_review_count() {
   reviewer=$1
-  output=${2-}
+  expected_pr=$2
+  expected_round=$3
+  expected_type=$4
+  output=${5-}
   require_nonempty_output "$reviewer reviewer" "$output" || return 2
   label=$(reviewer_label "$reviewer") || return 2
-  printf '%s\n' "$output" | awk -v reviewer="$reviewer" -v labels="$label" '
+  printf '%s\n' "$output" | awk -v reviewer="$reviewer" -v labels="$label" -v pr="$expected_pr" -v round="$expected_round" -v type="$expected_type" '
     function fail(message) {
       failed = 1
       print "malformed " reviewer " reviewer output: " message > "/dev/stderr"
@@ -98,7 +113,17 @@ parse_review_count() {
     function close_category() {
       if (in_category && category_findings == 0) fail("empty category")
     }
-    BEGIN { last_rank = 0; findings = 0 }
+    BEGIN { last_rank = 0; findings = 0; metadata = 0 }
+    /^[[:space:]]*$/ { next }
+    metadata < 5 {
+      metadata++
+      if (metadata == 1 && $0 != "## Review Result") fail("missing or misplaced identity heading")
+      if (metadata == 2 && $0 != "**PR:** #" pr) fail("PR identity mismatch")
+      if (metadata == 3 && $0 != "**Round:** " round) fail("round identity mismatch")
+      if (metadata == 4 && $0 != "**Type:** " type) fail("review type mismatch")
+      if (metadata == 5 && $0 != "**Reviewer:** " reviewer) fail("reviewer identity mismatch")
+      next
+    }
     /^### / {
       if ($0 == "### Action Required") rank = 1
       else if ($0 == "### Recommended") rank = 2
@@ -117,7 +142,6 @@ parse_review_count() {
       }
       next
     }
-    /^[[:space:]]*$/ { next }
     {
       if (last_rank == 0) fail("content before first category")
       if (summary_seen) {
@@ -137,6 +161,7 @@ parse_review_count() {
     END {
       if (failed) exit 2
       close_category()
+      if (metadata != 5) fail("incomplete identity envelope")
       if (!summary_seen) fail("missing final ### Summary")
       if (!summary_nonempty) fail("empty summary")
       print findings
@@ -155,6 +180,11 @@ validate_accepted_count() {
 }
 
 parse_review_batch() {
+  [ "${1-}" = --pr ] && [ "${3-}" = --round ] || { echo "review validation requires --pr <positive-integer> --round <positive-integer>" >&2; return 2; }
+  expected_pr=$2
+  expected_round=$4
+  case "$expected_pr:$expected_round" in *[!0-9:]*|0:*|*:0|:) echo "review identity requires positive PR and round numbers" >&2; return 2 ;; esac
+  shift 4
   [ "${1-}" = --reviewers ] || { echo "review validation requires --reviewers" >&2; return 2; }
   shift
   reviewers=()
@@ -171,7 +201,7 @@ parse_review_batch() {
     case "$reviewer" in correctness|security|architecture|testing) ;; *) echo "invalid code reviewer: $reviewer" >&2; return 2 ;; esac
     case "$seen" in *" $reviewer "*) echo "duplicate selected reviewer: $reviewer" >&2; return 2 ;; esac
     seen="$seen$reviewer "
-    count=$(parse_review_count "$reviewer" "${outputs[$index]}") || return 2
+    count=$(parse_review_count "$reviewer" "$expected_pr" "$expected_round" "code" "${outputs[$index]}") || return 2
     total=$((total + count))
     index=$((index + 1))
   done
@@ -184,15 +214,21 @@ validate_outputs() {
   case "$phase" in
     review) parse_review_batch "$@" ;;
     docs)
-      [ "${1-}" = -- ] && [ "$#" -eq 2 ] || { echo "docs validation requires -- <output>" >&2; return 2; }
-      parse_review_count docs "$2"
+      [ "${1-}" = --pr ] && [ "${3-}" = --round ] && [ "${5-}" = -- ] && [ "$#" -eq 6 ] || { echo "docs validation requires --pr <positive-integer> --round <positive-integer> -- <output>" >&2; return 2; }
+      case "$2:$4" in *[!0-9:]*|0:*|*:0|:) echo "docs identity requires positive PR and round numbers" >&2; return 2 ;; esac
+      parse_review_count docs "$2" "$4" docs "$6"
       ;;
     *) echo "unknown validation phase: $phase" >&2; return 2 ;;
   esac
 }
 
 parse_finding_ids() {
-  [ "${1-}" = --finding-ids ] || { echo "address transition requires --finding-ids" >&2; return 2; }
+  [ "${1-}" = --pr ] && [ "${3-}" = --round ] && [ "${5-}" = --finding-ids ] || { echo "address transition requires --pr <positive-integer> --round <identifier> --finding-ids" >&2; return 2; }
+  ADDRESS_PR=$2
+  ADDRESS_ROUND=$4
+  case "$ADDRESS_PR" in ''|*[!0-9]*|0) echo "address transition requires a positive PR number" >&2; return 2 ;; esac
+  shift 4
+  [ "${1-}" = --finding-ids ] || return 2
   shift
   FINDING_IDS=()
   seen=' '
@@ -212,34 +248,42 @@ parse_finding_ids() {
 
 parse_addressed() {
   output=${1-}
-  shift
+  expected_pr=$2
+  expected_round=$3
+  expected_phase=$4
+  shift 4
   expected_ids=("$@")
   require_nonempty_output addresser "$output"
-  printf '%s\n' "$output" | grep -Fq '| # | Finding | Action | Details |' || {
-    echo "malformed addresser output: missing summary table" >&2; return 2;
-  }
-  rows=$(printf '%s\n' "$output" | grep -E '^\| [0-9]+ \|' || true)
-  row_count=$(printf '%s\n' "$rows" | sed '/^$/d' | wc -l | tr -d ' ')
-  successful_rows=$(printf '%s\n' "$rows" | grep -Ec '^\| [0-9]+ \| .+ \| (Applied|Partially applied) \| .+ \|$' || true)
-  [ "$row_count" -eq "${#expected_ids[@]}" ] && [ "$successful_rows" -eq "$row_count" ] || {
-    echo "malformed or unsuccessful addresser output: every finding must be Applied or Partially applied" >&2; return 2;
-  }
-  actual_ids=$(printf '%s\n' "$rows" | sed -E 's/^\| ([0-9]+) \|.*$/\1/' | sort -n)
-  expected_sorted=$(printf '%s\n' "${expected_ids[@]}" | sort -n)
-  [ "$actual_ids" = "$expected_sorted" ] || {
-    echo "malformed addresser output: result rows must match the expected finding IDs exactly" >&2; return 2;
-  }
-  [ "$(printf '%s\n' "$output" | grep -Ec '^\*\*Tests:\*\*' || true)" -eq 1 ] &&
-    [ "$(printf '%s\n' "$output" | grep -Ec '^\*\*Tests:\*\* .+ — PASS$' || true)" -eq 1 ] || {
-    echo "malformed addresser output: require exactly one explicit passing Tests result" >&2; return 2;
-  }
-  [ "$(printf '%s\n' "$output" | grep -Ec '^\*\*Commits:\*\*[[:space:]]*$' || true)" -eq 1 ] &&
-    ! printf '%s\n' "$output" | grep -Eiq '^\*\*Commits:\*\*.*none|^- +none([[:space:]]|$)' || {
-    echo "malformed addresser output: require one non-empty Commits section" >&2; return 2;
-  }
-  printf '%s\n' "$output" | grep -Eq '^- `?[0-9a-f]{7,40}`? — `?[^`[:space:]][^`]*`?$' || {
-    echo "malformed addresser output: require at least one real commit identifier and message" >&2; return 2;
-  }
+  expected_joined=$(IFS=,; echo "${expected_ids[*]}")
+  printf '%s\n' "$output" | awk -v pr="$expected_pr" -v round="$expected_round" -v phase="$expected_phase" -v ids="$expected_joined" '
+    function fail(message) { print "malformed addresser output: " message > "/dev/stderr"; exit 2 }
+    BEGIN { split(ids, expected, ","); state=0; row=0 }
+    /^[[:space:]]*$/ { next }
+    state==0 { if ($0!="## Address Result") fail("missing identity heading"); state=1; next }
+    state==1 { if ($0!="**PR:** #" pr) fail("PR identity mismatch"); state=2; next }
+    state==2 { if ($0!="**Round:** " round) fail("round identity mismatch"); state=3; next }
+    state==3 { if ($0!="**Phase:** " phase) fail("phase identity mismatch"); state=4; next }
+    state==4 { if ($0!="### Findings") fail("missing or misplaced Findings section"); state=5; next }
+    state==5 { if ($0!="| # | Finding | Action | Details |") fail("malformed findings header"); state=6; next }
+    state==6 { if ($0!="|---|---------|--------|---------|") fail("malformed findings separator"); state=7; next }
+    state==7 && /^\| [0-9]+ \|/ {
+      split($0, f, "|"); id=f[2]; gsub(/^ +| +$/, "", id); action=f[4]; gsub(/^ +| +$/, "", action)
+      row++; if (id != expected[row]) fail("finding IDs must match exactly and in order")
+      if (action != "Applied" && action != "Partially applied") fail("every finding must be successfully addressed")
+      if (f[3] !~ /[^[:space:]]/ || f[5] !~ /[^[:space:]]/) fail("finding rows require description and details")
+      next
+    }
+    state==7 { if (row != length(expected) || $0!="### Tests") fail("missing finding or Tests section"); state=8; next }
+    state==8 { if ($0 !~ /^- \*\*Command:\*\* `[^`]+`$/ || tolower($0) ~ /`none`/) fail("Tests requires one credible command"); state=9; next }
+    state==9 { if ($0 !~ /^- \*\*Result:\*\* .+/ || tolower($0) ~ /none/) fail("Tests requires one non-empty result"); state=10; next }
+    state==10 { if ($0!="- **Status:** PASS") fail("Tests requires explicit PASS status"); state=11; next }
+    state==11 { if ($0!="### Commits") fail("missing or misplaced Commits section"); state=12; next }
+    state==12 {
+      if ($0 !~ /^- `?[0-9a-f]{7,40}`? — `?[^`[:space:]][^`]*`?$/ || tolower($0) ~ /none/) fail("Commits accepts only real commit rows")
+      commits++; next
+    }
+    END { if (state != 12 || row != length(expected) || commits < 1) fail("incomplete result envelope") }
+  ' || return 2
 }
 
 parse_verdict() {
@@ -255,27 +299,15 @@ parse_verdict() {
     echo "verification output must contain exactly one ### Verdict" >&2; return 2;
   }
   case "$verdict" in
-    FAIL|PARTIAL)
-      issue_count=$(printf '%s\n' "$output" | awk '
-        /^### Issues Found[[:space:]]*$/ { headings++; in_issues = 1; next }
-        /^### / { in_issues = 0 }
-        in_issues && /^- \*\*\[Verification\]\*\* .+/ { findings++ }
-        in_issues && /^- / && $0 !~ /^- \*\*\[Verification\]\*\* .+/ { malformed = 1 }
-        END {
-          if (headings != 1 || malformed || findings < 1) exit 2
-          print findings
-        }
-      ') || {
-        echo "verification $verdict output requires one or more structured issues under exactly one ### Issues Found heading" >&2
-        return 2
-      }
-      printf '%s\n' "$verdict"
-      ;;
-    PASS)
-      printf '%s\n' "$output" | awk '
+    PASS|FAIL|PARTIAL)
+      printf '%s\n' "$output" | awk -v verdict="$verdict" '
         function fail() { exit 2 }
+        BEGIN { section=0; last=0; envelope=0 }
+        /^[[:space:]]*$/ { next }
+        !envelope { if ($0 !~ /^## End-to-End Verification — PR #[1-9][0-9]*$/) fail(); envelope=1; next }
+        /^## / { fail() }
         /^### / {
-          if ($0 == "### Verdict: PASS") rank = 1
+          if ($0 == "### Verdict: " verdict) rank = 1
           else if ($0 == "### System Flow Verified") rank = 2
           else if ($0 == "### Evidence") rank = 3
           else if ($0 == "### Issues Found") rank = 4
@@ -284,16 +316,29 @@ parse_verdict() {
           if (rank <= last || seen[rank]++) fail()
           last = rank; section = rank; next
         }
-        /^[[:space:]]*$/ { next }
         section == 2 && $0 !~ /^#/ { flow = 1 }
         section == 3 && $0 !~ /^#/ { evidence = 1 }
-        section == 3 && $0 ~ /^\*\*Result:\*\* PASS([[:space:]]|$)/ { passing_result = 1 }
-        $0 ~ /^(\*\*)?Result:(\*\*)? (FAIL|PARTIAL)([[:space:]]|$)/ { contradiction = 1 }
-        section == 4 { if ($0 == "None") none++; else contradiction = 1 }
+        section == 3 && $0 ~ /^(\*\*)?Result:(\*\*)? PASS([[:space:]]|$)/ { evidence_pass++ }
+        section == 3 && $0 ~ /^(\*\*)?Result:(\*\*)? FAIL([[:space:]]|$)/ { evidence_fail++ }
+        section == 3 && $0 ~ /^(\*\*)?Result:(\*\*)? PARTIAL([[:space:]]|$)/ { evidence_partial++ }
+        $0 ~ /^(\*\*)?Result:(\*\*)? PASS([[:space:]]|$)/ { pass_result++ }
+        $0 ~ /^(\*\*)?Result:(\*\*)? FAIL([[:space:]]|$)/ { fail_result++ }
+        $0 ~ /^(\*\*)?Result:(\*\*)? PARTIAL([[:space:]]|$)/ { partial_result++ }
+        $0 ~ /^(\*\*)?Result:(\*\*)? UNKNOWN([[:space:]]|$)/ || $0 ~ /### Verdict: UNKNOWN/ { unknown = 1 }
+        $0 ~ /^- \*\*\[Verification\]\*\* .+/ { global_issues++ }
+        section == 4 {
+          if ($0 == "None") none++
+          else if ($0 ~ /^- \*\*\[Verification\]\*\* .+/) issues++
+          else malformed_issue = 1
+        }
         section == 5 && $0 !~ /^#/ { assessment = 1 }
-        /- \*\*\[Verification\]\*\*/ { contradiction = 1 }
-        END { if (last != 5 || !flow || !evidence || !passing_result || none != 1 || !assessment || contradiction) exit 2 }
-      ' || { echo "verification PASS output requires complete, ordered, non-contradictory success evidence" >&2; return 2; }
+        END {
+          if (!envelope || last != 5 || !flow || !evidence || !assessment || unknown || malformed_issue) fail()
+          if (verdict == "PASS" && (evidence_pass < 1 || fail_result || partial_result || none != 1 || global_issues)) fail()
+          if (verdict == "FAIL" && (evidence_fail < 1 || partial_result || none || issues < 1)) fail()
+          if (verdict == "PARTIAL" && ((evidence_fail + evidence_partial) < 1 || none || issues < 1)) fail()
+        }
+      ' || { echo "verification $verdict output requires the complete ordered envelope and verdict-consistent scenario evidence" >&2; return 2; }
       printf '%s\n' "$verdict"
       ;;
     N/A)
@@ -307,18 +352,21 @@ parse_verdict() {
 
 parse_merged() {
   expected_pr=$1
-  output=${2-}
+  expected_base=$2
+  expected_title=$3
+  output=${4-}
   require_nonempty_output merge "$output"
-  printf '%s\n' "$output" | grep -Eq '^## Merge Complete[[:space:]]*$' || {
-    echo "malformed merge output: missing success heading" >&2; return 2;
-  }
-  merged_pr=$(printf '%s\n' "$output" | sed -n 's/^\*\*PR:\*\* #\([1-9][0-9]*\) .*/\1/p')
-  [ "$(printf '%s\n' "$merged_pr" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 1 ] && [ "$merged_pr" = "$expected_pr" ] || {
-    echo "malformed merge output: require exactly one expected PR #$expected_pr" >&2; return 2;
-  }
-  printf '%s\n' "$output" | grep -Eq '^\*\*Merged to:\*\* .+' || {
-    echo "malformed merge output: missing base branch" >&2; return 2;
-  }
+  printf '%s\n' "$output" | awk -v pr="$expected_pr" -v base="$expected_base" -v title="$expected_title" '
+    function fail(message) { print "malformed merge output: " message > "/dev/stderr"; exit 2 }
+    /^[[:space:]]*$/ { next }
+    state==0 { if ($0!="## Merge Complete") fail("missing success heading"); state=1; next }
+    state==1 { if ($0!="**PR:** #" pr " — " title) fail("PR number or title mismatch"); state=2; next }
+    state==2 { if ($0!="**Base:** " base) fail("base branch mismatch"); state=3; next }
+    state==3 { if ($0!~/^\*\*Issues updated:\*\* .+/) fail("missing Issues updated value"); state=4; next }
+    state==4 { if ($0!="### Changes") fail("missing or misplaced Changes section"); state=5; next }
+    state==5 { if ($0!~/^- .+/) fail("Changes accepts only non-empty bullets"); changes++; next }
+    END { if (state!=5 || changes<1) fail("incomplete merge report") }
+  ' || return 2
 }
 
 transition() {
@@ -331,30 +379,34 @@ transition() {
       echo review
       ;;
     review)
-      [ "${1-}" = --accepted-count ] && [ "$#" -ge 2 ] || { echo "review transition requires --accepted-count" >&2; return 2; }
-      accepted=$2
-      shift 2
-      total=$(parse_review_batch "$@") || return 2
+      [ "${1-}" = --pr ] && [ "${3-}" = --round ] && [ "${5-}" = --accepted-count ] && [ "$#" -ge 6 ] || { echo "review transition requires --pr <number> --round <number> --accepted-count" >&2; return 2; }
+      accepted=$6
+      identity_args=(--pr "$2" --round "$4")
+      shift 6
+      total=$(parse_review_batch "${identity_args[@]}" "$@") || return 2
       validate_accepted_count "$accepted" "$total"
       if [ "$accepted" -eq 0 ]; then echo docs; else echo address; fi
       ;;
     address)
       parse_finding_ids "$@" || return 2
-      parse_addressed "$ADDRESS_OUTPUT" "${FINDING_IDS[@]}"
+      require_round_identifier code "$ADDRESS_ROUND" || { echo "code address round must be a positive integer" >&2; return 2; }
+      parse_addressed "$ADDRESS_OUTPUT" "$ADDRESS_PR" "$ADDRESS_ROUND" code "${FINDING_IDS[@]}"
       echo review
       ;;
     docs)
-      [ "${1-}" = --accepted-count ] && [ "$#" -eq 4 ] && [ "${3-}" = -- ] || {
-        echo "docs transition requires --accepted-count <count> -- <output>" >&2; return 2;
+      [ "${1-}" = --pr ] && [ "${3-}" = --round ] && [ "${5-}" = --accepted-count ] && [ "$#" -eq 8 ] && [ "${7-}" = -- ] || {
+        echo "docs transition requires --pr <number> --round <number> --accepted-count <count> -- <output>" >&2; return 2;
       }
-      accepted=$2
-      count=$(parse_review_count docs "$4") || return 2
+      accepted=$6
+      case "$2:$4" in *[!0-9:]*|0:*|*:0|:) echo "docs identity requires positive PR and round numbers" >&2; return 2 ;; esac
+      count=$(parse_review_count docs "$2" "$4" docs "$8") || return 2
       validate_accepted_count "$accepted" "$count"
       if [ "$accepted" -eq 0 ]; then echo verify; else echo docs-address; fi
       ;;
     docs-address)
       parse_finding_ids "$@" || return 2
-      parse_addressed "$ADDRESS_OUTPUT" "${FINDING_IDS[@]}"
+      require_round_identifier docs "$ADDRESS_ROUND" || { echo "docs address round must be docs-<positive-integer>" >&2; return 2; }
+      parse_addressed "$ADDRESS_OUTPUT" "$ADDRESS_PR" "$ADDRESS_ROUND" docs "${FINDING_IDS[@]}"
       echo docs
       ;;
     verify)
@@ -365,13 +417,15 @@ transition() {
       ;;
     verification-address)
       parse_finding_ids "$@" || return 2
-      parse_addressed "$ADDRESS_OUTPUT" "${FINDING_IDS[@]}"
+      require_round_identifier verification "$ADDRESS_ROUND" || { echo "verification address round must be verification-<positive-integer>" >&2; return 2; }
+      parse_addressed "$ADDRESS_OUTPUT" "$ADDRESS_PR" "$ADDRESS_ROUND" verification "${FINDING_IDS[@]}"
       echo verify
       ;;
     merge)
-      [ "${1-}" = --pr ] && [ "$#" -eq 4 ] && [ "${3-}" = -- ] || { echo "merge transition requires --pr <positive-integer> -- <output>" >&2; return 2; }
+      [ "${1-}" = --pr ] && [ "${3-}" = --base ] && [ "${5-}" = --title ] && [ "$#" -eq 8 ] && [ "${7-}" = -- ] || { echo "merge transition requires --pr <positive-integer> --base <branch> --title <title> -- <output>" >&2; return 2; }
       case "$2" in ''|*[!0-9]*|0) echo "merge transition requires a positive PR number" >&2; return 2 ;; esac
-      parse_merged "$2" "$4"
+      [ -n "${4//[[:space:]]/}" ] && [ -n "${6//[[:space:]]/}" ] || { echo "merge transition requires non-empty base and title" >&2; return 2; }
+      parse_merged "$2" "$4" "$6" "$8"
       echo complete
       ;;
     *) echo "unknown lifecycle phase: $phase" >&2; return 2 ;;

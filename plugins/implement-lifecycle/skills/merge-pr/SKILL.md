@@ -97,12 +97,14 @@ Output a summary:
 ## Merge Complete
 
 **PR:** #<number> — <title>
-**Merged to:** <base branch>
+**Base:** <base branch>
 **Issues updated:** <list of issue numbers, or "none">
 
 ### Changes
 - <bullet summary>
 ```
+
+Return this complete envelope exactly once and in the shown order. The PR number, title, and base branch must exactly match the metadata fetched immediately before merge. Include `Issues updated` even when its value is `none`, and include at least one non-empty Changes bullet. Do not append extra structural fields or return a truncated report.
 
 ## Escalation
 

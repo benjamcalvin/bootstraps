@@ -78,6 +78,12 @@ gh pr review <pr-number> --comment --body "<findings>"
 
 Return findings in exactly this structure:
 
+## Review Result
+**PR:** #<requested PR number>
+**Round:** <requested positive round number>
+**Type:** code
+**Reviewer:** security
+
 ### Action Required
 - **[Security]** or **[Requirements]** Description with specific file:line, attack vector/spec gap, and impact
 
