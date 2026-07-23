@@ -7,7 +7,7 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "3.0.1"
+  version: "3.0.2"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -198,7 +198,7 @@ Use these calibration cases:
 - Concrete bug with a bounded fix: **Accept** the smallest fix.
 - Valid concern paired with an architectural remedy: accept a smaller in-scope correction if one exists; otherwise **Reject** it for this PR and escalate or file a follow-up.
 - Speculative hardening with no demonstrated failure: **Reject**.
-- Third non-clean round dominated by review-introduced complexity: run the convergence audit and simplify; get human direction before round 4 if it remains unresolved.
+- Third non-clean round dominated by review-introduced complexity: run the convergence audit, stop before round 4, and request human direction. Recommend bounded simplification or removal of the review-introduced architecture.
 
 **If zero findings survive filtering**, post a brief PR comment — `"Review Round <N>: no actionable findings — review loop complete."` — then skip to Phase 4.5.
 
@@ -245,7 +245,7 @@ The addresser will fix issues, run tests, commit, push, and return a summary.
 
 The addresser has pushed fixes. Check convergence and the escalation limit, then continue.
 
-1. **Convergence audit after round 3:** After three non-clean rounds, post an audit that maps the remaining findings and review-added changes to the original acceptance criteria. State whether the loop is converging and whether remaining findings primarily concern the original task or architecture introduced during addressing. If they primarily concern review-introduced architecture, prefer a bounded simplification/removal; get human direction before starting round 4 if that cannot resolve them within the original scope.
+1. **Convergence audit after round 3:** After three non-clean rounds, post an audit that maps the remaining findings and review-added changes to the original acceptance criteria. State whether the loop is converging and whether remaining findings primarily concern the original task or architecture introduced during addressing. If they primarily concern review-introduced architecture, stop before round 4 and request human direction. Recommend bounded simplification or removal of that architecture.
 
 2. **Check escalation limit:** If this was round 5 or higher, escalate — do **not** continue unless the user explicitly authorized additional rounds:
 
@@ -289,8 +289,8 @@ Apply the same concern-validity, remedy-proportionality, scope, and accept/rejec
 
 | Decision | When to use | Effect |
 |----------|-------------|--------|
-| **Accept** (default) | Finding has merit — you verified by reading the docs/code | Include in addresser action plan at the reviewer's original severity |
-| **Reject** | Finding is incorrect, irrelevant, or demands docs for trivial changes | Exclude from action plan; record your reasoning |
+| **Accept** (default) | The concern is concrete and a smallest in-scope docs correction is available | Include only that proportional correction in the addresser action plan |
+| **Reject** | The concern is unproven, already resolved, out of scope, or disproportionate for this PR | Exclude it; record whether the concern itself was valid and optionally open a follow-up issue |
 
 **If zero findings survive filtering**, post a brief PR comment — `"Docs Compliance Gate: no actionable findings — proceeding to verification."` — then skip to Phase 5.
 
