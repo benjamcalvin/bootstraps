@@ -1,6 +1,7 @@
 ---
 name: review-docs
 description: Documentation compliance-focused PR reviewer — docs accuracy, frontmatter, cross-links, ADR triggers
+model: sonnet
 tools: Read, Grep, Glob, Bash
 ---
 

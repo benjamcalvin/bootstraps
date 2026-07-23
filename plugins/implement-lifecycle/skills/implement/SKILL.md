@@ -54,6 +54,8 @@ Keep the lifecycle semantics below identical in both clients and map each delega
 | Review/docs | Invoke the matching `review-*` named subagent | Spawn one subagent per specialty whose prompt begins `Use $implement-lifecycle:review-<specialty>` |
 | Verify | Invoke the `verify` named subagent | Spawn a subagent whose prompt begins `Use $implement-lifecycle:verify` |
 
+Choose subagent intelligence per delegated task. Default to the balanced mid-tier model: **Sonnet** in Claude Code and **`gpt-5.6-terra`** in Codex. Use a stronger frontier model only for exceptionally complex work such as novel architecture, subtle security or concurrency reasoning, or broad multi-system changes. Use a lighter model only for exceptionally simple, mechanical, tightly bounded work. Make this judgment per delegation rather than assigning one model tier to the entire lifecycle. If the client cannot select an exact model, use its closest balanced equivalent and continue.
+
 Pass the complete payload shown at each call site. Do not assume the delegated agent inherits scratch context from the orchestrator. Launch independent specialist reviewers in parallel and wait for all selected reviewers before refereeing.
 
 ---
