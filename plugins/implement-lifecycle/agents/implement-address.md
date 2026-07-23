@@ -1,6 +1,7 @@
 ---
 name: implement-address
 description: Apply the lifecycle referee's accepted pull request findings
+model: sonnet
 skills:
   - implement-lifecycle:implement-address
 ---

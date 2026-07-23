@@ -1,6 +1,7 @@
 ---
 name: review-testing
 description: Test quality-focused PR reviewer — coverage, edge cases, assertion quality, test patterns
+model: sonnet
 tools: Read, Grep, Glob, Bash
 ---
 

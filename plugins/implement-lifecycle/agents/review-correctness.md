@@ -1,6 +1,7 @@
 ---
 name: review-correctness
 description: Correctness-focused PR reviewer — logic bugs, edge cases, error handling, race conditions
+model: sonnet
 tools: Read, Grep, Glob, Bash
 ---
 

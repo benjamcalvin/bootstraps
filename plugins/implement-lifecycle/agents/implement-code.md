@@ -1,6 +1,7 @@
 ---
 name: implement-code
 description: Implement a delegated lifecycle task and create its pull request
+model: sonnet
 skills:
   - implement-lifecycle:implement-code
 ---

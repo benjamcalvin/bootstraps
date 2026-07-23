@@ -1,6 +1,7 @@
 ---
 name: review-architecture
 description: Architecture and design-focused PR reviewer — patterns, consistency, coupling, forward-looking design
+model: sonnet
 tools: Read, Grep, Glob, Bash
 ---
 

@@ -1,6 +1,7 @@
 ---
 name: review-security
 description: Security and requirements-focused PR reviewer — spec conformance, authZ, PII, injection risks
+model: sonnet
 tools: Read, Grep, Glob, Bash
 ---
 
