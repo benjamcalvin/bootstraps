@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Restore Claude Code forked-worker metadata for the cross-client implementation lifecycle and add a non-destructive lifecycle dispatch acceptance harness.
+- Restore Claude Code forked-worker metadata and add a shared, fail-closed dispatch/transition contract with deterministic and opt-in live cross-client acceptance coverage.
 
 All notable changes to the bootstraps marketplace will be documented in this file.
 

@@ -167,6 +167,14 @@ Provides 11 cross-client skills plus 5 Claude Code reviewer-agent wrappers for t
 | `review-testing` | Test coverage, assertion quality, edge cases, test anti-patterns |
 | `review-docs` | Docs compliance gate (Phase 4.5) — missing docs for new behavior, stale docs contradicted by code changes, frontmatter/cross-link correctness |
 
+The repository's routine validation runs a deterministic lifecycle acceptance test against the production dispatch/transition contract with GitHub and merge effects stubbed. To additionally verify plugin activation through installed Claude Code and Codex clients, run the opt-in live check from the repository root:
+
+```bash
+LIVE_CLIENT_ACCEPTANCE=1 bash plugins/implement-lifecycle/tests/test-live-client-activation.sh
+```
+
+The live check sends the plugin activation prompt to both configured clients. It forbids commands, delegation, GitHub access, and file changes, and requires each client to resolve the same shared target contract.
+
 ### implement-cli
 
 Single-skill plugin that mirrors the `/implement` lifecycle but delegates heavy work to Python Agent SDK subprocesses.

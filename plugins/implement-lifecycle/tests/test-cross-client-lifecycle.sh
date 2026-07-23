@@ -1,180 +1,145 @@
 #!/bin/bash
-# autotest — self-contained, non-destructive cross-client lifecycle acceptance harness
+# autotest — deterministic, non-destructive acceptance of the production dispatch contract
 set -euo pipefail
 
 PLUGIN_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-ORCHESTRATOR="$PLUGIN_DIR/skills/implement/SKILL.md"
-FAILURES=0
-DISPATCH_LOG=""
-DISPATCH_RESULT=""
+CONTRACT="$PLUGIN_DIR/skills/implement/assets/dispatch-contract.sh"
+TMP_DIR=$(mktemp -d "${TMPDIR:-/tmp}/implement-lifecycle-test.XXXXXX")
+trap 'rm -rf "$TMP_DIR"' EXIT
+DISPATCH_LOG="$TMP_DIR/dispatch.log"
+RESULT=""
 
-fail() {
-  echo "FAIL: $*" >&2
-  FAILURES=$((FAILURES + 1))
-}
+fail() { echo "FAIL: $*" >&2; exit 1; }
+assert_equal() { [ "$1" = "$2" ] || fail "$3: expected '$2', got '$1'"; }
+assert_logged() { grep -Fxq -- "$1" "$DISPATCH_LOG" || fail "$2: missing dispatch '$1'"; }
 
-assert_contains() {
-  file=$1
-  expected=$2
-  label=$3
-  if ! grep -Fq -- "$expected" "$file"; then
-    fail "$label: missing '$expected' in ${file#"$PLUGIN_DIR"/}"
-  fi
-}
-
-assert_logged() {
-  expected=$1
-  label=$2
-  if ! printf '%s\n' "$DISPATCH_LOG" | grep -Fxq -- "$expected"; then
-    fail "$label: dispatch '$expected' was not observed"
-  fi
-}
-
-assert_worker_contract() {
-  worker=$1
-  hint=$2
-  file="$PLUGIN_DIR/skills/$worker/SKILL.md"
-  assert_contains "$file" "context: fork" "$worker Claude fork context"
-  assert_contains "$file" "agent: general-purpose" "$worker Claude worker agent"
-  assert_contains "$file" "argument-hint: $hint" "$worker argument contract"
-  if [ ! -f "$PLUGIN_DIR/skills/$worker/agents/openai.yaml" ]; then
-    fail "$worker Codex discovery metadata is missing"
-  fi
-}
-
-record_dispatch() {
+# External effects are stubbed here; target resolution and state transitions are production code.
+dispatch_stub() {
   client=$1
-  target=$2
+  worker=$2
   payload=$3
-  if [ -n "$DISPATCH_LOG" ]; then
-    DISPATCH_LOG="$DISPATCH_LOG
-$client|$target|$payload"
-  else
-    DISPATCH_LOG="$client|$target|$payload"
-  fi
-}
-
-target_for() {
-  client=$1
-  phase=$2
-  if [ "$client" = "claude" ]; then
-    case "$phase" in
-      implement) echo "implement-code" ;;
-      correctness) echo "review-correctness" ;;
-      testing) echo "review-testing" ;;
-      address) echo "implement-address" ;;
-      docs) echo "review-docs" ;;
-      verify) echo "verify" ;;
-      merge) echo "merge-pr" ;;
-    esac
-  else
-    case "$phase" in
-      implement) echo '$implement-lifecycle:implement-code' ;;
-      correctness) echo '$implement-lifecycle:review-correctness' ;;
-      testing) echo '$implement-lifecycle:review-testing' ;;
-      address) echo '$implement-lifecycle:implement-address' ;;
-      docs) echo '$implement-lifecycle:review-docs' ;;
-      verify) echo '$implement-lifecycle:verify' ;;
-      merge) echo '$implement-lifecycle:merge-pr' ;;
-    esac
-  fi
-}
-
-mock_dispatch() {
-  client=$1
-  phase=$2
-  payload=$3
-  record_dispatch "$client" "$(target_for "$client" "$phase")" "$payload"
-  case "$phase|$payload" in
-    implement*) DISPATCH_RESULT="PR_NUMBER=731" ;;
-    correctness*"round 1") DISPATCH_RESULT="FINDINGS=2" ;;
-    testing*"round 1") DISPATCH_RESULT="FINDINGS=1" ;;
-    correctness*"round 2") DISPATCH_RESULT="FINDINGS=0" ;;
-    address*" docs-1 "*) DISPATCH_RESULT="ADDRESSED=docs-1" ;;
-    address*) DISPATCH_RESULT="ADDRESSED=1" ;;
-    docs*"round 1") DISPATCH_RESULT="FINDINGS=1" ;;
-    docs*"round 2") DISPATCH_RESULT="FINDINGS=0" ;;
-    verify*) DISPATCH_RESULT="VERDICT=PASS" ;;
-    merge*) DISPATCH_RESULT="MERGE_GATE=READY" ;;
+  target=$(bash "$CONTRACT" target "$client" "$worker")
+  printf '%s|%s|%s\n' "$client" "$target" "$payload" >> "$DISPATCH_LOG"
+  case "$worker|$payload" in
+    implement-code*) RESULT="PR_NUMBER=731" ;;
+    review-correctness*"round 1") RESULT="correctness=2" ;;
+    review-security*"round 1") RESULT="security=0" ;;
+    review-architecture*"round 1") RESULT="architecture=1" ;;
+    review-testing*"round 1") RESULT="testing=1" ;;
+    review-correctness*"round 2") RESULT="correctness=0" ;;
+    review-security*"round 2") RESULT="security=0" ;;
+    review-architecture*"round 2") RESULT="architecture=0" ;;
+    review-testing*"round 2") RESULT="testing=0" ;;
+    implement-address*" docs-1 "*) RESULT="ADDRESSED=docs-1" ;;
+    implement-address*) RESULT="ADDRESSED=1" ;;
+    review-docs*"round 1") RESULT="docs=1" ;;
+    review-docs*"round 2") RESULT="docs=0" ;;
+    verify*) RESULT="VERDICT=PASS" ;;
+    merge-pr*) RESULT="MERGED=731" ;;
+    *) fail "unhandled controlled dispatch: $worker $payload" ;;
   esac
 }
 
-run_disposable_lifecycle() {
+run_lifecycle() {
   client=$1
-  task="0 synthetic acceptance task"
+  dispatch_stub "$client" implement-code "0 synthetic acceptance task"
+  state=$(bash "$CONTRACT" transition implement "$RESULT")
+  assert_equal "$state" review "$client implementation result propagation"
+  pr_number=${RESULT#PR_NUMBER=}
+
+  # Resolve the complete reviewer set as one production batch before launching workers.
+  reviewer_targets=$(bash "$CONTRACT" targets "$client" \
+    review-correctness review-security review-architecture review-testing)
+  reviewer_target_count=$(printf '%s\n' "$reviewer_targets" | wc -l | tr -d ' ')
+  assert_equal "$reviewer_target_count" 4 "$client parallel reviewer batch"
+
   round=1
-
-  mock_dispatch "$client" implement "$task"
-  pr_number=${DISPATCH_RESULT#PR_NUMBER=}
-  if [ "$pr_number" != "731" ]; then
-    fail "$client implementation result did not propagate a PR number"
-  fi
-
-  # Round one returns findings; both selected reviewers are dispatched before addressing.
-  mock_dispatch "$client" correctness "Review PR #$pr_number, round $round"
-  correctness_findings=${DISPATCH_RESULT#FINDINGS=}
-  mock_dispatch "$client" testing "Review PR #$pr_number, round $round"
-  testing_findings=${DISPATCH_RESULT#FINDINGS=}
-  accepted_findings=$((correctness_findings + testing_findings))
-  if [ "$accepted_findings" -le 0 ]; then
-    fail "$client reviewer findings did not reach the address loop"
-  fi
+  reviewer_results=()
+  reviewer_pids=()
+  for reviewer in correctness security architecture testing; do
+    result_file="$TMP_DIR/$client-$reviewer-$round.result"
+    (
+      DISPATCH_LOG="$TMP_DIR/$client-$reviewer-$round.log"
+      dispatch_stub "$client" "review-$reviewer" "Review PR #$pr_number, round $round"
+      printf '%s\n' "$RESULT" > "$result_file"
+    ) &
+    reviewer_pids+=("$!")
+  done
+  for pid in "${reviewer_pids[@]}"; do wait "$pid"; done
+  for reviewer in correctness security architecture testing; do
+    cat "$TMP_DIR/$client-$reviewer-$round.log" >> "$DISPATCH_LOG"
+    reviewer_results+=("$(cat "$TMP_DIR/$client-$reviewer-$round.result")")
+  done
+  state=$(bash "$CONTRACT" transition review "${reviewer_results[@]}")
+  assert_equal "$state" address "$client findings drive address transition"
   findings_file="/tmp/implement-findings-pr-$pr_number-round-$round.md"
-  mock_dispatch "$client" address "$pr_number $round $findings_file"
+  dispatch_stub "$client" implement-address "$pr_number $round $findings_file"
+  state=$(bash "$CONTRACT" transition address "$RESULT")
+  assert_equal "$state" review "$client addresser result continues review"
 
-  # The addresser result continues the loop. Round two is clean and enters docs review.
-  if [ "$DISPATCH_RESULT" != "ADDRESSED=1" ]; then
-    fail "$client addresser result did not continue the review loop"
-  fi
   round=2
-  mock_dispatch "$client" correctness "Review PR #$pr_number, round $round"
-  docs_round=1
-  mock_dispatch "$client" docs "Review PR #$pr_number for documentation compliance, round $docs_round"
-  docs_file="/tmp/implement-docs-findings-pr-$pr_number-round-$docs_round.md"
-  mock_dispatch "$client" address "$pr_number docs-$docs_round $docs_file"
-  docs_round=2
-  mock_dispatch "$client" docs "Review PR #$pr_number for documentation compliance, round $docs_round"
+  reviewer_results=()
+  reviewer_pids=()
+  for reviewer in correctness security architecture testing; do
+    result_file="$TMP_DIR/$client-$reviewer-$round.result"
+    (
+      DISPATCH_LOG="$TMP_DIR/$client-$reviewer-$round.log"
+      dispatch_stub "$client" "review-$reviewer" "Review PR #$pr_number, round $round"
+      printf '%s\n' "$RESULT" > "$result_file"
+    ) &
+    reviewer_pids+=("$!")
+  done
+  for pid in "${reviewer_pids[@]}"; do wait "$pid"; done
+  for reviewer in correctness security architecture testing; do
+    cat "$TMP_DIR/$client-$reviewer-$round.log" >> "$DISPATCH_LOG"
+    reviewer_results+=("$(cat "$TMP_DIR/$client-$reviewer-$round.result")")
+  done
+  state=$(bash "$CONTRACT" transition review "${reviewer_results[@]}")
+  assert_equal "$state" docs "$client clean reviewer results open docs gate"
 
-  # A passing verifier propagates the same PR number into the merge gate.
-  mock_dispatch "$client" verify "$pr_number"
-  if [ "$DISPATCH_RESULT" != "VERDICT=PASS" ]; then
-    fail "$client verification result did not open the merge gate"
-  fi
-  mock_dispatch "$client" merge "$pr_number"
-  if [ "$DISPATCH_RESULT" != "MERGE_GATE=READY" ]; then
-    fail "$client merge-gate dispatch did not complete"
-  fi
+  docs_round=1
+  dispatch_stub "$client" review-docs "Review PR #$pr_number for documentation compliance, round $docs_round"
+  state=$(bash "$CONTRACT" transition docs "$RESULT")
+  assert_equal "$state" docs-address "$client docs findings drive address transition"
+  docs_file="/tmp/implement-docs-findings-pr-$pr_number-round-$docs_round.md"
+  dispatch_stub "$client" implement-address "$pr_number docs-$docs_round $docs_file"
+  state=$(bash "$CONTRACT" transition docs-address "$RESULT")
+  assert_equal "$state" docs "$client docs addresser result continues docs review"
+
+  docs_round=2
+  dispatch_stub "$client" review-docs "Review PR #$pr_number for documentation compliance, round $docs_round"
+  state=$(bash "$CONTRACT" transition docs "$RESULT")
+  assert_equal "$state" verify "$client clean docs result opens verification"
+  dispatch_stub "$client" verify "$pr_number"
+  state=$(bash "$CONTRACT" transition verify "$RESULT")
+  assert_equal "$state" merge "$client PASS verdict opens merge gate"
+  dispatch_stub "$client" merge-pr "$pr_number"
+  state=$(bash "$CONTRACT" transition merge "$RESULT")
+  assert_equal "$state" complete "$client merge result completes lifecycle"
 }
 
-assert_worker_contract "implement-code" "<issue-number-or-0> <task description, acceptance criteria, and optional instructions>"
-assert_worker_contract "implement-address" "<pr-number> <round-identifier> <findings-file-path>"
-assert_worker_contract "verify" "<pr-number>"
-
-# Bind the simulation to the advertised orchestration contract rather than testing a copy alone.
-assert_contains "$ORCHESTRATOR" "Always delegate implementation, addressing, verification, and specialist review work." "delegation invariant"
-assert_contains "$ORCHESTRATOR" 'explicitly tell the subagent to use `$implement-lifecycle:implement-code`' "Codex implementation dispatch"
-assert_contains "$ORCHESTRATOR" "Always invoke selected reviewers in parallel." "parallel review dispatch"
-assert_contains "$ORCHESTRATOR" '<pr-number> <round-number> /tmp/implement-findings-pr-<PR>-round-<N>.md' "address payload"
-assert_contains "$ORCHESTRATOR" '<pr-number> docs-<round-number> /tmp/implement-docs-findings-pr-<PR>-round-<N>.md' "docs address payload"
-assert_contains "$ORCHESTRATOR" 'using `verify` in Claude Code or `$implement-lifecycle:verify` in Codex' "verification dispatch"
-assert_contains "$ORCHESTRATOR" 'Use `merge-pr` in Claude Code or `$implement-lifecycle:merge-pr` in Codex' "merge dispatch"
-
 for client in claude codex; do
-  run_disposable_lifecycle "$client"
+  run_lifecycle "$client"
   prefix=""
-  if [ "$client" = "codex" ]; then
-    prefix='$implement-lifecycle:'
-  fi
-  assert_logged "$client|${prefix}implement-code|0 synthetic acceptance task" "$client implementation arguments"
-  assert_logged "$client|${prefix}implement-address|731 1 /tmp/implement-findings-pr-731-round-1.md" "$client review address handoff"
-  assert_logged "$client|${prefix}implement-address|731 docs-1 /tmp/implement-docs-findings-pr-731-round-1.md" "$client docs address handoff"
-  assert_logged "$client|${prefix}verify|731" "$client verification PR propagation"
-  assert_logged "$client|${prefix}merge-pr|731" "$client merge-gate PR propagation"
+  [ "$client" = codex ] && prefix='$implement-lifecycle:'
+  assert_logged "$client|${prefix}implement-code|0 synthetic acceptance task" "$client implementation payload"
+  for reviewer in correctness security architecture testing; do
+    assert_logged "$client|${prefix}review-$reviewer|Review PR #731, round 1" "$client $reviewer round-one payload"
+    assert_logged "$client|${prefix}review-$reviewer|Review PR #731, round 2" "$client $reviewer clean-result payload"
+  done
+  assert_logged "$client|${prefix}implement-address|731 1 /tmp/implement-findings-pr-731-round-1.md" "$client review address payload"
+  assert_logged "$client|${prefix}review-docs|Review PR #731 for documentation compliance, round 1" "$client docs payload"
+  assert_logged "$client|${prefix}implement-address|731 docs-1 /tmp/implement-docs-findings-pr-731-round-1.md" "$client docs address payload"
+  assert_logged "$client|${prefix}verify|731" "$client verification payload"
+  assert_logged "$client|${prefix}merge-pr|731" "$client merge payload"
 done
 
-if [ "$FAILURES" -ne 0 ]; then
-  echo "$FAILURES cross-client lifecycle acceptance assertion(s) failed" >&2
-  exit 1
+# Required results must gate transitions; missing or partial reviewer output is a hard failure.
+if bash "$CONTRACT" transition review correctness=0 security=0 architecture=0 >/dev/null 2>&1; then
+  fail "review transition accepted a missing testing result"
+fi
+if bash "$CONTRACT" transition verify VERDICT=UNKNOWN >/dev/null 2>&1; then
+  fail "verification transition accepted an unknown verdict"
 fi
 
-echo "PASS: Claude Code and Codex lifecycle dispatch contracts preserve worker isolation, arguments, review/address continuation, docs review, verification, and merge-gate propagation."
+echo "PASS: real Claude/Codex skill targets, parallel specialist dispatch, and result-gated lifecycle transitions are covered with external effects stubbed."

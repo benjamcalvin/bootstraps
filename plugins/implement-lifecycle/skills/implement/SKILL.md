@@ -6,7 +6,7 @@ description: >-
   Triggers: /implement, $implement-lifecycle:implement, implement this, build this feature
 license: MIT
 metadata:
-  version: "3.2.1"
+  version: "3.2.2"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -32,6 +32,8 @@ You are a **lean orchestrator**. Your job is to coordinate — not to implement,
 **Drive forward autonomously.** When you have a plan (from the user or an issue), execute all phases without pausing for approval between them. Do not ask "shall I proceed to the next phase?" — just proceed. Only stop to ask the user when you hit a genuine ambiguity, a blocking decision outside the task's scope, or an escalation condition listed below.
 
 Use the current client's task or plan tracker throughout when one is available. In Claude Code, use the Task tools. In Codex, use the plan-tracking capability. Do not block the workflow merely because a client exposes no tracker.
+
+Before delegating, read and use the shared [`assets/dispatch-contract.sh`](assets/dispatch-contract.sh) contract. Resolve worker targets from it instead of reconstructing client-specific names. Use its `transition` command to validate required worker results before advancing between implementation, review, addressing, docs, verification, merge, and completion. Resolve each selected reviewer set with one `targets` call, then launch every returned target in parallel. The contract validates real skill entry points and fails closed on missing results; it does not launch workers or authorize side effects.
 
 **Task tracking rules:**
 1. **Bootstrap immediately.** Create an item for each phase before starting, using the fields supported by the current client's tracker. With Claude Code Task tools, provide `subject` (imperative), `activeForm` (continuous), and `description`.
