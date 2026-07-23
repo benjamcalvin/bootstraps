@@ -6,7 +6,7 @@ description: >-
 argument-hint: <#issue-number>
 license: MIT
 metadata:
-  version: "1.1.0"
+  version: "1.1.1"
   tags: ["issue", "cleanup", "formatting"]
   author: benjamcalvin
 ---
