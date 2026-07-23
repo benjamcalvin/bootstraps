@@ -4,9 +4,12 @@ description: >-
   End-to-end verification of a PR's changes in the real running system (runs as subagent).
   Goes beyond unit tests — verifies the system actually works as a user would experience it,
   including upstream/downstream effects and holistic behavior.
+context: fork
+agent: general-purpose
+argument-hint: <pr-number>
 license: MIT
 metadata:
-  version: "1.1.0"
+  version: "1.1.1"
   tags: ["verify", "e2e", "integration", "subagent"]
   author: benjamcalvin
 ---

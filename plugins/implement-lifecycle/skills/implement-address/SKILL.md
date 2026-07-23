@@ -1,9 +1,12 @@
 ---
 name: implement-address
 description: Address filtered review findings for implement workflow (runs as subagent)
+context: fork
+agent: general-purpose
+argument-hint: <pr-number> <round-identifier> <findings-file-path>
 license: MIT
 metadata:
-  version: "2.1.0"
+  version: "2.1.1"
   tags: ["implement", "address", "subagent"]
   author: benjamcalvin
 ---

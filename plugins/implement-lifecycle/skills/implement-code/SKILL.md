@@ -1,9 +1,12 @@
 ---
 name: implement-code
 description: Plan, implement code, tests, and create PR for implement workflow (runs as subagent)
+context: fork
+agent: general-purpose
+argument-hint: <issue-number-or-0> <task description, acceptance criteria, and optional instructions>
 license: MIT
 metadata:
-  version: "1.1.0"
+  version: "1.1.1"
   tags: ["implement", "code", "pr", "subagent"]
   author: benjamcalvin
 ---
