@@ -4,9 +4,6 @@ description: >-
   End-to-end verification of a PR's changes in the real running system (runs as subagent).
   Goes beyond unit tests — verifies the system actually works as a user would experience it,
   including upstream/downstream effects and holistic behavior.
-context: fork
-agent: general-purpose
-argument-hint: <pr-number>
 license: MIT
 metadata:
   version: "1.0.0"
@@ -16,13 +13,17 @@ metadata:
 
 # End-to-End Verification
 
-Verify PR #$ARGUMENTS works in the real, running system — not in isolation.
+Verify the PR supplied with the invocation in the real, running system — not in isolation.
+
+```text
+$ARGUMENTS
+```
+
+If the current client leaves `$ARGUMENTS` literal, use the delegation prompt instead.
 
 ## PR Context
 
-- PR metadata: !`gh pr view $ARGUMENTS`
-- PR comments: !`gh pr view $ARGUMENTS --comments 2>/dev/null || echo "NO_COMMENTS"`
-- Changed files: !`gh pr view $ARGUMENTS --json files --jq '.files[] | "\(.path) (+\(.additions)/-\(.deletions))"'`
+At runtime, parse the PR number and fetch its metadata, comments, and changed-file summary.
 
 ## Instructions
 
@@ -30,7 +31,7 @@ You are the **verification agent** for the implementation lifecycle. Unit tests 
 
 You are the last line of defense before merge. Be thorough.
 
-Use the **Task tools** (`TaskCreate`, `TaskUpdate`) to track progress.
+Use the current client's task or plan tracker when available.
 
 ### Step 1: Understand the Change Holistically
 
@@ -127,7 +128,7 @@ If a verification step fails:
 Post your verification results to the PR:
 
 ```
-gh pr comment $ARGUMENTS --body "<results>"
+gh pr comment <pr-number> --body "<results>"
 ```
 
 Return findings in this structure:

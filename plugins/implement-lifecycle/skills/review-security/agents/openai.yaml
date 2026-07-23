@@ -1,0 +1,6 @@
+interface:
+  display_name: "Review Security"
+  short_description: "Security and requirements pull request review"
+  default_prompt: "Use $implement-lifecycle:review-security to inspect this PR for security and requirements risks."
+policy:
+  allow_implicit_invocation: false
