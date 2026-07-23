@@ -105,7 +105,12 @@ SRT_PIN="0.0.66"
 SRT_PKG="@anthropic-ai/sandbox-runtime"
 SRT_INSTALL="npm install -g ${SRT_PKG}@${SRT_PIN}"
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+case "$SCRIPT_PATH" in
+  */*) SCRIPT_PARENT="${SCRIPT_PATH%/*}" ;;
+  *) SCRIPT_PARENT="." ;;
+esac
+SCRIPT_DIR="$(cd "$SCRIPT_PARENT" && pwd)"
 ALLOWLIST_DIR="$SCRIPT_DIR/../assets/allowlists"
 
 # Globals set in main before any provider runs.
