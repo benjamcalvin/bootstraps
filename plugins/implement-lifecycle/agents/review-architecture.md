@@ -58,12 +58,20 @@ For each changed file, evaluate:
 - Do new abstractions have clear contracts? Will consumers understand how to use them correctly?
 - Are breaking changes to existing interfaces justified and properly migrated?
 
+## Finding Contract
+
+Every finding must name a concrete failure or maintenance consequence and the acceptance criterion, documented architectural invariant, or established project pattern it violates. Cite that evidence. Suggest the smallest correction within the PR's original scope; the referee may accept the concern without accepting your remedy. Do not propose a new dependency, executable subsystem, public interface, persistence mechanism, or architectural layer unless the original issue requires it.
+
+Use **Recommended** only for concrete, in-scope problems fixable without a new abstraction. Minor observations must not be framed as reasons to continue the review loop. When prior review fixes introduced the architecture now attracting findings, prefer simplifying or removing it over further hardening.
+
 ## Round Context
 
 Check the round number from your prompt. If this is round 2 or later, read the PR comments for previous "Review Round — Referee Decisions" comments. Do NOT repeat addressed or rejected findings. Focus on:
 - New architectural issues introduced by previous fixes
-- Issues missed in prior rounds
+- Unresolved accepted findings and the latest fix delta
 - Whether previously-addressed findings were actually fixed correctly
+
+Do not expand later rounds into speculative hardening of surfaces unrelated to the original task.
 
 ## Anti-Patterns (Avoid)
 

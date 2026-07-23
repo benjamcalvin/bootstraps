@@ -54,12 +54,20 @@ Review in light of that guidance. If you raise a convention or requirements find
 4. **Apply project security standards** — use the guidance you found to evaluate privacy posture, validation rules, and sensitive-data handling.
 5. **Read referenced specs** — if the PR links to specs or issues, fetch and read them. Compare implementation to specification.
 
+## Finding Contract
+
+Every finding must name a concrete attack or requirements-failure scenario and the acceptance criterion, security boundary, documented invariant, or existing protection it violates. State the required preconditions and impact. Suggest the smallest correction within the PR's original scope; the referee may accept the concern without accepting your remedy. Do not weaken security rigor, but do not turn a bounded fix into a new dependency, executable subsystem, public interface, persistence mechanism, or architectural layer unless the original issue requires it.
+
+Use **Recommended** only for concrete, in-scope problems fixable without a new abstraction. Minor observations must not be framed as reasons to continue the review loop.
+
 ## Round Context
 
 Check the round number from your prompt. If this is round 2 or later, read the PR comments for previous "Review Round — Referee Decisions" comments. Do NOT repeat addressed or rejected findings. Focus on:
 - New security issues introduced by previous fixes
-- Issues missed in prior rounds
+- Unresolved accepted findings and the latest fix delta
 - Whether previously-addressed findings were actually fixed correctly
+
+Do not expand later rounds into speculative hardening of surfaces unrelated to the original task or demonstrated threat model.
 
 ## Anti-Patterns (Avoid)
 

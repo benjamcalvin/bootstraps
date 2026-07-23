@@ -7,7 +7,7 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "3.0.0"
+  version: "3.0.1"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -107,9 +107,9 @@ EOF
 **This is a mandatory loop.** It repeats Steps A → B → C → D → E for each round until one of exactly two exit conditions is met:
 
 1. **Clean exit (Step B):** Zero findings survive referee filtering → skip to Phase 4.5.
-2. **Escalation exit (Step E):** Round 10+ reached → escalate and stop.
+2. **Escalation exit (Step E):** A scope/convergence guard fires or round 5 is completed → escalate and stop.
 
-There is no other way to exit this loop. Each round: Specialist reviewers → Referee (you) → Addresser → next round. **10-round escalation limit.**
+There is no other way to exit this loop. Each round: Specialist reviewers → Referee (you) → Addresser → next round. **Five rounds is the hard limit unless the user explicitly authorizes more.**
 
 #### Before Round 1
 
@@ -161,28 +161,44 @@ Agent tool → agent: "review-architecture", prompt: "Review PR #<pr-number>, ro
 Agent tool → agent: "review-testing", prompt: "Review PR #<pr-number>, round <round-number>"
 ```
 
-Each reviewer fetches PR context, posts findings to GitHub, and returns them to you.
+Each reviewer fetches PR context, posts findings to GitHub, and returns them to you. In round 2 and later, tell reviewers to focus on unresolved accepted findings, the latest fix delta, and regressions introduced by accepted fixes. They must not reopen rejected findings or speculatively harden unrelated surfaces.
 
 #### Step B: Referee Evaluation
 
 When reviewers return, **independently evaluate every finding**. Read the relevant code yourself. Do not rubber-stamp and do not dismiss without checking.
 
+Evaluate two questions separately:
+
+1. **Concern validity:** Does the finding demonstrate a concrete failure scenario and identify the acceptance criterion, documented invariant, or existing behavior it violates?
+2. **Remedy proportionality:** What is the smallest in-scope change that resolves that demonstrated failure? A valid concern does not make the reviewer's proposed remedy appropriate.
+
 For each finding, decide:
 
 | Decision | When to use | Effect |
 |----------|-------------|--------|
-| **Accept** (default) | Finding has merit — you verified by reading the code | Include in addresser action plan at the reviewer's original severity |
-| **Reject** | Finding is incorrect, irrelevant, or ill-considered | Exclude from action plan; record your reasoning |
+| **Accept** (default) | The concern is concrete and a smallest in-scope correction is available | Include only that proportional correction in the addresser action plan |
+| **Reject** | The concern is unproven, already resolved, out of scope, or disproportionate for this PR | Exclude it; record whether the concern itself was valid and optionally open a follow-up issue |
 
 **Default postures** (err on the side of accepting):
-- Default to **accept** unless you can demonstrate the finding is wrong by reading the code.
-- **Security findings:** Accept by default. Reject only with concrete evidence that the concern does not apply.
+- Default to **accept** only after verifying the concrete failure and its violated criterion or invariant.
+- **Security findings:** Treat a concrete, applicable security failure as high priority; reject theoretical attacks whose preconditions the changed code cannot meet.
 - **Convention findings:** Accept if the code violates a documented standard. Reject if purely stylistic preference with no backing standard.
-- **Vague "consider" / "might" language:** Accept if you independently agree it matters. Reject if not.
+- **Recommended findings:** Accept only when concrete, in scope, and achievable without a new abstraction.
+- **Minor findings:** Record them, but they cannot independently keep the loop open or trigger an address round.
+- **Vague "consider" / "might" language:** Reject unless it is backed by a reproducible failure or violated criterion.
 
 Produce a **filtered action plan** containing only accepted findings.
 
-**Referee mindset:** Think like a principal engineer. Good review isn't just about catching bugs — it's about raising the bar. When the reviewer identifies a legitimate improvement (consolidating duplication, using a more idiomatic API, improving test structure), accept it if it's in scope and doesn't incur technical debt. "Recommended" doesn't mean "optional" — it means "the code would be better for it." Embrace going the extra mile on quality; reject only what is truly out of scope, incorrect, or adds unnecessary complexity.
+**Referee mindset:** Think like a principal engineer. Preserve adversarial pressure on the selected design while keeping the remedy tied to the original task. Prefer changing or removing the smallest amount of code. When repeated findings target architecture introduced during addressing, prefer simplifying or removing that architecture over hardening it again.
+
+**Scope controls:** Before forwarding a remedy, compare it with the original issue and current PR. Escalate to the user or create a follow-up instead of forwarding a remedy that adds a dependency, executable subsystem, public interface, persistence mechanism, or new architectural layer not named by the issue. If the PR is already near 400 changed lines, or a remedy would take it beyond approximately 400, perform a scope audit first: identify which changes trace to original acceptance criteria and which were introduced only by review. Out-of-scope or disproportionate is valid **Reject** reasoning even when the underlying concern is real.
+
+Use these calibration cases:
+
+- Concrete bug with a bounded fix: **Accept** the smallest fix.
+- Valid concern paired with an architectural remedy: accept a smaller in-scope correction if one exists; otherwise **Reject** it for this PR and escalate or file a follow-up.
+- Speculative hardening with no demonstrated failure: **Reject**.
+- Third non-clean round dominated by review-introduced complexity: run the convergence audit and simplify; get human direction before round 4 if it remains unresolved.
 
 **If zero findings survive filtering**, post a brief PR comment — `"Review Round <N>: no actionable findings — review loop complete."` — then skip to Phase 4.5.
 
@@ -194,10 +210,10 @@ Post referee decisions to GitHub for the audit trail:
 gh pr comment <number> --body "$(cat <<'EOF'
 ## Review Round <N> — Referee Decisions
 
-| # | Finding | Reviewer Severity | Decision | Reasoning |
-|---|---------|-------------------|----------|-----------|
-| 1 | <brief description> | Action Required / Recommended / Minor | Accept / Reject | <why> |
-| ... | ... | ... | ... | ... |
+| # | Finding | Reviewer Severity | Concern | Decision | Reasoning / smallest remedy |
+|---|---------|-------------------|---------|----------|-----------------------------|
+| 1 | <brief description> | Action Required / Recommended / Minor | Valid / Unproven | Accept / Reject | <why and, if accepted, the bounded correction> |
+| ... | ... | ... | ... | ... | ... |
 
 **Findings forwarded to addresser:** <count>
 EOF
@@ -227,15 +243,17 @@ The addresser will fix issues, run tests, commit, push, and return a summary.
 
 #### Step E: Next Round
 
-The addresser has pushed fixes. Check the escalation limit, then continue.
+The addresser has pushed fixes. Check convergence and the escalation limit, then continue.
 
-1. **Check escalation limit:** If this was round 10 or higher, escalate — do **not** continue to another round:
+1. **Convergence audit after round 3:** After three non-clean rounds, post an audit that maps the remaining findings and review-added changes to the original acceptance criteria. State whether the loop is converging and whether remaining findings primarily concern the original task or architecture introduced during addressing. If they primarily concern review-introduced architecture, prefer a bounded simplification/removal; get human direction before starting round 4 if that cannot resolve them within the original scope.
+
+2. **Check escalation limit:** If this was round 5 or higher, escalate — do **not** continue unless the user explicitly authorized additional rounds:
 
 ```
 gh pr comment <number> --body "$(cat <<'EOF'
 ## Escalation — Review Loop Limit
 
-<N> review rounds completed without convergence.
+<N> review rounds completed without convergence. Five is the default hard limit.
 
 ### Unresolved items
 <list each unresolved item with context on what was attempted>
@@ -247,7 +265,7 @@ EOF
 
 Then stop and inform the user directly.
 
-2. **Continue:** Re-fetch the changed files summary, increment the round counter, and **return to Step A immediately.** Do not pause, do not ask for confirmation, do not evaluate whether to continue — the loop continues unconditionally until a clean exit in Step B or the escalation limit above.
+3. **Continue:** Re-fetch the changed-files summary and the latest address commit's delta, increment the round counter, and return to Step A. Continue autonomously unless the convergence audit requires human direction or another scope guard fires.
 
 ---
 
@@ -267,7 +285,7 @@ The docs reviewer fetches PR context, maps code changes to existing documentatio
 
 #### Step B: Referee Evaluation
 
-Apply the same accept/reject evaluation as Phase 4. Read the relevant docs and code yourself.
+Apply the same concern-validity, remedy-proportionality, scope, and accept/reject evaluation as Phase 4. Read the relevant docs and code yourself.
 
 | Decision | When to use | Effect |
 |----------|-------------|--------|
@@ -284,10 +302,10 @@ Post referee decisions to GitHub (same table format as Phase 4):
 gh pr comment <number> --body "$(cat <<'EOF'
 ## Docs Compliance Gate Round <N> — Referee Decisions
 
-| # | Finding | Reviewer Severity | Decision | Reasoning |
-|---|---------|-------------------|----------|-----------|
-| 1 | <brief description> | Action Required / Recommended / Minor | Accept / Reject | <why> |
-| ... | ... | ... | ... | ... |
+| # | Finding | Reviewer Severity | Concern | Decision | Reasoning / smallest remedy |
+|---|---------|-------------------|---------|----------|-----------------------------|
+| 1 | <brief description> | Action Required / Recommended / Minor | Valid / Unproven | Accept / Reject | <why and, if accepted, the bounded correction> |
+| ... | ... | ... | ... | ... | ... |
 
 **Findings forwarded to addresser:** <count>
 EOF
@@ -313,7 +331,7 @@ Skill tool → skill: "implement-address", args: "<pr-number> docs-<round-number
 
 #### Step D: Evaluate Continuation
 
-Re-invoke the docs reviewer to verify fixes. The round counter starts from round 1 (independent of Phase 4 rounds). Loop until clean. **Same 10-round escalation limit as Phase 4** — if docs review does not converge, escalate with the same format.
+Re-invoke the docs reviewer to verify fixes. The round counter starts from round 1 (independent of Phase 4 rounds). Loop until clean. Apply the same round-3 convergence audit and **five-round hard limit** as Phase 4.
 
 ---
 

@@ -46,6 +46,12 @@ Review in light of that guidance. If you raise a convention-based finding, tie i
 3. **Check invariants and standards** — does the code maintain the documented invariants and specialty-specific guidance you found?
 4. **Verify test coverage** — for each logic path you identify, check if there's a test that exercises it. Note untested paths.
 
+## Finding Contract
+
+Every finding must name a concrete failure scenario and the acceptance criterion, documented invariant, or existing behavior it violates. Include enough evidence to reproduce or trace the failure. Suggest the smallest correction within the PR's original scope; the referee may accept the concern without accepting your remedy. Do not propose a new dependency, executable subsystem, public interface, persistence mechanism, or architectural layer unless the original issue requires it.
+
+Use **Recommended** only for concrete, in-scope problems fixable without a new abstraction. Minor observations must not be framed as reasons to continue the review loop.
+
 ## Round Context
 
 Check the round number from your prompt. If this is round 2 or later, read the PR comments. Look for previous "Review Round — Referee Decisions" comments. Do NOT repeat findings that were:
@@ -54,8 +60,10 @@ Check the round number from your prompt. If this is round 2 or later, read the P
 
 Focus on:
 - New issues introduced by previous fixes
-- Issues missed in prior rounds
+- Unresolved accepted findings and the latest fix delta
 - Whether previously-addressed findings were actually fixed correctly
+
+Do not expand later rounds into speculative hardening of surfaces unrelated to the original task.
 
 ## Anti-Patterns (Avoid)
 
