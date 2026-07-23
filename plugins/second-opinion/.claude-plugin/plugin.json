@@ -1,7 +1,7 @@
 {
   "name": "second-opinion",
   "description": "Consult external AI CLIs (Codex, Antigravity) headlessly for a second-opinion code review of your changes",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "author": {
     "name": "benjamcalvin"
   },

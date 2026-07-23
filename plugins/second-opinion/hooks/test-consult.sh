@@ -28,6 +28,10 @@ FAIL=0
 pass() { PASS=$((PASS + 1)); }
 fail() { echo "FAIL: $1"; FAIL=$((FAIL + 1)); }
 
+# A root-level absolute script path must retain `/` as its parent.
+grep -Fq 'SCRIPT_PARENT="${SCRIPT_PARENT:-/}"' "$CONSULT" \
+  && pass || fail "root-level absolute script path should preserve / as its parent"
+
 # Scratch workspace (stub bins, prompt files). Cleaned on exit.
 WORK="$(mktemp -d -t second-opinion-test.XXXXXX)"
 trap 'rm -rf "$WORK"' EXIT
@@ -175,9 +179,9 @@ echo "$err" | grep -qi "failed to start" && pass || fail "srt-failure error shou
 # --- Platform-dependency fail-closed checks (ADR-001 Decision 6) ---
 # srt itself is present, but the OS-level dependency it needs to enforce the
 # jail is not -> exit 2, never a silent skip. These PATHs deliberately exclude
-# REAL_PATH so the host machine's own sandbox-exec/bwrap/socat cannot leak in;
-# a dirname stub covers the one external binary consult.sh needs before the
-# check fires (SCRIPT_DIR resolution).
+# REAL_PATH so the host machine's own sandbox-exec/bwrap/socat cannot leak in.
+# consult.sh startup must not require unrelated external binaries before the
+# explicit dependency checks run.
 #
 # make_srt_nodep_stub <dir> <platform> — srt present, `uname -s` forced to
 # <platform>, and NO platform-dep binaries on the PATH.
@@ -185,7 +189,6 @@ make_srt_nodep_stub() {
   local dir="$1" platform="$2"
   make_stub "$dir" srt 'exit 0'
   make_stub "$dir" uname "echo $platform"
-  make_stub "$dir" dirname 'echo "${1%/*}"'
 }
 
 # Darwin with sandbox-exec (Seatbelt) missing -> exit 2 naming the dep.
