@@ -169,7 +169,7 @@ Provides a shared lifecycle orchestrator, two utility skills, three delegated wo
 | `review-testing` | Test coverage, assertion quality, edge cases, test anti-patterns |
 | `review-docs` | Docs compliance gate (Phase 4.5) — missing docs for new behavior, stale docs contradicted by code changes, frontmatter/cross-link correctness |
 
-Heavy phases always run in isolated delegated agents. Claude Code invokes the plugin's named subagents; Codex spawns subagents that load the matching `$implement-lifecycle:<skill>`. The worker skills are reusable prompts and do not depend on inherited or forked skill context.
+Heavy phases always run in isolated delegated agents. Each worker skill is the canonical workflow; Claude Code's named subagents are thin runtime adapters that preload it, while Codex spawns a general subagent that loads the matching `$implement-lifecycle:<skill>`. Reviewer adapters deny only direct file-editing tools, leaving the agents free to use available read-only research, documentation, web, and MCP capabilities when the review requires them.
 
 Codex CLI 0.145.0 note: full lifecycle delegation works in a standard Codex session; headless `codex exec --ephemeral` sessions fail to initialize spawned subagents.
 
