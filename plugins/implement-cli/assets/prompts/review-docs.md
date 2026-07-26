@@ -63,9 +63,9 @@ If round 2+, read PR comments for previous referee decisions. Do NOT repeat addr
 
 ## Output
 
-Post findings to GitHub: `gh pr review $PR_NUMBER --comment --body "<findings>"`
+**Do not post to GitHub.** Run no `gh pr review`, `gh pr comment`, or `gh issue comment` — the orchestrator is the sole publisher and consolidates every reviewer's findings with its referee decisions into a single PR comment per round.
 
-Return findings as:
+Return findings to the orchestrator as:
 ### Action Required
 ### Recommended
 ### Minor

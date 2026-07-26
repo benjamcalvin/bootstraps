@@ -98,12 +98,9 @@ Do not expand later rounds into speculative coverage of surfaces unrelated to th
 
 ## Output
 
-Post findings to GitHub:
-```
-gh pr review <pr-number> --comment --body "<findings>"
-```
+**Do not post to GitHub.** Run no `gh pr review`, `gh pr comment`, or `gh issue comment`. The orchestrator is the sole publisher: it consolidates every reviewer's findings with its referee decisions into a single PR comment per round. Posting yourself fragments that trail into one comment per reviewer.
 
-Return findings in exactly this structure:
+Return findings to the orchestrator as your final message, in exactly this structure:
 
 ### Action Required
 - **[Testing]** Description with specific untested path, file:line in production code, and what test is missing

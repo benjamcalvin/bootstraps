@@ -95,12 +95,9 @@ Do not expand later rounds into speculative documentation work unrelated to the 
 
 ## Output
 
-Post findings to GitHub:
-```
-gh pr review <pr-number> --comment --body "<findings>"
-```
+**Do not post to GitHub.** Run no `gh pr review`, `gh pr comment`, or `gh issue comment`. The orchestrator is the sole publisher: it consolidates the docs findings with its referee decisions into a single PR comment per round. Posting yourself fragments that trail into one comment per reviewer.
 
-Return findings in exactly this structure:
+Return findings to the orchestrator as your final message, in exactly this structure:
 
 ### Action Required
 - **[Docs]** Description with specific file:line and documentation concern
