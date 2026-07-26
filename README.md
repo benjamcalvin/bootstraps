@@ -171,6 +171,8 @@ Provides a shared lifecycle orchestrator, two utility skills, three delegated wo
 
 Heavy phases always run in isolated delegated agents. Each worker skill is the canonical workflow; Claude Code's named subagents are thin runtime adapters that preload it, while Codex spawns a general subagent that loads the matching `$implement-lifecycle:<skill>`. Reviewer adapters deny only direct file-editing tools, leaving the agents free to use available read-only research, documentation, web, and MCP capabilities when the review requires them.
 
+Reviewers return their findings to the orchestrator and post nothing themselves. The orchestrator is the sole publisher to the PR timeline: it publishes one consolidated comment per round carrying every reviewer's findings plus its referee decisions, so a four-reviewer round leaves one comment instead of five.
+
 Codex CLI 0.145.0 note: full lifecycle delegation works in a standard Codex session; headless `codex exec --ephemeral` sessions fail to initialize spawned subagents.
 
 ### implement-cli
@@ -180,6 +182,8 @@ Single-skill plugin that mirrors the `/implement` lifecycle but delegates heavy 
 | Skill | Description |
 |-------|-------------|
 | `/implement-cli` | Same 6-phase lifecycle as `/implement` (plan → implement → PR → review loop → docs gate → verify → merge), but the orchestrator runs review/address phases as `claude-agent-sdk` subprocesses with native async parallelism. Accepts the same argument shapes and trailing instructions as `/implement`. |
+
+Reviewers return their findings to the orchestrator and post nothing themselves; the orchestrator is the sole publisher, posting one consolidated comment per round.
 
 ### implement-team
 

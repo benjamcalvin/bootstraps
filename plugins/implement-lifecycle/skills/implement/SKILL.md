@@ -6,7 +6,7 @@ description: >-
   Triggers: /implement, $implement-lifecycle:implement, implement this, build this feature
 license: MIT
 metadata:
-  version: "3.0.2"
+  version: "3.1.0"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -30,6 +30,8 @@ At runtime, inspect the current branch and recent commits. Fetch any referenced 
 You are a **lean orchestrator** — a supervisor who delegates, not an implementer. Every heavy phase runs in an isolated delegated agent; worker skills define the work but do not create that isolation themselves. **You MUST NOT use file-editing tools to modify source code, tests, or documentation.** You may use the shell for git/gh commands and tests, and the current client's read/search capabilities for refereeing, but never edit the codebase under review yourself.
 
 **Permitted carve-out — orchestration scratch files:** Writing non-source orchestration files (e.g. the `/tmp/implement-findings-*.md` findings files described in Phase 4) via Bash is expected and allowed. The prohibition targets modifying the codebase under review — source, tests, and docs — not writing your own scratch/findings files to `/tmp`.
+
+**You are the sole publisher to the PR timeline.** Specialist reviewers return their findings to you and post nothing themselves; you publish exactly **one consolidated comment per review round** carrying every reviewer's findings alongside your referee decisions. This keeps a four-reviewer round at one comment instead of five. If a reviewer reports having posted to GitHub, it violated its contract — note it and continue; do not mirror the duplicate.
 
 **Drive forward autonomously.** When you have a plan (from the user or an issue), execute all phases without pausing for approval between them. Do not ask "shall I proceed to the next phase?" — just proceed. Only stop to ask the user when you hit a genuine ambiguity, a blocking decision outside the task's scope, or an escalation condition listed below.
 
@@ -77,7 +79,7 @@ Any text after the leading token is **instructions that control what you do**. T
 | Instructions | Effect |
 |-------------|--------|
 | *(none)* | Default lifecycle: issue/freeform → Phases 1–6; PR number → Phases 4–6 |
-| "just review" / "review only" | Run specialist reviewers only. Post findings. Stop. |
+| "just review" / "review only" | Run specialist reviewers only, then post the consolidated review yourself (Phase 4 Step C). Stop. |
 | "address the review feedback" | Run the addresser only against existing review findings. |
 | "review and address" | Run review/address loop but don't merge. |
 | "skip planning" / "just implement" | Pass "skip planning" to implement-code so it skips codebase exploration and plan formulation. |
@@ -176,7 +178,7 @@ Use judgment from the PR summary, changed-file list, and issue/spec context:
 Payload: Review PR #<pr-number>, round <round-number>
 ```
 
-Each reviewer fetches PR context, posts findings to GitHub, and returns them to you. In round 2 and later, tell reviewers to focus on unresolved accepted findings, the latest fix delta, and regressions introduced by accepted fixes. They must not reopen rejected findings or speculatively harden unrelated surfaces.
+Each reviewer fetches PR context and returns its findings to you. Reviewers do **not** post to GitHub — you publish their findings in the consolidated comment in Step C, so keep each reviewer's returned text until then. In round 2 and later, tell reviewers to focus on unresolved accepted findings, the latest fix delta, and regressions introduced by accepted fixes. They must not reopen rejected findings or speculatively harden unrelated surfaces.
 
 #### Step B: Referee Evaluation
 
@@ -215,25 +217,41 @@ Use these calibration cases:
 - Speculative hardening with no demonstrated failure: **Reject**.
 - Third non-clean round dominated by review-introduced complexity: run the convergence audit, stop before round 4, and request human direction. Recommend bounded simplification or removal of the review-introduced architecture.
 
-**If zero findings survive filtering**, post a brief PR comment — `"Review Round <N>: no actionable findings — review loop complete."` — then skip to Phase 4.5.
+**If zero findings survive filtering**, still post the consolidated comment from Step C so the reviewers' raw findings and your rejection reasoning stay on the record, ending it with `**Result:** no actionable findings — review loop complete.` Then skip to Phase 4.5.
 
-#### Step C: Post Referee Decisions & Write Findings File
+#### Step C: Post the Consolidated Review & Write Findings File
 
-Post referee decisions to GitHub for the audit trail:
+Publish **one** comment per round covering every reviewer plus your referee decisions. Reviewers posted nothing, so this comment is the entire audit trail for the round — reproduce each reviewer's findings faithfully rather than summarizing them away.
 
 ```
 gh pr comment <number> --body "$(cat <<'EOF'
-## Review Round <N> — Referee Decisions
+## Review Round <N> — Consolidated Review & Referee Decisions
 
-| # | Finding | Reviewer Severity | Concern | Decision | Reasoning / smallest remedy |
-|---|---------|-------------------|---------|----------|-----------------------------|
-| 1 | <brief description> | Action Required / Recommended / Minor | Valid / Unproven | Accept / Reject | <why and, if accepted, the bounded correction> |
-| ... | ... | ... | ... | ... | ... |
+**Reviewers run:** <comma-separated list of specialties invoked>
+
+### Reviewer Findings
+
+#### Correctness
+<that reviewer's returned findings, verbatim under its Action Required / Recommended / Minor headings>
+
+#### Security
+<...>
+
+<one section per reviewer invoked; note "no findings" where a reviewer returned clean>
+
+### Referee Decisions
+
+| # | Finding | Reviewer | Reviewer Severity | Concern | Decision | Reasoning / smallest remedy |
+|---|---------|----------|-------------------|---------|----------|-----------------------------|
+| 1 | <brief description> | correctness | Action Required / Recommended / Minor | Valid / Unproven | Accept / Reject | <why and, if accepted, the bounded correction> |
+| ... | ... | ... | ... | ... | ... | ... |
 
 **Findings forwarded to addresser:** <count>
 EOF
 )"
 ```
+
+If the body is long enough to be unwieldy on the command line, write it to a temp file and post with `gh pr comment <number> --body-file <path>` — but still post it as a single comment.
 
 Write the filtered findings (accepted only) to a temp file for the addresser:
 
@@ -296,7 +314,7 @@ After the code review/address loop converges, run the docs curation gate. **This
 Payload: Review PR #<pr-number> for documentation compliance, round <round-number>
 ```
 
-The docs reviewer fetches PR context, maps code changes to existing documentation, and identifies gaps — not just inaccuracies in changed docs, but missing docs for new behavior and stale docs contradicted by code changes.
+The docs reviewer fetches PR context, maps code changes to existing documentation, and identifies gaps — not just inaccuracies in changed docs, but missing docs for new behavior and stale docs contradicted by code changes. It returns findings to you and posts nothing itself; you remain the sole publisher.
 
 #### Step B: Referee Evaluation
 
@@ -307,15 +325,21 @@ Apply the same concern-validity, remedy-proportionality, scope, and accept/rejec
 | **Accept** (default) | The concern is concrete and a smallest in-scope docs correction is available | Include only that proportional correction in the addresser action plan |
 | **Reject** | The concern is unproven, already resolved, out of scope, or disproportionate for this PR | Exclude it; record whether the concern itself was valid and optionally open a follow-up issue |
 
-**If zero findings survive filtering**, post a brief PR comment — `"Docs Compliance Gate: no actionable findings — proceeding to verification."` — then skip to Phase 5.
+**If zero findings survive filtering**, still post the consolidated comment from Step C so the docs reviewer's raw findings and your reasoning stay on the record, ending it with `**Result:** no actionable findings — proceeding to verification.` Then skip to Phase 5.
 
-#### Step C: Post Referee Decisions & Invoke Addresser
+#### Step C: Post the Consolidated Review & Invoke Addresser
 
-Post referee decisions to GitHub (same table format as Phase 4):
+Publish **one** comment per round carrying the docs reviewer's findings and your referee decisions:
 
 ```
 gh pr comment <number> --body "$(cat <<'EOF'
-## Docs Compliance Gate Round <N> — Referee Decisions
+## Docs Compliance Gate Round <N> — Consolidated Review & Referee Decisions
+
+### Reviewer Findings
+
+<the docs reviewer's returned findings, verbatim under its Action Required / Recommended / Minor headings>
+
+### Referee Decisions
 
 | # | Finding | Reviewer Severity | Concern | Decision | Reasoning / smallest remedy |
 |---|---------|-------------------|---------|----------|-----------------------------|

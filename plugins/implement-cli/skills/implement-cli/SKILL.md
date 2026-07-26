@@ -8,7 +8,7 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "1.3.1"
+  version: "1.4.0"
   tags: ["implement", "cli", "agent-sdk", "multi-provider", "lifecycle"]
   author: benjamcalvin
 ---
@@ -27,6 +27,8 @@ Orchestrate the full implementation lifecycle for: $ARGUMENTS
 <!-- stop-guard:active -->
 
 You are the **orchestrator**. You drive the lifecycle, make referee decisions, and post to GitHub. You delegate heavy work (implementation, review, addressing) to Python Agent SDK subprocesses via the `implement-cli` CLI tool.
+
+**You are the sole publisher to the PR timeline for reviews.** Reviewer subprocesses return findings in their JSON `text` and post nothing themselves; you publish exactly **one consolidated comment per review round** carrying every reviewer's findings alongside your referee decisions.
 
 **Drive forward autonomously.** Execute all phases without pausing for approval between them.
 
@@ -97,7 +99,7 @@ Parse `$ARGUMENTS` to determine **what to work on** and **what to do**.
 | Instructions | Effect |
 |-------------|--------|
 | *(none)* | Default lifecycle: issue/freeform → Phases 1–6; PR number → Phases 4–6 |
-| "just review" / "review only" | Run reviewers only, post findings, stop |
+| "just review" / "review only" | Run reviewers only, post the consolidated review yourself, stop |
 | "address the review feedback" | Run the addresser against existing findings |
 | "skip planning" / "just implement" | Skip codebase exploration and planning |
 
@@ -170,11 +172,42 @@ Parse JSON output — each reviewer's result is in `reviewers.<name>`:
 | **Accept** (default) | Finding has merit — you verified by reading the code |
 | **Reject** | Incorrect, irrelevant, or ill-considered |
 
-If zero findings survive, post `"Review Round <N>: no actionable findings"` and skip to Phase 4.5.
+Also judge the concern itself — concrete and demonstrated vs. unproven — and record it in the `Concern` column as `Valid` / `Unproven`.
 
-#### Step C: Post Decisions & Write Findings
+If zero findings survive, still post the Step C consolidated comment (reviewers posted nothing, so it is the round's only record) ending with `**Result:** no actionable findings`, then skip to Phase 4.5.
 
-Post referee decisions to GitHub. Write filtered findings to a file in the run directory:
+#### Step C: Post the Consolidated Review & Write Findings
+
+Publish **one** comment per round containing each reviewer's returned `text` verbatim, followed by your referee decision table:
+
+```bash
+cat > "$RUN_DIR/review-round-<N>.md" <<'EOF'
+## Review Round <N> — Consolidated Review & Referee Decisions
+
+**Reviewers run:** <comma-separated list>
+
+### Reviewer Findings
+
+#### Correctness
+<reviewers.review-correctness.text>
+
+#### Security
+<reviewers.review-security.text>
+
+<one section per reviewer invoked>
+
+### Referee Decisions
+
+| # | Finding | Reviewer | Severity | Concern | Decision | Reasoning / smallest remedy |
+|---|---------|----------|----------|---------|----------|-----------------------------|
+
+**Findings forwarded to addresser:** <count>
+EOF
+
+gh pr comment <PR> --body-file "$RUN_DIR/review-round-<N>.md"
+```
+
+Write the accepted-only findings to a separate file for the addresser:
 
 ```bash
 cat > "$RUN_DIR/findings-round-<N>.md" <<'EOF'

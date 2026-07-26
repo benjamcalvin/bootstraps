@@ -78,7 +78,7 @@ Use **Recommended** only for concrete, in-scope gaps fixable without a new abstr
 
 ## Round Context
 
-Check the round number from your prompt. If this is round 2 or later, read the PR comments for previous "Docs Compliance Gate Round <N> — Referee Decisions" comments. Do NOT repeat addressed or rejected findings. Focus on:
+Check the round number from your prompt. If this is round 2 or later, read the PR comments for the prior round's consolidated docs compliance review and referee decisions. Do NOT repeat addressed or rejected findings. Focus on:
 - New documentation issues introduced by previous fixes
 - Unresolved accepted findings and the latest fix delta
 - Whether previously-addressed findings were actually fixed correctly
@@ -95,12 +95,9 @@ Do not expand later rounds into speculative documentation work unrelated to the 
 
 ## Output
 
-Post findings to GitHub:
-```
-gh pr review <pr-number> --comment --body "<findings>"
-```
+**Do not post to GitHub.** Run no `gh pr review`, `gh pr comment`, or `gh issue comment`. The orchestrator is the sole publisher: it consolidates the docs findings with its referee decisions into a single PR comment per round. Posting yourself fragments that trail into one comment per reviewer.
 
-Return findings in exactly this structure:
+Return findings to the orchestrator as your final message, in exactly this structure:
 
 ### Action Required
 - **[Docs]** Description with specific file:line and documentation concern
