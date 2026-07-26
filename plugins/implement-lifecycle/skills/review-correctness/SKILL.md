@@ -55,7 +55,7 @@ Use **Recommended** only for concrete, in-scope problems fixable without a new a
 
 ## Round Context
 
-Check the round number from your prompt. If this is round 2 or later, read the PR comments. Look for previous "Review Round — Referee Decisions" comments. Do NOT repeat findings that were:
+Check the round number from your prompt. If this is round 2 or later, read the PR comments for the prior round's consolidated review and referee decisions. Do NOT repeat findings that were:
 - Already addressed in a previous round
 - Explicitly rejected by the referee with justification
 

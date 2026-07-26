@@ -196,8 +196,8 @@ cat > "$RUN_DIR/review-round-<N>.md" <<'EOF'
 
 ### Referee Decisions
 
-| # | Finding | Reviewer | Severity | Decision | Reasoning / smallest remedy |
-|---|---------|----------|----------|----------|-----------------------------|
+| # | Finding | Reviewer | Severity | Concern | Decision | Reasoning / smallest remedy |
+|---|---------|----------|----------|---------|----------|-----------------------------|
 
 **Findings forwarded to addresser:** <count>
 EOF

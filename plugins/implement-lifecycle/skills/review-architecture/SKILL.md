@@ -67,7 +67,7 @@ Use **Recommended** only for concrete, in-scope problems fixable without a new a
 
 ## Round Context
 
-Check the round number from your prompt. If this is round 2 or later, read the PR comments for previous "Review Round — Referee Decisions" comments. Do NOT repeat addressed or rejected findings. Focus on:
+Check the round number from your prompt. If this is round 2 or later, read the PR comments for the prior round's consolidated review and referee decisions. Do NOT repeat addressed or rejected findings. Focus on:
 - New architectural issues introduced by previous fixes
 - Unresolved accepted findings and the latest fix delta
 - Whether previously-addressed findings were actually fixed correctly
