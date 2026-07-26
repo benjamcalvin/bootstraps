@@ -183,6 +183,8 @@ Single-skill plugin that mirrors the `/implement` lifecycle but delegates heavy 
 |-------|-------------|
 | `/implement-cli` | Same 6-phase lifecycle as `/implement` (plan → implement → PR → review loop → docs gate → verify → merge), but the orchestrator runs review/address phases as `claude-agent-sdk` subprocesses with native async parallelism. Accepts the same argument shapes and trailing instructions as `/implement`. |
 
+Reviewers return their findings to the orchestrator and post nothing themselves; the orchestrator is the sole publisher, posting one consolidated comment per round.
+
 ### implement-team
 
 **Experimental.** Requires Claude Code `>= 2.1.32` and `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. Re-architects the implementation lifecycle around long-lived teammates that share a task list and mailbox instead of forked one-shot subagents.
