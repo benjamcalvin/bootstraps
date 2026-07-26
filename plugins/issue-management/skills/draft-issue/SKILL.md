@@ -48,7 +48,7 @@ Three disciplines keep the layers readable:
 Parse `$ARGUMENTS` to determine:
 - **Type:** Is this a bug, feature, chore, refactor, or docs task?
 - **Scope:** What modules/files are likely involved?
-- **Scope:** Is this one logical change a reviewer can hold in their head in one sitting — or a small batch of same-kind housekeeping changes? If not, it needs decomposing into several PRs.
+- **Decomposition:** Is this one logical change a reviewer can hold in their head in one sitting — or a small batch of same-kind housekeeping changes? If not, it needs splitting into several PRs.
 
 If the request is vague, use the `AskUserQuestion` tool to clarify before proceeding. Do not guess at intent — surface ambiguity early.
 

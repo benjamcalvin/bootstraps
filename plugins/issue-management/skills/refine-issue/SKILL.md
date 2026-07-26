@@ -97,7 +97,7 @@ Add or enhance the Technical Context section:
 
 #### 4c: Decompose if Needed
 
-If the issue spans more than one logical change — independent concerns, or layers that must land in sequence — add a "Proposed PRs" section that gives each its own PR:
+If the issue spans more than one logical change — independent concerns, or layers that must land in sequence — add a "Proposed PRs" section that gives each its own PR. A batch of small, independent, same-kind housekeeping changes may stay a single PR:
 
 ```markdown
 ## Proposed PRs

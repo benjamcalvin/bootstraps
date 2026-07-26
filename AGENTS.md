@@ -47,6 +47,7 @@ Every change to a plugin **must** include a version bump in that plugin's `.clau
 - Add a plugin to the Codex marketplace only when its complete workflow works in Codex; Claude-specific agents, hooks, and SDKs are not portable merely because the skill format is shared
 - One plugin does one thing well
 - Plugins can bundle skills, hooks, agents, and assets
+- Self-containment forces some guidance to be duplicated across plugins. For PR scope, `bootstrap-docs`' `standards-pr-template.md` holds the authoritative wording; `pr-check`, `draft-issue`, `refine-issue`, and `implement`'s referee paraphrase it. Change it there first, then re-sync the paraphrases
 - See existing plugins for schema examples
 
 ## Development
