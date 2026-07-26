@@ -89,14 +89,19 @@ Use the correct keyword based on whether this PR **fully completes** the issue o
 - Reference related PRs with `Depends on #N` or `See also #N`
 - Link to specs or ADRs when the PR implements a design document
 
-## PR Sizing
+## PR Scope
 
-Small, focused PRs. Each PR should represent one logical change.
+**A PR is one logical change that a reviewer can hold in their head in one sitting.**
 
-**Guidelines:**
-- Target: under 400 lines of meaningful diff (excluding generated code, test fixtures, lock files)
-- If a PR exceeds 600 lines, it almost certainly should be split
-- A PR that touches more than 5 files across unrelated concerns should be split
+Line count is a symptom, not the standard. A single ADR, a new module's scaffold, and a mechanical rename are each one logical change however many lines they span; a 200-line PR that fixes a bug *and* refactors an unrelated module is two changes and should be split.
+
+**Signals a PR should be split:**
+- The summary needs an "and" to describe what it does
+- A reviewer must context-switch between unrelated concerns to evaluate it
+- It mixes a refactor with a behavior change — the behavior change becomes invisible inside the noise
+- Understanding the later files requires re-reading the earlier ones
+
+**Housekeeping exception:** a batch of small, independent, low-risk changes of the same kind — dependency bumps, typo fixes, a lint sweep — may ship as one PR even though they are not one logical change. Reviewing them together is cheaper than reviewing them apart, and they share a single verdict. Keep the batch to one kind of change, and say so in the title (`chore: bump test dependencies`).
 
 **Splitting strategies:**
 - Refactor first, then build on top (separate PRs)
@@ -113,7 +118,7 @@ When a feature requires multiple sequential PRs, stack them:
 4. Merge from the bottom up — once the base PR merges, retarget the next PR
 
 **When to stack vs. single PR:**
-- Single PR if the change is cohesive and under the size guidelines
+- Single PR if the change is cohesive by the scope test above
 - Stack if the feature has natural layers (schema → data layer → API) or if reviewing everything at once would be unwieldy
 
 ## Commits Within a PR

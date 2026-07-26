@@ -12,7 +12,7 @@
       "name": "bootstrap-docs",
       "source": "./plugins/bootstrap-docs",
       "description": "Set up a comprehensive, AI-readable documentation strategy in any project",
-      "version": "1.4.1",
+      "version": "1.5.0",
       "category": "productivity",
       "tags": ["docs", "documentation", "strategy", "scaffolding"],
       "author": {
@@ -24,7 +24,7 @@
       "name": "implement-lifecycle",
       "source": "./plugins/implement-lifecycle",
       "description": "Cross-client implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, verify, merge",
-      "version": "3.6.0",
+      "version": "3.7.0",
       "category": "productivity",
       "tags": ["implement", "review", "pr", "lifecycle", "adversarial", "tdd", "merge"],
       "author": {
@@ -48,7 +48,7 @@
       "name": "issue-management",
       "source": "./plugins/issue-management",
       "description": "Draft, clean up, and refine GitHub issues — optimized for AI agent consumption",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "category": "productivity",
       "tags": ["issue", "draft", "cleanup", "refine", "planning"],
       "author": {

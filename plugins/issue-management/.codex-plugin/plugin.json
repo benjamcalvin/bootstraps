@@ -1,6 +1,6 @@
 {
   "name": "issue-management",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Draft, clean up, and refine GitHub issues — optimized for AI agent consumption",
   "author": {
     "name": "benjamcalvin"

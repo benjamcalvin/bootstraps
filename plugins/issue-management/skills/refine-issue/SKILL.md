@@ -97,7 +97,7 @@ Add or enhance the Technical Context section:
 
 #### 4c: Decompose if Needed
 
-If the issue requires >400 lines of changes or touches multiple independent modules, add a "Proposed PRs" section:
+If the issue spans more than one logical change — independent concerns, or layers that must land in sequence — add a "Proposed PRs" section that gives each its own PR:
 
 ```markdown
 ## Proposed PRs
