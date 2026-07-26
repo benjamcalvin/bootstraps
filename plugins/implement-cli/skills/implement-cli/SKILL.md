@@ -172,6 +172,8 @@ Parse JSON output — each reviewer's result is in `reviewers.<name>`:
 | **Accept** (default) | Finding has merit — you verified by reading the code |
 | **Reject** | Incorrect, irrelevant, or ill-considered |
 
+Also judge the concern itself — concrete and demonstrated vs. unproven — and record it in the `Concern` column as `Valid` / `Unproven`.
+
 If zero findings survive, still post the Step C consolidated comment (reviewers posted nothing, so it is the round's only record) ending with `**Result:** no actionable findings`, then skip to Phase 4.5.
 
 #### Step C: Post the Consolidated Review & Write Findings
