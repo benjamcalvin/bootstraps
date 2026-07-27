@@ -18,8 +18,9 @@ metadata:
 
 > **🚧 Work in progress.** This plugin is unfinished and not stable, and is not
 > recommended for general use. Its prompts drift from the canonical
-> [`implement-lifecycle`](../../../implement-lifecycle) review skills, and its
-> behaviour may change without notice. Prefer `/implement` for day-to-day work.
+> [`implement-lifecycle`](../../../implement-lifecycle) review skills (tracked in
+> [#96](https://github.com/benjamcalvin/bootstraps/issues/96)), and its behaviour
+> may change without notice. Prefer `/implement` for day-to-day work.
 >
 > **If you invoke this skill, say so before proceeding** and offer `/implement`
 > as the alternative.
