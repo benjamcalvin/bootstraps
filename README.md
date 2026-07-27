@@ -149,7 +149,7 @@ Provides a shared lifecycle orchestrator, two utility skills, three delegated wo
 |-------|-------------|
 | `/implement` / `$implement-lifecycle:implement` | Lean orchestrator — 6-phase lifecycle (plan → implement → PR → review loop → verify → merge). Accepts `#issue`, PR number, or freeform task. Supports trailing instructions like "just review" or "skip planning". |
 | `/merge-pr` / `$implement-lifecycle:merge-pr` | Validate, squash-merge, delete branch, and update linked GitHub issues with delivery status. |
-| `/pr-check` / `$implement-lifecycle:pr-check` | Pre-flight PR validation — branch naming, title, description, sizing, commits, references. |
+| `/pr-check` / `$implement-lifecycle:pr-check` | Pre-flight PR validation — branch naming, title, description, commits, references, plus an advisory scope note. |
 
 **Delegated worker roles** (invoked by the orchestrator, not directly):
 

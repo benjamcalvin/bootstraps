@@ -10,7 +10,7 @@ agent: general-purpose
 allowed-tools: Read, Glob, Bash(cat *), Bash(find *)
 license: MIT
 metadata:
-  version: "1.4.1"
+  version: "1.5.0"
   tags: ["docs", "documentation", "strategy", "scaffolding"]
   author: benjamcalvin
   standards-sub-types: ["testing", "code", "pr"]
@@ -248,7 +248,7 @@ For each module with status `pending` or `enabled` (not `declined`), create the 
 - Note: Standards are organized by type. The default types are:
   - **Testing standards** — test organization, naming, assertions, coverage, mocking, CI integration
   - **Code conventions** — project layout, naming, error handling, logging, formatting, documentation
-  - **PR standards** — branch naming, PR titles, descriptions, sizing, review, stacking
+  - **PR standards** — branch naming, PR titles, descriptions, scope, review, stacking
 - Each type has its own template with opinionable defaults. Users select which types to adopt during setup and customize them for their stack.
 
 **plans/AGENTS.md:**

@@ -2,11 +2,11 @@
 name: pr-check
 description: >-
   Validate a PR against PR standards before requesting review.
-  Checks branch naming, title, description, sizing, commits, and references.
+  Checks branch naming, title, description, commits, references, and scope.
   Triggers: /pr-check, check this PR, validate PR
 license: MIT
 metadata:
-  version: "1.1.0"
+  version: "2.0.0"
   tags: ["pr", "check", "standards", "validation"]
   author: benjamcalvin
 ---
@@ -48,23 +48,17 @@ Must open with 2-4 plain-language sentences explaining what the change does and 
 **4. PR Description — Test Evidence**
 Must include how the change was verified: test output, manual steps, or "covered by existing tests."
 
-**5. PR Sizing**
-Check additions + deletions (excluding generated code, test fixtures, lock files if identifiable):
-- Under 400 lines → PASS
-- 400-600 lines → WARN ("consider splitting")
-- Over 600 lines → FAIL ("should be split")
-
-**6. Commit Messages**
+**5. Commit Messages**
 Each commit message should follow `<type>: <summary>` format. No "WIP", "fixup", or "wip" commits.
 
-**7. References**
+**6. References**
 If the change relates to a GitHub issue, it should reference it with an appropriate keyword:
 - `Closes #N` / `Fixes #N` — only when this single PR fully completes the issue
 - `Part of #N` — when the PR is one of several addressing the issue
 
 WARN if no references found (not all PRs need them, but flag for awareness). WARN if `Closes #N` is used but the PR appears to be a sub-task of a larger issue (e.g., the issue has multiple acceptance criteria and the PR only addresses some).
 
-**8. Altitude Layering**
+**7. Altitude Layering**
 The description must descend through altitude layers rather than mixing them:
 - The TL;DR contains **no** file paths, function names, or line numbers — behavior in plain language only
 - Design reasoning (when present) is in component terms; code identifiers appear only in implementation-level sections (Implementation Notes, Test evidence, Review focus)
@@ -72,6 +66,12 @@ The description must descend through altitude layers rather than mixing them:
 - No review chronology woven into the description ("round 1 added...", "after feedback we...")
 
 WARN on isolated violations; FAIL if the TL;DR is saturated with code identifiers or the layers are absent entirely.
+
+### Scope Note (advisory — not scored)
+
+Assess whether the PR is **one logical change a reviewer can hold in their head in one sitting**, or a small batch of same-kind housekeeping changes. This is a judgment about cohesion, not size: a single ADR, a new module's scaffold, and a mechanical rename are each one logical change however many lines they span, while a small PR that fixes a bug *and* refactors an unrelated module is two.
+
+Report a one-line observation. Say the PR is cohesive, or name the seam it should be split along. Do not assign PASS/WARN/FAIL, do not count lines against a threshold, and do not treat this note as a merge blocker — it exists to inform the author and reviewers, not to gate.
 
 ### Output Format
 
@@ -84,12 +84,13 @@ WARN on isolated violations; FAIL if the TL;DR is saturated with code identifier
 | 2 | PR title | PASS/WARN/FAIL | ... |
 | 3 | TL;DR | PASS/WARN/FAIL | ... |
 | 4 | Test evidence | PASS/WARN/FAIL | ... |
-| 5 | Sizing | PASS/WARN/FAIL | ... |
-| 6 | Commit messages | PASS/WARN/FAIL | ... |
-| 7 | References | PASS/WARN/FAIL | ... |
-| 8 | Altitude layering | PASS/WARN/FAIL | ... |
+| 5 | Commit messages | PASS/WARN/FAIL | ... |
+| 6 | References | PASS/WARN/FAIL | ... |
+| 7 | Altitude layering | PASS/WARN/FAIL | ... |
 
-**Result: X/8 passing, Y warnings, Z failures**
+**Result: X/7 passing, Y warnings, Z failures**
+
+**Scope (advisory):** <one line — cohesive, or the seam it should be split along>
 ```
 
 If there are failures, add a brief "Suggested Fixes" section listing what to change.

@@ -122,7 +122,7 @@ Critical paths carry the highest coverage expectations:
 
 ### Standards
 - [Code Conventions](code-conventions.md) — Coding standards these tests enforce
-- [PR Standards](pr-standards.md) — PR conventions and sizing guidelines
+- [PR Standards](pr-standards.md) — PR conventions and scope guidelines
 
 ### Operational
 - {Link to development setup guide}

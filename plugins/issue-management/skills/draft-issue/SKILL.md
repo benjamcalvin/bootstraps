@@ -48,7 +48,7 @@ Three disciplines keep the layers readable:
 Parse `$ARGUMENTS` to determine:
 - **Type:** Is this a bug, feature, chore, refactor, or docs task?
 - **Scope:** What modules/files are likely involved?
-- **Size:** Can this be done in a single PR (target: under 400 lines changed)?
+- **Decomposition:** Is this one logical change a reviewer can hold in their head in one sitting — or a small batch of same-kind housekeeping changes? If not, it needs splitting into several PRs.
 
 If the request is vague, use the `AskUserQuestion` tool to clarify before proceeding. Do not guess at intent — surface ambiguity early.
 
@@ -66,7 +66,7 @@ Before drafting, explore the codebase to ground the issue in reality.
 
 #### Template: Standard Issue (Single PR)
 
-Use when the work fits in one PR (~400 lines or fewer).
+Use when the work is one logical change that fits in a single PR.
 
 ```markdown
 ## Problem
@@ -133,7 +133,7 @@ sections above. Omit if there is none.>
 
 #### Template: Large Issue (Multiple PRs)
 
-Use when the work requires multiple PRs (>400 lines, multiple modules).
+Use when the work spans several logical changes — independent concerns, or layers that must land in sequence (schema → data layer → API).
 
 Add these sections to the standard template:
 
@@ -205,7 +205,7 @@ Before presenting to the user, verify:
 2. Acceptance criteria are machine-testable
 3. Scope is bounded with explicit "out of scope" items
 4. Technical context has exact file paths and pattern references
-5. Size is appropriate (decomposed if >400 lines)
+5. Scope is one logical change per PR (decomposed into `Proposed PRs` if it spans several)
 6. No ambiguity — an AI agent could start implementing without clarifying questions
 7. References are linked
 8. Verification is explicit
