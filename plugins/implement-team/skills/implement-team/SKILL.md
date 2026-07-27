@@ -1,6 +1,7 @@
 ---
 name: implement-team
 description: >-
+  DEPRECATED — use implement-lifecycle (/implement) instead.
   Implementation lifecycle re-architected around Claude Code agent-teams —
   long-lived implementer and reviewer teammates with shared task list and
   mailbox messaging. Higher token cost than /implement in exchange for
@@ -9,12 +10,24 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "0.4.0"
-  tags: ["implement", "lifecycle", "review", "agent-teams", "experimental"]
+  version: "0.5.0"
+  tags: ["implement", "lifecycle", "review", "agent-teams", "experimental", "deprecated"]
   author: benjamcalvin
 ---
 
 # Implement (team mode)
+
+> **⚠️ DEPRECATED.** This plugin is no longer maintained. Use
+> [`implement-lifecycle`](../../../implement-lifecycle) (`/implement`) instead — it
+> covers the same lifecycle, is supported on both Claude Code and Codex, and does
+> not depend on the experimental agent-teams runtime.
+>
+> `implement-team` remains installable so existing users are not broken, but it
+> receives no fixes and will be removed in a future release. Known open defects
+> are not being addressed.
+>
+> **If you invoke this skill, say so before proceeding** and offer `/implement`
+> as the alternative.
 
 Orchestrate the full implementation lifecycle for: $ARGUMENTS
 

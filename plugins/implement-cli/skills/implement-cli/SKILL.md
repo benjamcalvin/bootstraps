@@ -1,6 +1,7 @@
 ---
 name: implement-cli
 description: >-
+  WIP — not recommended for general use; prefer implement-lifecycle (/implement).
   CLI-based implementation lifecycle using the Python Agent SDK.
   Orchestrates plan, implement, review/address loop, docs gate, verify, and merge
   via claude-agent-sdk subprocesses with native async parallelism.
@@ -8,12 +9,20 @@ description: >-
 argument-hint: <#issue | PR-number | freeform task> [instructions]
 license: MIT
 metadata:
-  version: "1.4.0"
-  tags: ["implement", "cli", "agent-sdk", "multi-provider", "lifecycle"]
+  version: "1.4.1"
+  tags: ["implement", "cli", "agent-sdk", "multi-provider", "lifecycle", "wip"]
   author: benjamcalvin
 ---
 
 # Implement (CLI)
+
+> **🚧 Work in progress.** This plugin is under active development and is not
+> recommended for general use. Its prompts drift from the canonical
+> [`implement-lifecycle`](../../../implement-lifecycle) review skills, and its
+> behaviour may change without notice. Prefer `/implement` for day-to-day work.
+>
+> **If you invoke this skill, say so before proceeding** and offer `/implement`
+> as the alternative.
 
 Orchestrate the full implementation lifecycle for: $ARGUMENTS
 
