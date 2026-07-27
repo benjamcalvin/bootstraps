@@ -16,7 +16,7 @@ metadata:
 
 # Implement (CLI)
 
-> **🚧 Work in progress.** This plugin is under active development and is not
+> **🚧 Work in progress.** This plugin is unfinished and not stable, and is not
 > recommended for general use. Its prompts drift from the canonical
 > [`implement-lifecycle`](../../../implement-lifecycle) review skills, and its
 > behaviour may change without notice. Prefer `/implement` for day-to-day work.

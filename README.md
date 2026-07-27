@@ -181,8 +181,8 @@ Codex CLI 0.145.0 note: full lifecycle delegation works in a standard Codex sess
 
 ### implement-cli
 
-> **🚧 Work in progress — not recommended for general use.** Under active
-> development; its reviewer prompts drift from the canonical `implement-lifecycle`
+> **🚧 Work in progress — not recommended for general use.** Unfinished and not
+> stable; its reviewer prompts drift from the canonical `implement-lifecycle`
 > review skills and its behaviour may change without notice. Use
 > `implement-lifecycle` (`/implement`) for day-to-day work.
 
