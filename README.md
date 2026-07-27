@@ -183,7 +183,9 @@ Codex CLI 0.145.0 note: full lifecycle delegation works in a standard Codex sess
 
 > **🚧 Work in progress — not recommended for general use.** Unfinished and not
 > stable; its reviewer prompts drift from the canonical `implement-lifecycle`
-> review skills and its behaviour may change without notice. Use
+> review skills (tracked in
+> [#96](https://github.com/benjamcalvin/bootstraps/issues/96)) and its behaviour
+> may change without notice. Use
 > `implement-lifecycle` (`/implement`) for day-to-day work.
 
 Single-skill plugin that mirrors the `/implement` lifecycle but delegates heavy work to Python Agent SDK subprocesses.
