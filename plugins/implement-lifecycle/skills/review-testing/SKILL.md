@@ -49,6 +49,7 @@ For each test file changed or added:
 - Are assertions specific? Tests that only check "no error" without verifying the actual result are weak — they pass even when the code returns wrong data.
 - Do assertions check the *right thing*? A test that asserts on implementation details (internal state, call counts) instead of observable behavior is brittle.
 - Are negative assertions present where needed? ("this field should NOT be set", "this list should NOT contain X")
+- **Are thresholds independently derived?** A test whose expected value, limit, or boundary is computed from the very code under test is self-referential — it passes even when the code is wrong. Expected values must come from the spec, an independent calculation, or a hardcoded fixture, not from the implementation under test.
 
 ### Edge Cases
 - Are boundary values tested? (empty string, zero, negative, max int, Unicode, very long strings)
@@ -67,6 +68,7 @@ For each test file changed or added:
 - **Copy-paste tests** — Are tests duplicated where a table-driven approach or test helper would be clearer?
 - **Missing cleanup** — Do tests that create resources (files, DB rows, servers) clean up after themselves?
 - **Flaky patterns** — Are there sleeps, time-dependent assertions, or race conditions in the tests themselves?
+- **Self-referential assertions** — Does a test assert against a threshold or expected value derived from the code under test (e.g., a guard scan that matches its own source, or a limit computed from the implementation)? Flag these as circular — they cannot fail when the code is wrong.
 
 ### Coverage Gaps
 - If new public API surfaces were added, are they all tested?
@@ -78,6 +80,8 @@ For each test file changed or added:
 Every finding must name a concrete untested failure and the acceptance criterion, documented invariant, or changed behavior it could allow to regress. Explain why existing tests would miss it. Suggest the smallest correction within the PR's original scope; the referee may accept the concern without accepting your remedy. Do not propose a new dependency, executable subsystem, public interface, persistence mechanism, or architectural layer unless the original issue requires it.
 
 Use **Recommended** only for concrete, in-scope gaps fixable without a new abstraction. Minor observations must not be framed as reasons to continue the review loop. For client, process, or integration boundaries, prefer a targeted test of the real boundary; reject self-confirming simulations that merely restate orchestration instructions or mock away the behavior under review.
+
+**Self-referential acceptance checks.** When a PR uses a guard test that scans for forbidden strings or patterns (e.g., a lint that forbids a token), check that the guard fragments the forbidden string so the scan does not match its own source. A guard that contains the exact forbidden literal will falsely pass (or falsely fail) against itself.
 
 ## Round Context
 
