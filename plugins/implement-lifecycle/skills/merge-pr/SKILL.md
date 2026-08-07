@@ -33,7 +33,7 @@ Check that the PR is safe to merge. For each check, determine pass/fail:
 
 1. **State** — PR must be `OPEN`. If already merged or closed, report and stop.
 2. **Merge conflicts** — `mergeable` must not be `CONFLICTING`. If conflicts exist, report and stop.
-3. **CI status** — All status checks must pass. If any check is failing, report which ones and stop.
+3. **CI status** — All status checks must pass. If any check is failing, report which ones and stop. **Exception — billing-only failure:** if a check failed purely because the account spending limit prevented any job from running (e.g. the run reports "job was not started because recent account payments have failed", or a job failed in seconds before any step ran), that is NOT a code gate. Record it as a billing exception in your report and proceed — do not block or report it as a red code failure.
 4. **PR standards** — Invoke `pr-check` in Claude Code or `$implement-lifecycle:pr-check` in Codex against the PR. All scored checks must pass (WARN is acceptable, FAIL is not). Fix any failures if possible; otherwise report what needs to be fixed and stop. The **scope note is advisory** — surface it in your report, but never block a merge on it. A cohesive change is mergeable whatever its diff size, and a PR whose scope is already under review is past the point where splitting is cheap.
 5. **Review decision** — Check `reviewDecision` and `baseRefName`:
    - If `CHANGES_REQUESTED`, stop and report.

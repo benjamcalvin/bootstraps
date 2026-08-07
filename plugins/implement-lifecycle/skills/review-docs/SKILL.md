@@ -76,6 +76,8 @@ Every finding must name a concrete reader-facing error or omission and the accep
 
 Use **Recommended** only for concrete, in-scope gaps fixable without a new abstraction. Minor observations must not be framed as reasons to continue the review loop.
 
+**Reconcile docs the PR touches — don't leave anchors for the next PR.** When a PR changes docs that still say "missing", "absent", "not yet implemented", or "TODO" about behavior this PR implements or removes, flag it so the PR reconciles its own docs rather than leaving a stale anchor for the next PR's docs gate to catch. Each PR should leave the docs it touches accurate at its own merge.
+
 ## Round Context
 
 Check the round number from your prompt. If this is round 2 or later, read the PR comments for the prior round's consolidated docs compliance review and referee decisions. Do NOT repeat addressed or rejected findings. Focus on:
