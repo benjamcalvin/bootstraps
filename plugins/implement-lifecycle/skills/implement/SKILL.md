@@ -127,9 +127,9 @@ EOF
 **This is a mandatory loop.** It repeats Steps A → B → C → D → E for each round until one of exactly two exit conditions is met:
 
 1. **Clean exit (Step B):** Zero findings survive referee filtering → skip to Phase 4.5.
-2. **Escalation exit (Step E):** A scope/convergence guard fires or round 5 is completed → escalate and stop.
+2. **Escalation exit (Step E):** A scope/convergence guard fires, OR convergence stalls (two consecutive rounds forward no fewer accepted findings than the prior round, or a round forwards only rejected findings), OR round 5 is reached → escalate and stop. A round that forwards ONLY rejected findings (nothing accepted) is not a productive round — it counts as stalled convergence, not a new clean round.
 
-There is no other way to exit this loop. Each round: Specialist reviewers → Referee (you) → Addresser → next round. **Five rounds is the hard limit unless the user explicitly authorizes more.**
+There is no other way to exit this loop. Each round: Specialist reviewers → Referee (you) → Addresser → next round. **The loop continues while it is converging; it escalates when convergence stalls.** Convergence = each round forwards strictly fewer or equal accepted findings than the prior round, with no open production defect and no review-introduced churn. Escalation is driven by stalled convergence or a scope guard, not by a fixed round count. Do not continue past 5 rounds without explicit user authorization even when converging, but you are NOT required to hit 5 — escalate as soon as convergence stalls.
 
 #### Before Round 1
 
@@ -278,15 +278,17 @@ The addresser will fix issues, run tests, commit, push, and return a summary.
 
 The addresser has pushed fixes. Check convergence and the escalation limit, then continue.
 
-1. **Convergence audit after round 3:** After three non-clean rounds, post an audit that maps the remaining findings and review-added changes to the original acceptance criteria. State whether the loop is converging and whether remaining findings primarily concern the original task or architecture introduced during addressing. If they primarily concern review-introduced architecture, stop before round 4 and request human direction. Recommend bounded simplification or removal of that architecture.
+0. **Rejected-only rounds do not advance the loop.** If the referee accepted zero findings in the last round (every finding rejected as unproven / out of scope / already resolved), do NOT invoke the addresser and do NOT count it as a productive round. Post the consolidated comment (Step C already did), then either treat the loop as converged and proceed to Phase 4.5, or, if the rejections were close calls, escalate for human direction. Never send an empty findings file to the addresser.
 
-2. **Check escalation limit:** If this was round 5 or higher, escalate — do **not** continue unless the user explicitly authorized additional rounds:
+1. **Convergence audit after round 2:** After two non-clean rounds, post an audit that maps the remaining findings and review-added changes to the original acceptance criteria. For each distinct sub-problem or code area still under contention, record the finding DENSITY (how many findings have targeted that same sub-problem across rounds). A sub-problem with repeated findings across multiple rounds is a convergence trap — flag it. State whether the loop is converging and whether remaining findings primarily concern the original task or architecture introduced during addressing. If they primarily concern review-introduced architecture, stop before round 3 and request human direction. Recommend bounded simplification or removal of that architecture.
+
+2. **Check escalation limit:** Escalate when (a) this was round 5 or higher, OR (b) convergence stalled (see exit condition 2) — do **not** continue unless the user explicitly authorized additional rounds:
 
 ```
 gh pr comment <number> --body "$(cat <<'EOF'
 ## Escalation — Review Loop Limit
 
-<N> review rounds completed without convergence. Five is the default hard limit.
+<N> review rounds completed without convergence. Escalating on stalled convergence (or the round-5 ceiling).
 
 ### Unresolved items
 <list each unresolved item with context on what was attempted>
