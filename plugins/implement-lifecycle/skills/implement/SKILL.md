@@ -290,7 +290,7 @@ The addresser will fix issues, run tests, commit, push, and return a summary.
 
 The addresser has pushed fixes. Check convergence and the escalation limit, then continue.
 
-**Do not run a redundant clean-confirmation round.** If the previous round was clean (zero accepted findings) and the only changes since were trivial/mechanical (no new logic), do NOT re-invoke the full reviewer pool just to confirm cleanliness — that is a wasted round. Proceed to Phase 4.5. Only re-invoke a reviewer when a substantive change was made after the clean round.
+**Do not run a redundant clean-confirmation round.** If the previous round was genuinely clean — exit condition 1: reviewers submitted zero findings (not merely zero ACCEPTED findings, which is the rejected-only case handled below) — and the only changes since were trivial/mechanical (no new logic), do NOT re-invoke the full reviewer pool just to confirm cleanliness — that is a wasted round. Proceed to Phase 4.5. Only re-invoke a reviewer when a substantive change was made after the clean round.
 
 0. **Rejected-only rounds do not advance the loop.** If the referee accepted zero findings in the last round (every finding rejected as unproven / out of scope / already resolved), do NOT invoke the addresser and do NOT count it as a productive round. Post the consolidated comment (Step C already did), then either treat the loop as converged and proceed to Phase 4.5, or, if the rejections were close calls, escalate for human direction. Never send an empty findings file to the addresser.
 

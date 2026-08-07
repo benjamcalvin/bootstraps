@@ -73,7 +73,7 @@ Assess whether the PR is **one logical change a reviewer can hold in their head 
 
 Report a one-line observation. Say the PR is cohesive, or name the seam it should be split along. Do not assign PASS/WARN/FAIL, do not count lines against a threshold, and do not treat this note as a merge blocker — it exists to inform the author and reviewers, not to gate.
 
-**Size-to-cap advisory (early split signal).** If the PR is over-scoped against the project's practical review size (roughly a few hundred net lines, or far larger than the change it claims to be), flag it explicitly and recommend splitting the out-of-scope work into child issues BEFORE implementation proceeds. A PR that balloons past reviewable size mid-lifecycle forces scope-splitting refine passes and extra review rounds — far cheaper to split up front. This is advisory, not a blocker.
+**Size-to-cap advisory (early split signal).** If the PR is over-scoped — far larger than the change it claims to be, or spanning multiple unrelated changes a reviewer cannot hold in one sitting — flag it and recommend splitting the out-of-scope work into child issues BEFORE implementation proceeds. This is a qualitative scope judgment, not a line-count threshold (see the scope note above). A PR that balloons past reviewable size mid-lifecycle forces scope-splitting refine passes and extra review rounds — far cheaper to split up front. This is advisory, not a blocker.
 
 ### Output Format
 
