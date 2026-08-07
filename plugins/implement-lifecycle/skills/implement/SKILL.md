@@ -129,7 +129,7 @@ EOF
 1. **Clean exit (Step B):** Zero findings survive referee filtering → skip to Phase 4.5.
 2. **Escalation exit (Step E):** A scope/convergence guard fires, OR convergence stalls (two consecutive rounds forward no fewer accepted findings than the prior round, or a round forwards only rejected findings), OR round 5 is reached → escalate and stop. A round that forwards ONLY rejected findings (nothing accepted) is not a productive round — it counts as stalled convergence, not a new clean round.
 
-There is no other way to exit this loop. Each round: Specialist reviewers → Referee (you) → Addresser → next round. **The loop continues while it is converging; it escalates when convergence stalls.** Convergence = each round forwards strictly fewer or equal accepted findings than the prior round, with no open production defect and no review-introduced churn. Escalation is driven by stalled convergence or a scope guard, not by a fixed round count. Do not continue past 5 rounds without explicit user authorization even when converging, but you are NOT required to hit 5 — escalate as soon as convergence stalls.
+There is no other way to exit this loop. Each round: Specialist reviewers → Referee (you) → Addresser → next round. **The loop continues while it is converging; it escalates when convergence stalls.** Convergence = each round forwards no more accepted findings than the prior round, with no open production defect and no review-introduced churn. Escalation is driven by stalled convergence or a scope guard, not by a fixed round count. Do not continue past 5 rounds without explicit user authorization even when converging, but you are NOT required to hit 5 — escalate as soon as convergence stalls.
 
 #### Before Round 1
 
