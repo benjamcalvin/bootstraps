@@ -127,9 +127,9 @@ EOF
 **This is a mandatory loop.** It repeats Steps A → B → C → D → E for each round until one of exactly two exit conditions is met:
 
 1. **Clean exit (Step B):** Zero findings survive referee filtering — including a round whose findings were all rejected — → skip to Phase 4.5. If the rejections were close calls (the underlying concern was valid but the remedy was out of scope), consider escalating for human direction instead of silently proceeding.
-2. **Escalation exit (Step E):** A scope/convergence guard fires, OR convergence stalls (two consecutive rounds forward no fewer accepted findings than the prior round), OR round 5 is reached → escalate and stop.
+2. **Escalation exit (Step E):** A scope/convergence guard fires, OR convergence stalls (two consecutive rounds forward no fewer accepted findings than the prior round), OR round 5 is reached → stop the loop and run the **convergence-recovery decision** in Step E. Recovery is not a single path: revise-and-reset, restart-clean, or escalate to the user.
 
-There is no other way to exit this loop. Each round: Specialist reviewers → Referee (you) → Addresser → next round. **The loop continues while it is converging; it escalates when convergence stalls.** Convergence = each round forwards **strictly fewer** accepted findings than the prior round, with no open production defect and no review-introduced churn. Stalled = two consecutive rounds forward no fewer accepted findings than the prior round. Escalation is driven by stalled convergence or a scope guard, not by a fixed round count. Do not continue past 5 rounds without explicit user authorization even when converging, but you are NOT required to hit 5 — escalate as soon as convergence stalls.
+There is no other way to exit this loop. Each round: Specialist reviewers → Referee (you) → Addresser → next round. **The loop continues while it is converging; it escalates when convergence stalls.** Convergence = each round forwards **strictly fewer** accepted findings than the prior round, with no open production defect and no review-introduced churn. Stalled = two consecutive rounds forward no fewer accepted findings than the prior round. Escalation is driven by stalled convergence or a scope guard, not by a fixed round count. Do not continue past 5 rounds without explicit user authorization even when converging, but you are NOT required to hit 5 — on a stall, first consider recovering the run (revise-and-reset or restart-clean, below) before escalating to a human.
 
 #### Before Round 1
 
@@ -282,7 +282,13 @@ The addresser has pushed fixes. Check convergence and the escalation limit, then
 
 1. **Convergence audit after round 2:** After two non-clean rounds, post an audit that maps the remaining findings and review-added changes to the original acceptance criteria. For each distinct sub-problem or code area still under contention, record the finding DENSITY (how many findings have targeted that same sub-problem across rounds). A sub-problem with repeated findings across multiple rounds is a convergence trap — flag it. State whether the loop is converging and whether remaining findings primarily concern the original task or architecture introduced during addressing. If they primarily concern review-introduced architecture, stop before round 3 and request human direction. Recommend bounded simplification or removal of that architecture.
 
-2. **Check escalation limit:** Escalate when (a) this was round 5 or higher, OR (b) convergence stalled (see exit condition 2) — do **not** continue unless the user explicitly authorized additional rounds:
+2. **Convergence-recovery decision:** When the escalation exit fires (round 5 reached, convergence stalled, or a scope guard), do **not** default to stopping. Diagnose WHY the loop is not converging and choose one of three recovery paths:
+
+   - **Revise-and-reset — original scope insufficiently specific.** If the reviews kept surfacing ambiguity — underspecified acceptance criteria, conflicting requirements, or findings the original issue never pinned down — the scope was the problem, not the implementation. Take the learnings from this run (what the reviews revealed about the real requirement), reset the branch to a clean head, revise the issue/requirements to be specific and unambiguous, and open a **clean PR** built on the revised issue.
+   - **Restart-clean — gone off track.** If the loop is dominated by review-introduced architecture or scope creep that drifted from the original issue, the run went off track. Start clean — discard the drifted work — but restart with **clearer guidelines** that bind the work back to the original issue scope.
+   - **Escalate to the user.** If the stall is a genuinely hard ambiguity that self-revision cannot resolve, or the user should choose between the paths, escalate. This remains a valid option — self-recovery is not mandatory.
+
+   Do **not** extend the SAME loop past round 5 without explicit user authorization; recovery means starting a NEW loop (revised or clean), not continuing the stalled one. If you escalate, post the escalation comment and stop:
 
 ```
 gh pr comment <number> --body "$(cat <<'EOF'
@@ -424,6 +430,8 @@ Report the result to the user.
 ---
 
 ## Escalation
+
+Before flagging the human, consider whether a stalled run can be recovered autonomously (see the convergence-recovery decision in Phase 4 Step E): revise-and-reset on an insufficiently-specific scope, or restart-clean when the work has gone off track. Escalation to the human is the fallback when neither self-recovery path applies or the user should decide.
 
 Stop and flag the human directly (not as a PR comment) when encountering:
 
