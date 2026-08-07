@@ -73,9 +73,9 @@ Write the minimum code to make all tests pass:
 - Don't "improve" adjacent code, formatting, or comments
 - Don't add features beyond what was asked
 
-### Step 4: Run the Full Test Suite
+### Step 4: Run Focused Verification
 
-Run the project's test suite and linters. All tests must pass. All lints must pass. If tests fail, fix the code (not the tests).
+Run the tests, linters, and a build for the packages/modules you changed. Every test you touched must pass; every lint must pass. If tests fail, fix the code (not the tests). Do NOT re-run the entire repository suite here — the authoritative full-suite run is owned by `verify` once at the final head (see the implement skill). Running the full suite at every implement/address phase is the single biggest wall-clock waste in the lifecycle.
 
 ### Step 5: Manual Verification
 
