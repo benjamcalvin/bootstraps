@@ -60,6 +60,8 @@ Choose subagent intelligence per delegated task. Default to the balanced mid-tie
 
 Pass the complete payload shown at each call site. Do not assume the delegated agent inherits scratch context from the orchestrator. Launch independent specialist reviewers in parallel and wait for all selected reviewers before refereeing.
 
+**Isolate delegated context.** Each delegated agent (implementer, addresser, reviewer, verifier) should be launched with MINIMAL, FRESH context: the PR/issue being worked, the governing contract (issue body, ADR, or spec), the current diff, and any prior accepted/rejected findings — NOT the orchestrator's accumulated cross-PR history. Long-lived or reused sessions (e.g., a docs gate or verifier kept alive across multiple PRs) accumulate unrelated context and degrade review quality; reset or bound them per PR. Assemble a single shared **context bundle** (issue, contract, diff, prior findings, referee decisions) and pass the same bundle to every subagent for that PR, so each starts from the same ground truth instead of re-deriving it.
+
 ---
 
 ### Entry Point
@@ -221,7 +223,7 @@ Use these calibration cases:
 
 #### Step C: Post the Consolidated Review & Write Findings File
 
-Publish **one** comment per round covering every reviewer plus your referee decisions. Reviewers posted nothing, so this comment is the entire audit trail for the round — reproduce each reviewer's findings faithfully rather than summarizing them away.
+Publish **one** comment per round covering every reviewer plus your referee decisions. Reviewers posted nothing, so this comment is the entire audit trail for the round — reproduce each reviewer's findings faithfully rather than summarizing them away. Even when review dispatch is folded inline into the implement session (common for small PRs), record each reviewer's verdict (PASS or findings) in this comment so the review is provable on the PR trail — never let a review that ran go unrecorded.
 
 ```
 gh pr comment <number> --body "$(cat <<'EOF'
