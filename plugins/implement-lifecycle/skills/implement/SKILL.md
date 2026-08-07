@@ -223,7 +223,7 @@ Use these calibration cases:
 
 #### Step C: Post the Consolidated Review & Write Findings File
 
-Publish **one** comment per round covering every reviewer plus your referee decisions. Reviewers posted nothing, so this comment is the entire audit trail for the round — reproduce each reviewer's findings faithfully rather than summarizing them away. Even when review dispatch is folded inline into the implement session (common for small PRs), record each reviewer's verdict (PASS or findings) in this comment so the review is provable on the PR trail — never let a review that ran go unrecorded.
+Publish **one** comment per round covering every reviewer plus your referee decisions. Reviewers posted nothing, so this comment is the entire audit trail for the round — reproduce each reviewer's findings faithfully rather than summarizing them away. For small PRs you may fold review dispatch inline into the implement session to save context, but this is a deliberate choice that must not weaken the adversarial implementer/reviewer separation — each reviewer still evaluates independently, and you must record each reviewer's individual verdict (PASS or findings) in this comment so the review is provable on the PR trail. Never let a review that ran go unrecorded.
 
 ```
 gh pr comment <number> --body "$(cat <<'EOF'
