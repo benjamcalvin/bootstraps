@@ -126,10 +126,10 @@ EOF
 
 **This is a mandatory loop.** It repeats Steps A → B → C → D → E for each round until one of exactly two exit conditions is met:
 
-1. **Clean exit (Step B):** Zero findings survive referee filtering → skip to Phase 4.5.
-2. **Escalation exit (Step E):** A scope/convergence guard fires, OR convergence stalls (two consecutive rounds forward no fewer accepted findings than the prior round, or a round forwards only rejected findings), OR round 5 is reached → escalate and stop. A round that forwards ONLY rejected findings (nothing accepted) is not a productive round — it counts as stalled convergence, not a new clean round.
+1. **Clean exit (Step B):** Zero findings survive referee filtering — including a round whose findings were all rejected — → skip to Phase 4.5. If the rejections were close calls (the underlying concern was valid but the remedy was out of scope), consider escalating for human direction instead of silently proceeding.
+2. **Escalation exit (Step E):** A scope/convergence guard fires, OR convergence stalls (two consecutive rounds forward no fewer accepted findings than the prior round), OR round 5 is reached → escalate and stop.
 
-There is no other way to exit this loop. Each round: Specialist reviewers → Referee (you) → Addresser → next round. **The loop continues while it is converging; it escalates when convergence stalls.** Convergence = each round forwards no more accepted findings than the prior round, with no open production defect and no review-introduced churn. Escalation is driven by stalled convergence or a scope guard, not by a fixed round count. Do not continue past 5 rounds without explicit user authorization even when converging, but you are NOT required to hit 5 — escalate as soon as convergence stalls.
+There is no other way to exit this loop. Each round: Specialist reviewers → Referee (you) → Addresser → next round. **The loop continues while it is converging; it escalates when convergence stalls.** Convergence = each round forwards **strictly fewer** accepted findings than the prior round, with no open production defect and no review-introduced churn. Stalled = two consecutive rounds forward no fewer accepted findings than the prior round. Escalation is driven by stalled convergence or a scope guard, not by a fixed round count. Do not continue past 5 rounds without explicit user authorization even when converging, but you are NOT required to hit 5 — escalate as soon as convergence stalls.
 
 #### Before Round 1
 
@@ -215,7 +215,7 @@ Use these calibration cases:
 - Concrete bug with a bounded fix: **Accept** the smallest fix.
 - Valid concern paired with an architectural remedy: accept a smaller in-scope correction if one exists; otherwise **Reject** it for this PR and escalate or file a follow-up.
 - Speculative hardening with no demonstrated failure: **Reject**.
-- Third non-clean round dominated by review-introduced complexity: run the convergence audit, stop before round 4, and request human direction. Recommend bounded simplification or removal of the review-introduced architecture.
+- Second non-clean round dominated by review-introduced complexity: run the convergence audit, stop before round 3, and request human direction. Recommend bounded simplification or removal of the review-introduced architecture.
 
 **If zero findings survive filtering**, still post the consolidated comment from Step C so the reviewers' raw findings and your rejection reasoning stay on the record, ending it with `**Result:** no actionable findings — review loop complete.` Then skip to Phase 4.5.
 
@@ -372,7 +372,7 @@ Payload: <pr-number> docs-<round-number> /tmp/implement-docs-findings-pr-<PR>-ro
 
 #### Step D: Evaluate Continuation
 
-Re-invoke the docs reviewer to verify fixes. The round counter starts from round 1 (independent of Phase 4 rounds). Loop until clean. Apply the same round-3 convergence audit and **five-round hard limit** as Phase 4.
+Re-invoke the docs reviewer to verify fixes. The round counter starts from round 1 (independent of Phase 4 rounds). Loop until clean. Apply the same round-2 convergence audit and convergence-based escalation (round-5 ceiling) as Phase 4.
 
 ---
 
