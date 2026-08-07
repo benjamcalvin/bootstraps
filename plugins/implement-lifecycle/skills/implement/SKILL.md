@@ -188,9 +188,13 @@ Each reviewer fetches PR context and returns its findings to you. Reviewers do *
 
 **Reviewers should EXECUTE the PR's own acceptance commands when feasible** — run the tests, linters, or commands the PR claims to satisfy — rather than only reasoning about them. Reasoning alone misses mechanical acceptance failures (self-referential scans, off-by-one anchors, unbuilt code). If a reviewer cannot execute (no environment), it must state that limitation explicitly rather than assert correctness it did not verify.
 
+**Keep the reviewer set stable across rounds.** Once you select a reviewer set for round 1, keep the same specialties for subsequent rounds unless the change surface genuinely shifts. Dropping a specialist mid-loop (e.g. no correctness reviewer in round 3) leaves its domain unguarded and can let a regression slip through. Only drop a reviewer when its specialty is provably no longer touched.
+
 #### Step B: Referee Evaluation
 
 When reviewers return, **independently evaluate every finding**. Read the relevant code yourself. Do not rubber-stamp and do not dismiss without checking.
+
+**Deduplicate across reviewers first.** Two specialists often return the same underlying gap (e.g. architecture and security both flag the same catalog conflict, or three reviewers all flag the same orphan-demanded field). Before evaluating, collapse duplicate findings into one entry, note the cross-reviewer duplication, and evaluate that single concern once. Do not count a duplicate as multiple independent findings or forward it to the addresser multiple times.
 
 Evaluate two questions separately:
 
@@ -285,6 +289,8 @@ The addresser will fix issues, run tests, commit, push, and return a summary.
 #### Step E: Next Round
 
 The addresser has pushed fixes. Check convergence and the escalation limit, then continue.
+
+**Do not run a redundant clean-confirmation round.** If the previous round was clean (zero accepted findings) and the only changes since were trivial/mechanical (no new logic), do NOT re-invoke the full reviewer pool just to confirm cleanliness — that is a wasted round. Proceed to Phase 4.5. Only re-invoke a reviewer when a substantive change was made after the clean round.
 
 0. **Rejected-only rounds do not advance the loop.** If the referee accepted zero findings in the last round (every finding rejected as unproven / out of scope / already resolved), do NOT invoke the addresser and do NOT count it as a productive round. Post the consolidated comment (Step C already did), then either treat the loop as converged and proceed to Phase 4.5, or, if the rejections were close calls, escalate for human direction. Never send an empty findings file to the addresser.
 
