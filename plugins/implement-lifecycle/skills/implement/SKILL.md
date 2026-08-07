@@ -143,7 +143,7 @@ git fetch origin "$BASE_BRANCH"
 git rebase "origin/$BASE_BRANCH"
 ```
 
-If conflicts arise, resolving them is a **permitted git-mechanical carve-out** to the no-edit contract. Keep it strictly mechanical, then run the full test suite and force-push the rebased branch:
+If conflicts arise, resolving them is a **permitted git-mechanical carve-out** to the no-edit contract. Keep it strictly mechanical, then run the affected package tests (focused, not the full suite — see the full-suite-once rule below) and force-push the rebased branch:
 
 ```bash
 git push --force-with-lease
