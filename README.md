@@ -141,7 +141,7 @@ $issue-management:refine-issue #42
 
 ### implement-lifecycle
 
-Provides a shared lifecycle orchestrator, two utility skills, three delegated worker roles, and five specialist review roles across Claude Code and Codex:
+Provides a shared lifecycle orchestrator, two utility skills, three delegated worker roles, a baseline general reviewer, four optional targeted specialists, and a separate docs gate across Claude Code and Codex:
 
 **Skills:**
 
@@ -159,19 +159,20 @@ Provides a shared lifecycle orchestrator, two utility skills, three delegated wo
 | `implement-address` | Address filtered review findings from the referee's action plan. |
 | `verify` | End-to-end verification — exercises the real running system, checks downstream effects, regression tests existing flows. |
 
-**Specialist review roles** (invoked in parallel during the review loop):
+**Review roles:**
 
 | Role | Focus |
 |-------|-------|
-| `review-correctness` | Logic bugs, edge cases, error handling, race conditions |
-| `review-security` | AuthZ, injection risks, PII handling, spec conformance |
-| `review-architecture` | Pattern consistency, module boundaries, coupling, forward-looking design |
-| `review-testing` | Test coverage, assertion quality, edge cases, test anti-patterns |
-| `review-docs` | Docs compliance gate (Phase 4.5) — missing docs for new behavior, stale docs contradicted by code changes, frontmatter/cross-link correctness |
+| `review-general` | Baseline holistic reviewer for requirements, project conventions, established patterns, scope, integration, and test adequacy. |
+| `review-correctness` | Optional targeted specialist for logic bugs, edge cases, error handling, and race conditions. |
+| `review-security` | Optional targeted specialist for AuthZ, injection risks, and PII handling. |
+| `review-architecture` | Optional targeted specialist for module boundaries, coupling, and forward-looking design. |
+| `review-testing` | Optional targeted specialist for test coverage, assertion quality, edge cases, and test anti-patterns. |
+| `review-docs` | Separate Phase 4.5 docs-compliance gate for missing docs, stale docs, and frontmatter/cross-link correctness. |
 
 Heavy phases always run in isolated delegated agents. Each worker skill is the canonical workflow; Claude Code's named subagents are thin runtime adapters that preload it, while Codex spawns a general subagent that loads the matching `$implement-lifecycle:<skill>`. Reviewer adapters deny only direct file-editing tools, leaving the agents free to use available read-only research, documentation, web, and MCP capabilities when the review requires them.
 
-Reviewers return their findings to the orchestrator and post nothing themselves. The orchestrator is the sole publisher to the PR timeline: it publishes one consolidated comment per round carrying every reviewer's findings plus its referee decisions, so a four-reviewer round leaves one comment instead of five.
+Reviewers return their findings to the orchestrator and post nothing themselves. The orchestrator is the sole publisher to the PR timeline: it publishes one consolidated comment per round carrying every reviewer's findings plus its referee decisions.
 
 Codex CLI 0.145.0 note: full lifecycle delegation works in a standard Codex session; headless `codex exec --ephemeral` sessions fail to initialize spawned subagents.
 
