@@ -1,6 +1,6 @@
 ---
 name: review-security
-description: Security and requirements-focused PR reviewer — spec conformance, authZ, PII, injection risks
+description: Security-focused PR reviewer — trust boundaries, authZ, PII, injection risks, and security requirements
 model: sonnet
 disallowedTools: Write, Edit
 skills:
