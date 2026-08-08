@@ -31,7 +31,7 @@ You are a **lean orchestrator** — a supervisor who delegates, not an implement
 
 **Permitted carve-out — orchestration scratch files:** Writing non-source orchestration files (e.g. the `/tmp/implement-findings-*.md` findings files described in Phase 4) via Bash is expected and allowed. The prohibition targets modifying the codebase under review — source, tests, and docs — not writing your own scratch/findings files to `/tmp`.
 
-**You are the sole publisher to the PR timeline.** Specialist reviewers return their findings to you and post nothing themselves; you publish exactly **one consolidated comment per review round** carrying every reviewer's findings alongside your referee decisions. This keeps a four-reviewer round at one comment instead of five. If a reviewer reports having posted to GitHub, it violated its contract — note it and continue; do not mirror the duplicate.
+**You are the sole publisher to the PR timeline.** Reviewers return their findings to you and post nothing themselves; you publish exactly **one consolidated comment per review round** carrying every reviewer's findings alongside your referee decisions. If a reviewer reports having posted to GitHub, it violated its contract — note it and continue; do not mirror the duplicate.
 
 **Drive forward autonomously.** When you have a plan (from the user or an issue), execute all phases without pausing for approval between them. Do not ask "shall I proceed to the next phase?" — just proceed. Only stop to ask the user when you hit a genuine ambiguity, a blocking decision outside the task's scope, or an escalation condition listed below.
 
@@ -53,12 +53,12 @@ Keep the lifecycle semantics below identical in both clients and map each delega
 |-------|-------------|-------|
 | Implement | Invoke the `implement-code` named subagent | Spawn a subagent whose prompt begins `Use $implement-lifecycle:implement-code` |
 | Address | Invoke the `implement-address` named subagent | Spawn a subagent whose prompt begins `Use $implement-lifecycle:implement-address` |
-| Review/docs | Invoke the matching `review-*` named subagent | Spawn one subagent per specialty whose prompt begins `Use $implement-lifecycle:review-<specialty>` |
+| Review/docs | Invoke the matching `review-*` named subagent | Spawn one subagent per selected reviewer whose prompt begins `Use $implement-lifecycle:review-<type>` |
 | Verify | Invoke the `verify` named subagent | Spawn a subagent whose prompt begins `Use $implement-lifecycle:verify` |
 
 Choose subagent intelligence per delegated task. Default to the balanced mid-tier model: **Sonnet** in Claude Code and **`gpt-5.6-terra`** in Codex. Use a stronger frontier model only for exceptionally complex work such as novel architecture, subtle security or concurrency reasoning, or broad multi-system changes. Use a lighter model only for exceptionally simple, mechanical, tightly bounded work. Make this judgment per delegation rather than assigning one model tier to the entire lifecycle. If the client cannot select an exact model, use its closest balanced equivalent and continue.
 
-Pass the complete payload shown at each call site. Do not assume the delegated agent inherits scratch context from the orchestrator. Launch independent specialist reviewers in parallel and wait for all selected reviewers before refereeing.
+Pass the complete payload shown at each call site. Do not assume the delegated agent inherits scratch context from the orchestrator. When specialists are selected, launch all reviewers in parallel and wait for them before refereeing.
 
 **Isolate delegated context.** Each delegated agent (implementer, addresser, reviewer, verifier) should be launched with MINIMAL, FRESH context: the PR/issue being worked, the governing contract (issue body, ADR, or spec), the current diff, and any prior accepted/rejected findings — NOT the orchestrator's accumulated cross-PR history. Long-lived or reused sessions (e.g., a docs gate or verifier kept alive across multiple PRs) accumulate unrelated context and degrade review quality; reset or bound them per PR. Assemble a single shared **context bundle** (issue, contract, diff, prior findings, referee decisions) and pass the same bundle to every subagent for that PR, so each starts from the same ground truth instead of re-deriving it.
 
@@ -81,7 +81,7 @@ Any text after the leading token is **instructions that control what you do**. T
 | Instructions | Effect |
 |-------------|--------|
 | *(none)* | Default lifecycle: issue/freeform → Phases 1–6; PR number → Phases 4–6 |
-| "just review" / "review only" | Run specialist reviewers only, then post the consolidated review yourself (Phase 4 Step C). Stop. |
+| "just review" / "review only" | Run the general reviewer plus any warranted specialists, then post the consolidated review yourself (Phase 4 Step C). Stop. |
 | "address the review feedback" | Run the addresser only against existing review findings. |
 | "review and address" | Run review/address loop but don't merge. |
 | "skip planning" / "just implement" | Pass "skip planning" to implement-code so it skips codebase exploration and plan formulation. |
@@ -131,7 +131,7 @@ EOF
 1. **Clean exit (Step B):** Zero findings survive referee filtering — including a round whose findings were all rejected — → skip to Phase 4.5. If the rejections were close calls (the underlying concern was valid but the remedy was out of scope), consider escalating for human direction instead of silently proceeding.
 2. **Escalation exit (Step E):** A scope/convergence guard fires, OR convergence stalls (two consecutive rounds forward no fewer accepted findings than the prior round), OR round 5 is reached → stop the loop and run the **convergence-recovery decision** in Step E. Recovery is not a single path: revise-and-reset, restart-clean, or escalate to the user.
 
-There is no other way to exit this loop. Each round: Specialist reviewers → Referee (you) → Addresser → next round. **The loop continues while it is converging; it escalates when convergence stalls.** Convergence = each round forwards **strictly fewer** accepted findings than the prior round, with no open production defect and no review-introduced churn. Stalled = two consecutive rounds forward no fewer accepted findings than the prior round. Escalation is driven by stalled convergence or a scope guard, not by a fixed round count. Do not continue past 5 rounds without explicit user authorization even when converging, but you are NOT required to hit 5 — on a stall, first consider recovering the run (revise-and-reset or restart-clean, below) before escalating to a human.
+There is no other way to exit this loop. Each round: General review plus any targeted specialist reviews → Referee (you) → Addresser → next round. **The loop continues while it is converging; it escalates when convergence stalls.** Convergence = each round forwards **strictly fewer** accepted findings than the prior round, with no open production defect and no review-introduced churn. Stalled = two consecutive rounds forward no fewer accepted findings than the prior round. Escalation is driven by stalled convergence or a scope guard, not by a fixed round count. Do not continue past 5 rounds without explicit user authorization even when converging, but you are NOT required to hit 5 — on a stall, first consider recovering the run (revise-and-reset or restart-clean, below) before escalating to a human.
 
 #### Before Round 1
 
@@ -164,21 +164,25 @@ Do **NOT** fetch the full diff — it fills the context window. Read specific fi
 
 #### Step A: Invoke Reviewers
 
-**Dynamically select** which specialist reviewers to invoke based on the complexity, risk, and surface area of the changes. Be judicious: use the smallest sufficient reviewer set for the PR, not the full pool by default. Balance thoroughness with efficiency — invoke the subset that matches the change:
+Invoke **`review-general` in every round**. It owns a complete, proportionate baseline review: correctness, issue and PR requirements, project conventions and standards, established local patterns, scope, maintainability, integration fit, and basic test adequacy.
+
+Then decide whether the PR has a concrete high-risk area that needs deeper specialist attention. Specialists are optional and supplement the general review; they do not repeat it:
 
 - `review-correctness` — Logic bugs, edge cases, error handling, race conditions
-- `review-security` — Spec conformance, authZ, PII, injection risks
+- `review-security` — Trust boundaries, authZ, sensitive data, security requirements, injection risks
 - `review-architecture` — Pattern consistency, module boundaries, coupling, forward-looking design
 - `review-testing` — Test coverage, assertion quality, edge cases, test anti-patterns
 
 Use judgment from the PR summary, changed-file list, and issue/spec context:
-- **Always include `review-correctness`** when production logic changed.
-- Include **`review-security`** for auth/authz, user input, secrets, external integrations, data handling, permission boundaries, or whenever requirements/spec conformance is important.
-- Include **`review-architecture`** for multi-module changes, new abstractions, dependency shifts, public APIs, or structural refactors.
-- Include **`review-testing`** when tests changed, new behavior was added, or existing behavior changed without obvious regression coverage.
-- Skip reviewers whose specialty clearly does not apply; do not summon them just for ritual coverage.
+- **Routine, well-bounded PRs:** run only `review-general`.
+- Add **`review-correctness`** only for unusually subtle algorithms, concurrency, state transitions, resource lifecycles, or error-path-heavy logic.
+- Add **`review-security`** for auth/authz, untrusted input, secrets, external integrations, sensitive data, or permission boundaries.
+- Add **`review-architecture`** for consequential new abstractions, dependency shifts, public APIs, structural refactors, or changes spanning architectural boundaries.
+- Add **`review-testing`** when test strategy itself is risky: complex fixtures, weak or missing regression coverage, multiple test layers, nondeterminism, or substantial test-harness changes.
+- Prefer zero specialists for routine work and one specialist for a focused risk. Use multiple specialists only when the PR genuinely contains multiple independent high-risk surfaces, and record why each was selected.
+- Do not select a specialist merely because files in its domain changed. The general reviewer already covers ordinary correctness, patterns, requirements, and test adequacy.
 
-**Always invoke selected reviewers in parallel through the client adapter:**
+Invoke the general reviewer and any selected specialists in parallel through the client adapter:
 
 ```
 Payload: Review PR #<pr-number>, round <round-number>
@@ -188,7 +192,7 @@ Each reviewer fetches PR context and returns its findings to you. Reviewers do *
 
 **Reviewers should EXECUTE the PR's own acceptance commands when feasible** — run the tests, linters, or commands the PR claims to satisfy — rather than only reasoning about them. Reasoning alone misses mechanical acceptance failures (self-referential scans, off-by-one anchors, unbuilt code). If a reviewer cannot execute (no environment), it must state that limitation explicitly rather than assert correctness it did not verify.
 
-**Keep the reviewer set stable across rounds.** Once you select a reviewer set for round 1, keep the same specialties for subsequent rounds unless the change surface genuinely shifts. Dropping a specialist mid-loop (e.g. no correctness reviewer in round 3) leaves its domain unguarded and can let a regression slip through. Only drop a reviewer when its specialty is provably no longer touched.
+**Reassess specialists each round.** Always keep `review-general`. Re-invoke a specialist only when the latest fix delta or an unresolved accepted finding still touches its high-risk area. Drop specialists whose concern is resolved and whose area was not changed; do not spend another review merely to preserve the prior round's roster.
 
 #### Step B: Referee Evaluation
 
@@ -233,20 +237,22 @@ Use these calibration cases:
 
 #### Step C: Post the Consolidated Review & Write Findings File
 
-Publish **one** comment per round covering every reviewer plus your referee decisions. Reviewers posted nothing, so this comment is the entire audit trail for the round — reproduce each reviewer's findings faithfully rather than summarizing them away. For small PRs you may fold review dispatch inline into the implement session to save context, but this is a deliberate choice that must not weaken the adversarial implementer/reviewer separation — each reviewer still evaluates independently, and you must record each reviewer's individual verdict (PASS or findings) in this comment so the review is provable on the PR trail. Never let a review that ran go unrecorded.
+Publish **one** comment per round covering every reviewer plus your referee decisions. Reviewers posted nothing, so this comment is the entire audit trail for the round — reproduce each reviewer's findings faithfully rather than summarizing them away. Record every reviewer that ran and its verdict (PASS or findings). Never let a review that ran go unrecorded.
 
 ```
 gh pr comment <number> --body "$(cat <<'EOF'
 ## Review Round <N> — Consolidated Review & Referee Decisions
 
-**Reviewers run:** <comma-separated list of specialties invoked>
+**Reviewers run:** general<comma-separated targeted specialists, if any>
+
+**Specialist rationale:** <why each specialist was needed, or "none — general review was sufficient">
 
 ### Reviewer Findings
 
-#### Correctness
+#### General
 <that reviewer's returned findings, verbatim under its Action Required / Recommended / Minor headings>
 
-#### Security
+#### <Specialty, only when invoked>
 <...>
 
 <one section per reviewer invoked; note "no findings" where a reviewer returned clean>
@@ -290,7 +296,7 @@ The addresser will fix issues, run tests, commit, push, and return a summary.
 
 The addresser has pushed fixes. Check convergence and the escalation limit, then continue.
 
-**Do not run a redundant clean-confirmation round.** If the previous round was genuinely clean — exit condition 1: reviewers submitted zero findings (not merely zero ACCEPTED findings, which is the rejected-only case handled below) — and the only changes since were trivial/mechanical (no new logic), do NOT re-invoke the full reviewer pool just to confirm cleanliness — that is a wasted round. Proceed to Phase 4.5. Only re-invoke a reviewer when a substantive change was made after the clean round.
+**Do not run a redundant clean-confirmation round.** If the previous round was genuinely clean — exit condition 1: reviewers submitted zero findings (not merely zero ACCEPTED findings, which is the rejected-only case handled below) — and the only changes since were trivial/mechanical (no new logic), do NOT re-invoke reviewers just to confirm cleanliness — that is a wasted round. Proceed to Phase 4.5. Only re-invoke a reviewer when a substantive change was made after the clean round.
 
 0. **Rejected-only rounds do not advance the loop.** If the referee accepted zero findings in the last round (every finding rejected as unproven / out of scope / already resolved), do NOT invoke the addresser and do NOT count it as a productive round. Post the consolidated comment (Step C already did), then either treat the loop as converged and proceed to Phase 4.5, or, if the rejections were close calls, escalate for human direction. Never send an empty findings file to the addresser.
 
