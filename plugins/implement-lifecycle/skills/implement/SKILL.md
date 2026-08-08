@@ -326,9 +326,9 @@ Then stop and inform the user directly.
 
 ### Phase 4.5: Docs Compliance Gate
 
-After the code review/address loop converges, run the docs curation gate. **This gate is mandatory even if the PR contains no documentation file changes.** The docs reviewer is a curator, not a diff checker — it proactively identifies where documentation is missing, outdated, or contradicted by the code changes. A PR that adds a new CLI command, changes a default, or restructures internals may need docs updates even though no `.md` files were touched.
+After the code review/address loop converges, run the docs curation gate. **This gate is mandatory for any PR with a docs-relevant surface** — a change to public-facing behavior (new CLI command, changed default, public API, plugin surface, config option), a change that restructures internals with observable effects, or any change to documentation files. The docs reviewer is a curator, not a diff checker — it proactively identifies where documentation is missing, outdated, or contradicted by the code changes. A PR that adds a new CLI command, changes a default, or restructures internals may need docs updates even though no `.md` files were touched. **The gate may be skipped only for a pure internal/mechanical change with no observable or documented surface** (e.g. a private refactor with no behavior change and no docs files touched).
 
-**Do NOT include `review-docs` in the Phase 4 reviewer pool.** It runs only here, after the code review loop is complete. **Do NOT skip this phase** based on the file list — the reviewer itself will determine if no docs updates are needed.
+**Do NOT include `review-docs` in the Phase 4 reviewer pool.** It runs only here, after the code review loop is complete — this is the single docs owner for the lifecycle. **Do NOT skip this phase** just because the file list shows no `.md` files; judge docs-relevance by the observable surface, not the file list. When in doubt, run it — it is cheap and it catches real stale-docs gaps.
 
 #### Step A: Invoke Docs Reviewer
 
