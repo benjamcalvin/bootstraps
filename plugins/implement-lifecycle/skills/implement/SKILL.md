@@ -143,11 +143,15 @@ git fetch origin "$BASE_BRANCH"
 git rebase "origin/$BASE_BRANCH"
 ```
 
-If conflicts arise, resolving them is a **permitted git-mechanical carve-out** to the no-edit contract. Keep it strictly mechanical, then run the full test suite and force-push the rebased branch:
+If conflicts arise, resolving them is a **permitted git-mechanical carve-out** to the no-edit contract. Keep it strictly mechanical, then run the affected package tests (focused, not the full suite — see the full-suite-once rule below) and force-push the rebased branch:
 
 ```bash
 git push --force-with-lease
 ```
+
+**Run the authoritative full suite ONCE per lifecycle, owned by `verify` at the final head.** Implementer and addresser run focused package tests + lint + build on their own changes; they do NOT re-run the entire suite at every phase. The single full-suite run happens in Phase 5 (verify) against the final merged state. This avoids the repeated full-suite re-runs that dominate wall-clock across phases.
+
+**Pin the toolchain once.** Use the project's pinned Go/toolchain version (e.g. `mise` or `go.mod`'s `go` directive) consistently across every phase. Do not let implementer, addresser, and verify each resolve a different toolchain — a mismatch (e.g. 1.25.5 vs 1.25.7) causes wasted full-suite failures that are not real regressions.
 
 Then fetch a lightweight PR summary for your own reference:
 ```bash
@@ -181,6 +185,8 @@ Payload: Review PR #<pr-number>, round <round-number>
 ```
 
 Each reviewer fetches PR context and returns its findings to you. Reviewers do **not** post to GitHub — you publish their findings in the consolidated comment in Step C, so keep each reviewer's returned text until then. In round 2 and later, tell reviewers to focus on unresolved accepted findings, the latest fix delta, and regressions introduced by accepted fixes. They must not reopen rejected findings or speculatively harden unrelated surfaces.
+
+**Reviewers should EXECUTE the PR's own acceptance commands when feasible** — run the tests, linters, or commands the PR claims to satisfy — rather than only reasoning about them. Reasoning alone misses mechanical acceptance failures (self-referential scans, off-by-one anchors, unbuilt code). If a reviewer cannot execute (no environment), it must state that limitation explicitly rather than assert correctness it did not verify.
 
 #### Step B: Referee Evaluation
 

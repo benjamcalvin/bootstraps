@@ -57,11 +57,13 @@ For each finding, take one of these actions:
 - Flag it in your summary with the evidence for and against
 - Do not guess or silently skip
 
-### Step 3: Run Full Verification
+**Preserve test evidence when compressing.** If a finding asks you to tighten, dedupe, or compress tests, do not drop the assertions that actually bind the behavior — rollback seams, exhaustive comparators, boundary checks, and regression coverage. Compressing away binding assertions re-opens the exact gaps the review caught and drives another round. Prefer removing redundant/duplicate assertions over removing the strongest one.
+
+### Step 3: Run Focused Verification
 
 After addressing all findings:
 
-1. **Run the full test suite and linters.** Every test must pass. Every lint must pass. If tests fail, fix the code — not the tests.
+1. **Run focused tests, linters, and a build** on the packages you changed. Every test you touched must pass; every lint must pass. If tests fail, fix the code — not the tests. Do NOT re-run the entire repository suite here: the authoritative full-suite run is owned by `verify` once at the final head (see the implement skill). Running the full suite at every address pass is the single biggest wall-clock waste in the lifecycle.
 2. **Spot-check your changes** — Read through your own diff. Did you introduce any new issues while fixing the review feedback?
 
 ### Step 4: Commit and Push
