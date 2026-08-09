@@ -51,14 +51,21 @@ Keep the lifecycle semantics below identical in both clients and map each delega
 
 | Phase | Claude Code | Codex |
 |-------|-------------|-------|
-| Implement | Invoke the `implement-code` named subagent | Spawn a subagent whose prompt begins `Use $implement-lifecycle:implement-code` |
-| Address | Invoke the `implement-address` named subagent | Spawn a subagent whose prompt begins `Use $implement-lifecycle:implement-address` |
-| Review/docs | Invoke the matching `review-*` named subagent | Spawn one subagent per selected reviewer whose prompt begins `Use $implement-lifecycle:review-<type>` |
-| Verify | Invoke the `verify` named subagent | Spawn a subagent whose prompt begins `Use $implement-lifecycle:verify` |
+| Implement | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:implement-code plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:implement-code` |
+| Address | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:implement-address plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:implement-address` |
+| Review general | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:review-general plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:review-general` |
+| Review correctness | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:review-correctness plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:review-correctness` |
+| Review security | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:review-security plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:review-security` |
+| Review architecture | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:review-architecture plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:review-architecture` |
+| Review testing | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:review-testing plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:review-testing` |
+| Review docs | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:review-docs plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:review-docs` |
+| Verify | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:verify plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:verify` |
 
 Choose subagent intelligence per delegated task. Default to the balanced mid-tier model: **Sonnet** in Claude Code and **`gpt-5.6-terra`** in Codex. Use a stronger frontier model only for exceptionally complex work such as novel architecture, subtle security or concurrency reasoning, or broad multi-system changes. Use a lighter model only for exceptionally simple, mechanical, tightly bounded work. Make this judgment per delegation rather than assigning one model tier to the entire lifecycle. If the client cannot select an exact model, use its closest balanced equivalent and continue.
 
 Pass the complete payload shown at each call site. Do not assume the delegated agent inherits scratch context from the orchestrator. When specialists are selected, launch all reviewers in parallel and wait for them before refereeing.
+
+If a subagent cannot discover or invoke its required skill, report that failed delegation and stop that phase. Do not execute the phase inline in the orchestrator.
 
 **Isolate delegated context.** Each delegated agent (implementer, addresser, reviewer, verifier) should be launched with MINIMAL, FRESH context: the PR/issue being worked, the governing contract (issue body, ADR, or spec), the current diff, and any prior accepted/rejected findings — NOT the orchestrator's accumulated cross-PR history. Long-lived or reused sessions (e.g., a docs gate or verifier kept alive across multiple PRs) accumulate unrelated context and degrade review quality; reset or bound them per PR. Assemble a single shared **context bundle** (issue, contract, diff, prior findings, referee decisions) and pass the same bundle to every subagent for that PR, so each starts from the same ground truth instead of re-deriving it.
 
