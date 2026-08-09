@@ -157,9 +157,12 @@ for plugin_dir in plugins/*/; do
   fi
 
   # implement-lifecycle distributes canonical worker skills, not Claude Code
-  # agent-template adapters. Every skill retains its Codex metadata.
+  # agent-template adapters. Every listed skill retains valid Codex metadata.
   if [ "$plugin_name" = "implement-lifecycle" ]; then
-    lifecycle_templates=$(find "$plugin_dir/agents" -type f -name '*.md' -print -quit 2>/dev/null)
+    lifecycle_templates=""
+    if [ -d "$plugin_dir/agents" ]; then
+      lifecycle_templates=$(find "$plugin_dir/agents" -type f -print -quit)
+    fi
     if [ -n "$lifecycle_templates" ]; then
       echo "  ERROR: implement-lifecycle must not distribute named agent templates"
       ERRORS=$((ERRORS + 1))
@@ -168,16 +171,31 @@ for plugin_dir in plugins/*/; do
     fi
 
     lifecycle_metadata_missing=false
-    for lifecycle_skill_dir in "$plugin_dir"/skills/*/; do
-      [ -d "$lifecycle_skill_dir" ] || continue
-      if [ ! -f "$lifecycle_skill_dir/agents/openai.yaml" ]; then
-        echo "  ERROR: $(basename "$lifecycle_skill_dir") is missing agents/openai.yaml"
+    lifecycle_metadata_invalid=false
+    lifecycle_skills=(
+      implement-code implement-address review-general review-correctness review-security
+      review-architecture review-testing review-docs verify
+      implement merge-pr pr-check
+    )
+    for lifecycle_skill in "${lifecycle_skills[@]}"; do
+      lifecycle_skill_dir="$plugin_dir/skills/$lifecycle_skill"
+      lifecycle_metadata="$lifecycle_skill_dir/agents/openai.yaml"
+      if [ ! -d "$lifecycle_skill_dir" ]; then
+        echo "  ERROR: implement-lifecycle is missing canonical skill directory: $lifecycle_skill"
         ERRORS=$((ERRORS + 1))
         lifecycle_metadata_missing=true
+      elif [ ! -s "$lifecycle_metadata" ]; then
+        echo "  ERROR: $lifecycle_skill is missing a non-empty agents/openai.yaml"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_metadata_missing=true
+      elif ! ruby -e 'require "yaml"; metadata = YAML.load_file(ARGV.fetch(0)); exit(metadata.is_a?(Hash) && metadata["interface"].is_a?(Hash))' "$lifecycle_metadata" > /dev/null 2>&1; then
+        echo "  ERROR: $lifecycle_skill has invalid agents/openai.yaml"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_metadata_invalid=true
       fi
     done
-    if [ "$lifecycle_metadata_missing" = false ]; then
-      echo "  OK: Every implement-lifecycle skill retains agents/openai.yaml"
+    if [ "$lifecycle_metadata_missing" = false ] && [ "$lifecycle_metadata_invalid" = false ]; then
+      echo "  OK: Every inventoried implement-lifecycle skill has valid agents/openai.yaml"
     fi
 
     if rg -q 'named (subagent|worker)|preloaded (worker )?skill|reviewer agent adapter' \
@@ -190,8 +208,20 @@ for plugin_dir in plugins/*/; do
 
     lifecycle_mapping_missing=false
     for lifecycle_worker in implement-code implement-address review-general review-correctness review-security review-architecture review-testing review-docs verify; do
-      if ! rg -Fq "implement-lifecycle:$lifecycle_worker" "$plugin_dir/skills/implement/SKILL.md"; then
-        echo "  ERROR: Lifecycle delegation mapping is missing $lifecycle_worker"
+      case "$lifecycle_worker" in
+        implement-code) phase="Implement" ;;
+        implement-address) phase="Address" ;;
+        review-general) phase="Review general" ;;
+        review-correctness) phase="Review correctness" ;;
+        review-security) phase="Review security" ;;
+        review-architecture) phase="Review architecture" ;;
+        review-testing) phase="Review testing" ;;
+        review-docs) phase="Review docs" ;;
+        verify) phase="Verify" ;;
+      esac
+      mapping_row="| $phase | Spawn a generic isolated subagent whose prompt begins \`Use the implement-lifecycle:$lifecycle_worker plugin skill\` | Spawn a generic isolated subagent whose prompt begins \`Use \$implement-lifecycle:$lifecycle_worker\` |"
+      if ! rg -Fq "$mapping_row" "$plugin_dir/skills/implement/SKILL.md"; then
+        echo "  ERROR: Lifecycle delegation table is missing the generic Claude/Codex mapping for $lifecycle_worker"
         ERRORS=$((ERRORS + 1))
         lifecycle_mapping_missing=true
       fi
@@ -202,14 +232,15 @@ for plugin_dir in plugins/*/; do
 
     lifecycle_reviewer_contract_missing=false
     for lifecycle_reviewer in review-general review-correctness review-security review-architecture review-testing review-docs; do
-      if ! rg -Fq 'Do not modify the reviewed codebase.' "$plugin_dir/skills/$lifecycle_reviewer/SKILL.md"; then
-        echo "  ERROR: $lifecycle_reviewer must prohibit modifying the reviewed codebase"
+      if ! rg -Fq 'Do not modify the reviewed codebase.' "$plugin_dir/skills/$lifecycle_reviewer/SKILL.md" || \
+        ! rg -Fq 'Do not post to GitHub.' "$plugin_dir/skills/$lifecycle_reviewer/SKILL.md"; then
+        echo "  ERROR: $lifecycle_reviewer must prohibit modifying reviewed code and posting to GitHub"
         ERRORS=$((ERRORS + 1))
         lifecycle_reviewer_contract_missing=true
       fi
     done
     if [ "$lifecycle_reviewer_contract_missing" = false ]; then
-      echo "  OK: Lifecycle reviewer skills prohibit modifying reviewed code"
+      echo "  OK: Lifecycle reviewer skills prohibit modifying reviewed code and posting to GitHub"
     fi
   fi
 
