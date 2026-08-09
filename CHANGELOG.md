@@ -10,11 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Codex manifest and marketplace validation in `validate-all.sh`
+- Pi package metadata and installation guidance for `implement-lifecycle`; Pi users can discover its shared skills and delegate through their separately installed `pi-subagents`
 
 ### Changed
 
 - Documented the repository's Claude Code/Codex compatibility matrix and installation flows
 - `implement-lifecycle` 3.9.2 now delegates every heavy phase through generic isolated subagents that explicitly invoke the canonical worker skills, removing the distributed Claude Code worker templates
+- `implement-lifecycle` 3.10.0 defines its phase-to-skill mapping once and applies it through Claude Code, Codex, Pi, and generic isolated-delegation adapters
 
 ## implement-team [0.5.0] - 2026-07-26
 

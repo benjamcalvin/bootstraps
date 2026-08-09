@@ -156,9 +156,9 @@ for plugin_dir in plugins/*/; do
     fi
   fi
 
-  # implement-lifecycle distributes canonical worker skills, not Claude Code
-  # agent-template adapters. Its explicit required skill inventory must retain
-  # non-empty agents/openai.yaml files with non-empty top-level interface sections.
+  # implement-lifecycle distributes canonical worker skills, not harness-specific
+  # agent templates. Its explicit required skill inventory must retain non-empty
+  # optional OpenAI metadata with explicit invocation policy.
   if [ "$plugin_name" = "implement-lifecycle" ]; then
     lifecycle_templates=""
     if [ -d "$plugin_dir/agents" ]; then
@@ -173,6 +173,7 @@ for plugin_dir in plugins/*/; do
 
     lifecycle_metadata_missing=false
     lifecycle_interface_section_missing=false
+    lifecycle_explicit_invocation_missing=false
     lifecycle_skills=(
       implement-code implement-address review-general review-correctness review-security
       review-architecture review-testing review-docs verify
@@ -198,10 +199,14 @@ for plugin_dir in plugins/*/; do
         echo "  ERROR: $lifecycle_skill has no non-empty interface section in agents/openai.yaml"
         ERRORS=$((ERRORS + 1))
         lifecycle_interface_section_missing=true
+      elif ! rg -Fq 'allow_implicit_invocation: false' "$lifecycle_metadata"; then
+        echo "  ERROR: $lifecycle_skill must retain explicit-invocation policy in agents/openai.yaml"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_explicit_invocation_missing=true
       fi
     done
-    if [ "$lifecycle_metadata_missing" = false ] && [ "$lifecycle_interface_section_missing" = false ]; then
-      echo "  OK: Every inventoried implement-lifecycle skill has a non-empty agents/openai.yaml with a non-empty top-level interface section"
+    if [ "$lifecycle_metadata_missing" = false ] && [ "$lifecycle_interface_section_missing" = false ] && [ "$lifecycle_explicit_invocation_missing" = false ]; then
+      echo "  OK: Every inventoried implement-lifecycle skill retains non-empty optional OpenAI metadata and explicit invocation policy"
     fi
 
     if rg -q 'named (subagent|worker)|preloaded (worker )?skill|reviewer agent adapter' \
@@ -212,28 +217,56 @@ for plugin_dir in plugins/*/; do
       echo "  OK: Lifecycle instructions use generic skill-directed subagents"
     fi
 
-    lifecycle_mapping_missing=false
+    lifecycle_implement_skill="$plugin_dir/skills/implement/SKILL.md"
+    lifecycle_mapping=$(awk '/^\| Phase \| Canonical skill \|$/,/^$/' "$lifecycle_implement_skill")
+    lifecycle_mapping_invalid=false
     for lifecycle_worker in implement-code implement-address review-general review-correctness review-security review-architecture review-testing review-docs verify; do
-      case "$lifecycle_worker" in
-        implement-code) phase="Implement" ;;
-        implement-address) phase="Address" ;;
-        review-general) phase="Review general" ;;
-        review-correctness) phase="Review correctness" ;;
-        review-security) phase="Review security" ;;
-        review-architecture) phase="Review architecture" ;;
-        review-testing) phase="Review testing" ;;
-        review-docs) phase="Review docs" ;;
-        verify) phase="Verify" ;;
-      esac
-      mapping_row="| $phase | Spawn a generic isolated subagent whose prompt begins \`Use the implement-lifecycle:$lifecycle_worker plugin skill\` | Spawn a generic isolated subagent whose prompt begins \`Use \$implement-lifecycle:$lifecycle_worker\` |"
-      if ! rg -Fq "$mapping_row" "$plugin_dir/skills/implement/SKILL.md"; then
-        echo "  ERROR: Lifecycle delegation table is missing the generic Claude/Codex mapping for $lifecycle_worker"
+      mapping_count=$(printf '%s\n' "$lifecycle_mapping" | rg -Fc "\`$lifecycle_worker\`")
+      if [ "$mapping_count" -ne 1 ]; then
+        echo "  ERROR: Canonical lifecycle mapping must contain $lifecycle_worker exactly once (found $mapping_count)"
         ERRORS=$((ERRORS + 1))
-        lifecycle_mapping_missing=true
+        lifecycle_mapping_invalid=true
       fi
     done
-    if [ "$lifecycle_mapping_missing" = false ]; then
-      echo "  OK: Lifecycle delegation mapping names every canonical worker skill"
+    mapping_rows=$(printf '%s\n' "$lifecycle_mapping" | rg -c '^\| (Implement|Address|Review (general|correctness|security|architecture|testing|docs)|Verify) \|')
+    if [ "$mapping_rows" -ne 9 ]; then
+      echo "  ERROR: Canonical lifecycle mapping must contain exactly nine worker rows (found $mapping_rows)"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_mapping_invalid=true
+    fi
+    for adapter_syntax in \
+      'Use the implement-lifecycle:<skill> plugin skill' \
+      'Use $implement-lifecycle:<skill>' \
+      'generic `delegate` child with `skill: <skill>`' \
+      'fresh isolated child, load the mapped Agent Skill explicitly'; do
+      adapter_count=$(rg -Fc "$adapter_syntax" "$lifecycle_implement_skill")
+      if [ "$adapter_count" -ne 1 ]; then
+        echo "  ERROR: Lifecycle adapter syntax must be centralized exactly once: $adapter_syntax (found $adapter_count)"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_mapping_invalid=true
+      fi
+    done
+    if [ "$lifecycle_mapping_invalid" = false ]; then
+      echo "  OK: Canonical lifecycle mapping contains each worker once and adapter syntax is centralized"
+    fi
+
+    lifecycle_pi_manifest="$plugin_dir/package.json"
+    if ! jq -e '
+      .name == "implement-lifecycle" and
+      (.version | type == "string" and length > 0) and
+      (.keywords | type == "array" and index("pi-package")) and
+      (.pi.skills == ["./skills"]) and
+      (has("dependencies") | not) and
+      (has("devDependencies") | not) and
+      (has("scripts") | not)
+    ' "$lifecycle_pi_manifest" > /dev/null 2>&1; then
+      echo "  ERROR: implement-lifecycle package.json must be dependency-free Pi metadata that exposes ./skills"
+      ERRORS=$((ERRORS + 1))
+    elif [ "$version" != "$(jq -r '.version' "$lifecycle_pi_manifest")" ]; then
+      echo "  ERROR: Version mismatch — plugin.json=$version, Pi package=$(jq -r '.version' "$lifecycle_pi_manifest")"
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "  OK: Pi package metadata exposes skills without runtime dependencies and version is in sync ($version)"
     fi
 
     lifecycle_reviewer_contract_missing=false
