@@ -161,7 +161,7 @@ for plugin_dir in plugins/*/; do
   if [ "$plugin_name" = "implement-lifecycle" ]; then
     lifecycle_templates=""
     if [ -d "$plugin_dir/agents" ]; then
-      lifecycle_templates=$(find "$plugin_dir/agents" -type f -print -quit)
+      lifecycle_templates=$(find "$plugin_dir/agents" -mindepth 1 -print -quit)
     fi
     if [ -n "$lifecycle_templates" ]; then
       echo "  ERROR: implement-lifecycle must not distribute named agent templates"
@@ -188,8 +188,13 @@ for plugin_dir in plugins/*/; do
         echo "  ERROR: $lifecycle_skill is missing a non-empty agents/openai.yaml"
         ERRORS=$((ERRORS + 1))
         lifecycle_metadata_missing=true
-      elif ! ruby -e 'require "yaml"; metadata = YAML.load_file(ARGV.fetch(0)); exit(metadata.is_a?(Hash) && metadata["interface"].is_a?(Hash))' "$lifecycle_metadata" > /dev/null 2>&1; then
-        echo "  ERROR: $lifecycle_skill has invalid agents/openai.yaml"
+      elif ! awk '
+        /^interface:[[:space:]]*(#.*)?$/ { interface_line = NR; next }
+        interface_line && /^[^[:space:]#]/ { exit !interface_content }
+        interface_line && /^[[:space:]]+[^[:space:]#]/ { interface_content = 1 }
+        END { exit !(interface_line && interface_content) }
+      ' "$lifecycle_metadata"; then
+        echo "  ERROR: $lifecycle_skill has no non-empty interface section in agents/openai.yaml"
         ERRORS=$((ERRORS + 1))
         lifecycle_metadata_invalid=true
       fi
