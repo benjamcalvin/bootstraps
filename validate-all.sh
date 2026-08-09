@@ -156,6 +156,63 @@ for plugin_dir in plugins/*/; do
     fi
   fi
 
+  # implement-lifecycle distributes canonical worker skills, not Claude Code
+  # agent-template adapters. Every skill retains its Codex metadata.
+  if [ "$plugin_name" = "implement-lifecycle" ]; then
+    lifecycle_templates=$(find "$plugin_dir/agents" -type f -name '*.md' -print -quit 2>/dev/null)
+    if [ -n "$lifecycle_templates" ]; then
+      echo "  ERROR: implement-lifecycle must not distribute named agent templates"
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "  OK: No implement-lifecycle named agent templates distributed"
+    fi
+
+    lifecycle_metadata_missing=false
+    for lifecycle_skill_dir in "$plugin_dir"/skills/*/; do
+      [ -d "$lifecycle_skill_dir" ] || continue
+      if [ ! -f "$lifecycle_skill_dir/agents/openai.yaml" ]; then
+        echo "  ERROR: $(basename "$lifecycle_skill_dir") is missing agents/openai.yaml"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_metadata_missing=true
+      fi
+    done
+    if [ "$lifecycle_metadata_missing" = false ]; then
+      echo "  OK: Every implement-lifecycle skill retains agents/openai.yaml"
+    fi
+
+    if rg -q 'named (subagent|worker)|preloaded (worker )?skill|reviewer agent adapter' \
+      "$plugin_dir/skills/implement/SKILL.md" README.md; then
+      echo "  ERROR: Lifecycle instructions still reference Claude Code named worker adapters"
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "  OK: Lifecycle instructions use generic skill-directed subagents"
+    fi
+
+    lifecycle_mapping_missing=false
+    for lifecycle_worker in implement-code implement-address review-general review-correctness review-security review-architecture review-testing review-docs verify; do
+      if ! rg -Fq "implement-lifecycle:$lifecycle_worker" "$plugin_dir/skills/implement/SKILL.md"; then
+        echo "  ERROR: Lifecycle delegation mapping is missing $lifecycle_worker"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_mapping_missing=true
+      fi
+    done
+    if [ "$lifecycle_mapping_missing" = false ]; then
+      echo "  OK: Lifecycle delegation mapping names every canonical worker skill"
+    fi
+
+    lifecycle_reviewer_contract_missing=false
+    for lifecycle_reviewer in review-general review-correctness review-security review-architecture review-testing review-docs; do
+      if ! rg -Fq 'Do not modify the reviewed codebase.' "$plugin_dir/skills/$lifecycle_reviewer/SKILL.md"; then
+        echo "  ERROR: $lifecycle_reviewer must prohibit modifying the reviewed codebase"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_reviewer_contract_missing=true
+      fi
+    done
+    if [ "$lifecycle_reviewer_contract_missing" = false ]; then
+      echo "  OK: Lifecycle reviewer skills prohibit modifying reviewed code"
+    fi
+  fi
+
   # Run self-contained hook tests (test files that contain "# autotest" marker)
   for test_file in "$plugin_dir"/hooks/test-*.sh; do
     [ -f "$test_file" ] || continue

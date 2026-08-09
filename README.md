@@ -173,7 +173,7 @@ Provides a shared lifecycle orchestrator, two utility skills, three delegated wo
 | `review-testing` | Optional targeted specialist for test coverage, assertion quality, edge cases, and test anti-patterns. |
 | `review-docs` | Separate Phase 4.5 docs-compliance gate for missing docs, stale docs, and frontmatter/cross-link correctness. |
 
-Heavy phases always run in isolated delegated agents. Each worker skill is the canonical workflow; Claude Code's named subagents are thin runtime adapters that preload it, while Codex spawns a general subagent that loads the matching `$implement-lifecycle:<skill>`. Reviewer adapters deny only direct file-editing tools, leaving the agents free to use available read-only research, documentation, web, and MCP capabilities when the review requires them.
+Heavy phases always run in generic isolated delegated agents. Worker skills are the canonical workflow: Claude Code subagents explicitly invoke `implement-lifecycle:<skill>`, while Codex subagents explicitly load the matching `$implement-lifecycle:<skill>`. Model selection remains a per-delegation decision. The former Claude adapters' partial direct-file-editing-tool denial is no longer packaged; reviewer non-modification remains a worker-skill contract, and reviewers may use available read-only research, documentation, web, and MCP capabilities when the review requires them.
 
 Reviewers return their findings to the orchestrator and post nothing themselves. The orchestrator is the sole publisher to the PR timeline: it publishes one consolidated comment per round carrying every reviewer's findings plus its referee decisions.
 
