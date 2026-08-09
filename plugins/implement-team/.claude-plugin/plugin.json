@@ -1,10 +1,10 @@
 {
   "name": "implement-team",
-  "description": "Implementation lifecycle re-architected around Claude Code agent-teams — long-lived implementer and reviewer teammates with shared task list and mailbox messaging",
-  "version": "0.4.0",
+  "description": "DEPRECATED — use implement-lifecycle instead. Implementation lifecycle re-architected around Claude Code agent-teams — long-lived implementer and reviewer teammates with shared task list and mailbox messaging",
+  "version": "0.5.0",
   "author": {
     "name": "benjamcalvin"
   },
   "license": "MIT",
-  "keywords": ["implement", "review", "lifecycle", "agent-teams", "collaboration", "tdd", "experimental"]
+  "keywords": ["implement", "review", "lifecycle", "agent-teams", "collaboration", "tdd", "experimental", "deprecated"]
 }

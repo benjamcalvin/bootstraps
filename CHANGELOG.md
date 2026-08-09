@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Documented the repository's Claude Code/Codex compatibility matrix and installation flows
 
+## implement-team [0.5.0] - 2026-07-26
+
+### Deprecated
+
+- `implement-team` is deprecated in favour of `implement-lifecycle` (`/implement`). It remains installable but is unmaintained, receives no fixes, and will be removed in a future release
+
+## implement-cli [1.4.1] - 2026-07-26
+
+### Changed
+
+- Marked work-in-progress and not recommended for general use; `implement-lifecycle` (`/implement`) is the supported lifecycle plugin
+
 ## second-opinion [2.2.1] - 2026-07-23
 
 ### Fixed

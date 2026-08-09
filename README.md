@@ -55,12 +55,17 @@ The Codex marketplace currently includes `bootstrap-docs`, `implement-lifecycle`
 ```
 /plugin install bootstrap-docs@bootstraps
 /plugin install implement-lifecycle@bootstraps
-/plugin install implement-cli@bootstraps
-/plugin install implement-team@bootstraps
 /plugin install issue-management@bootstraps
 /plugin install bootstrap-worktrees@bootstraps
 /plugin install stop-guard@bootstraps
 /plugin install second-opinion@bootstraps
+```
+
+`implement-cli` (WIP) and `implement-team` (deprecated) remain installable but are not recommended — use `implement-lifecycle` instead:
+
+```
+/plugin install implement-cli@bootstraps
+/plugin install implement-team@bootstraps
 ```
 
 Choose a scope when prompted:
@@ -86,8 +91,6 @@ Some skills accept arguments:
 /implement #42
 /implement fix the login bug
 /implement 17 just review
-/implement-cli #42
-/implement-team #42
 /bootstrap-worktrees
 /draft-issue add user avatar support
 /cleanup-issue #42
@@ -133,8 +136,8 @@ $issue-management:refine-issue #42
 | **bootstrap-docs** | Yes | Yes | Set up a comprehensive, AI-readable documentation strategy in any project. Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates. |
 | **bootstrap-worktrees** | Yes | No | Set up project-agnostic worktree isolation with per-worktree ports, Docker Compose projects, and config files. Discovers services and generates create/remove scripts plus Claude Code hooks. |
 | **implement-lifecycle** | Yes | Yes | Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, docs gate, verify, merge. |
-| **implement-cli** | Yes | No | CLI-based variant of the implementation lifecycle using the Python Agent SDK to orchestrate review/address subprocesses with native async parallelism. |
-| **implement-team** | Yes | No | Experimental. Implementation lifecycle re-architected around Claude Code agent-teams — long-lived implementer and reviewer teammates with shared task list and mailbox messaging. |
+| **implement-cli** | Yes | No | **WIP — not recommended for general use.** CLI-based variant of the implementation lifecycle using the Python Agent SDK to orchestrate review/address subprocesses with native async parallelism. |
+| **implement-team** | Yes | No | **Deprecated — use implement-lifecycle instead.** Implementation lifecycle re-architected around Claude Code agent-teams — long-lived implementer and reviewer teammates with shared task list and mailbox messaging. |
 | **issue-management** | Yes | Yes | Draft, clean up, and refine GitHub issues — optimized for AI agent consumption. |
 | **stop-guard** | Yes | No | Stop hook that evaluates task completion via Gemini CLI and blocks premature stops. Opt-in per session via activation marker. |
 | **second-opinion** | Yes | No | Consult external AI CLIs (Codex, Antigravity) headlessly for an independent, read-only second-opinion code review of your changes. |
@@ -178,6 +181,13 @@ Codex CLI 0.145.0 note: full lifecycle delegation works in a standard Codex sess
 
 ### implement-cli
 
+> **🚧 Work in progress — not recommended for general use.** Unfinished and not
+> stable; its reviewer prompts drift from the canonical `implement-lifecycle`
+> review skills (tracked in
+> [#96](https://github.com/benjamcalvin/bootstraps/issues/96)) and its behaviour
+> may change without notice. Use
+> `implement-lifecycle` (`/implement`) for day-to-day work.
+
 Single-skill plugin that mirrors the `/implement` lifecycle but delegates heavy work to Python Agent SDK subprocesses.
 
 | Skill | Description |
@@ -188,7 +198,13 @@ Reviewers return their findings to the orchestrator and post nothing themselves;
 
 ### implement-team
 
-**Experimental.** Requires Claude Code `>= 2.1.32` and `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. Re-architects the implementation lifecycle around long-lived teammates that share a task list and mailbox instead of forked one-shot subagents.
+> **⚠️ Deprecated — no longer maintained.** Use `implement-lifecycle`
+> (`/implement`) instead: it covers the same lifecycle, works on both Claude Code
+> and Codex, and does not depend on the experimental agent-teams runtime.
+> `implement-team` stays installable so existing users are not broken, but it
+> receives no fixes and will be removed in a future release.
+
+Requires Claude Code `>= 2.1.32` and `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`. Re-architects the implementation lifecycle around long-lived teammates that share a task list and mailbox instead of forked one-shot subagents.
 
 | Skill | Description |
 |-------|-------------|
