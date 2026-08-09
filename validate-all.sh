@@ -157,7 +157,8 @@ for plugin_dir in plugins/*/; do
   fi
 
   # implement-lifecycle distributes canonical worker skills, not Claude Code
-  # agent-template adapters. Every listed skill retains valid Codex metadata.
+  # agent-template adapters. Its explicit required skill inventory must retain
+  # non-empty agents/openai.yaml files with non-empty top-level interface sections.
   if [ "$plugin_name" = "implement-lifecycle" ]; then
     lifecycle_templates=""
     if [ -d "$plugin_dir/agents" ]; then
@@ -171,7 +172,7 @@ for plugin_dir in plugins/*/; do
     fi
 
     lifecycle_metadata_missing=false
-    lifecycle_metadata_invalid=false
+    lifecycle_interface_section_missing=false
     lifecycle_skills=(
       implement-code implement-address review-general review-correctness review-security
       review-architecture review-testing review-docs verify
@@ -196,11 +197,11 @@ for plugin_dir in plugins/*/; do
       ' "$lifecycle_metadata"; then
         echo "  ERROR: $lifecycle_skill has no non-empty interface section in agents/openai.yaml"
         ERRORS=$((ERRORS + 1))
-        lifecycle_metadata_invalid=true
+        lifecycle_interface_section_missing=true
       fi
     done
-    if [ "$lifecycle_metadata_missing" = false ] && [ "$lifecycle_metadata_invalid" = false ]; then
-      echo "  OK: Every inventoried implement-lifecycle skill has valid agents/openai.yaml"
+    if [ "$lifecycle_metadata_missing" = false ] && [ "$lifecycle_interface_section_missing" = false ]; then
+      echo "  OK: Every inventoried implement-lifecycle skill has a non-empty agents/openai.yaml with a non-empty top-level interface section"
     fi
 
     if rg -q 'named (subagent|worker)|preloaded (worker )?skill|reviewer agent adapter' \
