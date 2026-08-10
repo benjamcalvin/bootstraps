@@ -1,6 +1,6 @@
 # Bootstraps
 
-A cross-compatible Claude Code and OpenAI Codex plugin marketplace of reusable skills, hooks, and project scaffolds.
+A cross-compatible Claude Code, OpenAI Codex, and Pi collection of reusable skills, hooks, and project scaffolds.
 
 ## Prerequisites
 
@@ -49,6 +49,16 @@ codex plugin marketplace add benjamcalvin/bootstraps
 Open the plugin browser with `/plugins`, install a plugin from the **Bootstraps** marketplace, and start a new session so Codex loads its skills.
 
 The Codex marketplace currently includes `bootstrap-docs`, `implement-lifecycle`, and `issue-management`. The other plugins depend on Claude Code-specific hooks, worktree behavior, agent teams, or the Claude Agent SDK and remain available only through Claude Code.
+
+## Install implement-lifecycle in Pi
+
+Pi can install the plugin directory as a local package. From a checkout of this repository, run:
+
+```sh
+pi install ./plugins/implement-lifecycle
+```
+
+This package exposes its `skills/` directory through `package.json`; restart Pi, then use `/skill:implement #42`. For lifecycle delegation, separately install [`pi-subagents`](https://github.com/nicobailon/pi-subagents); it supplies the fresh generic `delegate` child used by the Pi adapter. It is a user-managed prerequisite, not a bundled dependency.
 
 ## Install a Plugin in Claude Code
 
@@ -131,20 +141,20 @@ $issue-management:refine-issue #42
 
 ## Available Plugins
 
-| Plugin | Claude Code | Codex | Description |
-|--------|-------------|-------|-------------|
-| **bootstrap-docs** | Yes | Yes | Set up a comprehensive, AI-readable documentation strategy in any project. Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates. |
-| **bootstrap-worktrees** | Yes | No | Set up project-agnostic worktree isolation with per-worktree ports, Docker Compose projects, and config files. Discovers services and generates create/remove scripts plus Claude Code hooks. |
-| **implement-lifecycle** | Yes | Yes | Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, docs gate, verify, merge. |
-| **implement-cli** | Yes | No | **WIP — not recommended for general use.** CLI-based variant of the implementation lifecycle using the Python Agent SDK to orchestrate review/address subprocesses with native async parallelism. |
-| **implement-team** | Yes | No | **Deprecated — use implement-lifecycle instead.** Implementation lifecycle re-architected around Claude Code agent-teams — long-lived implementer and reviewer teammates with shared task list and mailbox messaging. |
-| **issue-management** | Yes | Yes | Draft, clean up, and refine GitHub issues — optimized for AI agent consumption. |
-| **stop-guard** | Yes | No | Stop hook that evaluates task completion via Gemini CLI and blocks premature stops. Opt-in per session via activation marker. |
-| **second-opinion** | Yes | No | Consult external AI CLIs (Codex, Antigravity) headlessly for an independent, read-only second-opinion code review of your changes. |
+| Plugin | Claude Code | Codex | Pi | Description |
+|--------|-------------|-------|----|-------------|
+| **bootstrap-docs** | Yes | Yes | No | Set up a comprehensive, AI-readable documentation strategy in any project. Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates. |
+| **bootstrap-worktrees** | Yes | No | No | Set up project-agnostic worktree isolation with per-worktree ports, Docker Compose projects, and config files. Discovers services and generates create/remove scripts plus Claude Code hooks. |
+| **implement-lifecycle** | Yes | Yes | Yes | Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, docs gate, verify, merge. Pi delegation requires `pi-subagents`. |
+| **implement-cli** | Yes | No | No | **WIP — not recommended for general use.** CLI-based variant of the implementation lifecycle using the Python Agent SDK to orchestrate review/address subprocesses with native async parallelism. |
+| **implement-team** | Yes | No | No | **Deprecated — use implement-lifecycle instead.** Implementation lifecycle re-architected around Claude Code agent-teams — long-lived implementer and reviewer teammates with shared task list and mailbox messaging. |
+| **issue-management** | Yes | Yes | No | Draft, clean up, and refine GitHub issues — optimized for AI agent consumption. |
+| **stop-guard** | Yes | No | No | Stop hook that evaluates task completion via Gemini CLI and blocks premature stops. Opt-in per session via activation marker. |
+| **second-opinion** | Yes | No | No | Consult external AI CLIs (Codex, Antigravity) headlessly for an independent, read-only second-opinion code review of your changes. |
 
 ### implement-lifecycle
 
-Provides a shared lifecycle orchestrator, two utility skills, three delegated worker roles, a baseline general reviewer, four optional targeted specialists, and a separate docs gate across Claude Code and Codex:
+Provides a shared lifecycle orchestrator, two utility skills, three delegated worker roles, a baseline general reviewer, four optional targeted specialists, and a separate docs gate across Claude Code, Codex, Pi, and other compatible harnesses:
 
 **Skills:**
 
@@ -173,7 +183,9 @@ Provides a shared lifecycle orchestrator, two utility skills, three delegated wo
 | `review-testing` | Optional targeted specialist for test coverage, assertion quality, edge cases, and test anti-patterns. |
 | `review-docs` | Separate Phase 4.5 docs-compliance gate for missing docs, stale docs, and frontmatter/cross-link correctness. |
 
-Heavy phases always run in generic isolated delegated agents. Worker skills are the canonical workflow: Claude Code subagents explicitly invoke `implement-lifecycle:<skill>`, while Codex subagents explicitly load the matching `$implement-lifecycle:<skill>`. Model selection remains a per-delegation decision. The former Claude adapters' partial direct-file-editing-tool denial is no longer packaged; reviewer non-modification remains a worker-skill contract, and reviewers may use available read-only research, documentation, web, and MCP capabilities when the review requires them.
+Heavy phases always run in fresh generic isolated delegated children. The canonical phase-to-skill mapping is shared by every harness: Claude Code selects `implement-lifecycle:<skill>`, Codex selects `$implement-lifecycle:<skill>`, and Pi's user-installed `pi-subagents` launches a generic `delegate` child with `skill: <skill>`. Compatible harnesses must explicitly load the mapped Agent Skill, pass the complete payload and context bundle, return the child result, and never fall back to inline execution when isolation or skill loading is unavailable. Selected reviewers run in parallel and all results return before refereeing. Model selection remains a per-delegation decision.
+
+The skill-local `agents/openai.yaml` files are optional OpenAI skill metadata that supplies presentation and invocation policy. They are not subagent definitions, are retained for Codex compatibility, and do not change the harness-neutral worker behavior. No custom Pi agent templates are distributed.
 
 Reviewers return their findings to the orchestrator and post nothing themselves. The orchestrator is the sole publisher to the PR timeline: it publishes one consolidated comment per round carrying every reviewer's findings plus its referee decisions.
 

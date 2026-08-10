@@ -2,3 +2,5 @@ interface:
   display_name: "Implement"
   short_description: "Run the full implementation lifecycle"
   default_prompt: "Use $implement-lifecycle:implement to implement this task through review, verification, and merge."
+policy:
+  allow_implicit_invocation: false

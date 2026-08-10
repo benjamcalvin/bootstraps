@@ -15,7 +15,7 @@ metadata:
 
 Orchestrate the full implementation lifecycle using the task supplied with the skill invocation.
 
-Claude Code expands the payload below. If the current client leaves it literal, use the user's invoking prompt instead.
+The active harness expands the payload below. If it leaves the payload literal, use the user's invoking prompt instead.
 
 ```text
 $ARGUMENTS
@@ -45,29 +45,35 @@ Use the current client's task or plan tracker throughout when available.
 
 ---
 
-### Client delegation adapters
+### Harness-neutral delegation
 
-Keep the lifecycle semantics below identical in both clients and map each delegation to the client's native boundary:
+The lifecycle maps each heavy phase to one canonical worker skill:
 
-| Phase | Claude Code | Codex |
-|-------|-------------|-------|
-| Implement | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:implement-code plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:implement-code` |
-| Address | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:implement-address plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:implement-address` |
-| Review general | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:review-general plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:review-general` |
-| Review correctness | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:review-correctness plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:review-correctness` |
-| Review security | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:review-security plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:review-security` |
-| Review architecture | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:review-architecture plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:review-architecture` |
-| Review testing | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:review-testing plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:review-testing` |
-| Review docs | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:review-docs plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:review-docs` |
-| Verify | Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:verify plugin skill` | Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:verify` |
+| Phase | Canonical skill |
+|-------|-----------------|
+| Implement | `implement-code` |
+| Address | `implement-address` |
+| Review general | `review-general` |
+| Review correctness | `review-correctness` |
+| Review security | `review-security` |
+| Review architecture | `review-architecture` |
+| Review testing | `review-testing` |
+| Review docs | `review-docs` |
+| Verify | `verify` |
 
-Choose subagent intelligence per delegated task. Default to the balanced mid-tier model: **Sonnet** in Claude Code and **`gpt-5.6-terra`** in Codex. Use a stronger frontier model only for exceptionally complex work such as novel architecture, subtle security or concurrency reasoning, or broad multi-system changes. Use a lighter model only for exceptionally simple, mechanical, tightly bounded work. Make this judgment per delegation rather than assigning one model tier to the entire lifecycle. If the client cannot select an exact model, use its closest balanced equivalent and continue.
+For every delegation, use the adapter for the active harness to create a fresh isolated child, explicitly select the mapped canonical skill, pass the complete payload and context bundle, and return the child's result to the orchestrator. Choose the closest balanced model available in that harness for each delegation; use stronger or lighter models only when the task warrants it. Do not assign one model choice to the whole lifecycle.
 
-Pass the complete payload shown at each call site. Do not assume the delegated agent inherits scratch context from the orchestrator. When specialists are selected, launch all reviewers in parallel and wait for them before refereeing.
+**Claude Code adapter.** Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:<skill> plugin skill`, followed by the complete payload and fresh context bundle.
 
-If a subagent cannot discover or invoke its required skill, report that failed delegation and stop that phase. Do not execute the phase inline in the orchestrator.
+**Codex adapter.** Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:<skill>`, followed by the complete payload and fresh context bundle.
 
-**Isolate delegated context.** Each delegated agent (implementer, addresser, reviewer, verifier) should be launched with MINIMAL, FRESH context: the PR/issue being worked, the governing contract (issue body, ADR, or spec), the current diff, and any prior accepted/rejected findings — NOT the orchestrator's accumulated cross-PR history. Long-lived or reused sessions (e.g., a docs gate or verifier kept alive across multiple PRs) accumulate unrelated context and degrade review quality; reset or bound them per PR. Assemble a single shared **context bundle** (issue, contract, diff, prior findings, referee decisions) and pass the same bundle to every subagent for that PR, so each starts from the same ground truth instead of re-deriving it.
+**Pi adapter.** With the user-installed `pi-subagents` prerequisite available, launch a fresh generic `delegate` child with `skill: <skill>` and the complete payload and fresh context bundle. Do not use or distribute custom Pi agent definitions.
+
+**Generic adapter.** A compatible harness must create a fresh isolated child, load the mapped Agent Skill explicitly, pass the complete payload and fresh context bundle, and return the child result. A harness that cannot provide isolated delegation or load the required skill must report the failed phase and must not execute it inline.
+
+When specialists are selected, every adapter launches the selected reviewers in parallel and waits for all their results before refereeing.
+
+**Isolate delegated context.** Each delegated agent (implementer, addresser, reviewer, verifier) should be launched with MINIMAL, FRESH context: the PR/issue being worked, the governing contract (issue body, ADR, or spec), the current diff, and any prior accepted/rejected findings — NOT the orchestrator's accumulated cross-PR history. Long-lived or reused sessions (e.g., a docs gate or verifier kept alive across multiple PRs) accumulate unrelated context and degrade review quality; reset or bound them per PR. Assemble a single shared **context bundle** (issue, contract, diff, prior findings, referee decisions) and pass the same bundle to every child for that PR, so each starts from the same ground truth instead of re-deriving it.
 
 ---
 
