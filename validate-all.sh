@@ -339,6 +339,43 @@ for plugin_dir in plugins/*/; do
         lifecycle_suite_contract_invalid=true
       fi
     done
+
+    lifecycle_merge_suite_command_pattern='^(\./validate-all\.sh|((ba|z|k)?sh)[[:space:]]+(\./)?validate-all\.sh)$'
+    lifecycle_merge_command_positive_fixtures=(
+      './validate-all.sh'
+      'sh validate-all.sh'
+      'sh ./validate-all.sh'
+      'bash validate-all.sh'
+      'bash ./validate-all.sh'
+      'zsh validate-all.sh'
+      'zsh ./validate-all.sh'
+      'ksh validate-all.sh'
+      'ksh ./validate-all.sh'
+    )
+    lifecycle_merge_command_negative_fixtures=(
+      'true'
+      'make test'
+      './validate-all.sh.bak'
+      './validate-all.sh --quick'
+      'bash validate-all.sh.bak'
+      'bash scripts/validate-all.sh'
+      'bash -c ./validate-all.sh'
+      'env CI=1 ./validate-all.sh'
+    )
+    for lifecycle_fixture in "${lifecycle_merge_command_positive_fixtures[@]}"; do
+      if ! printf '%s\n' "$lifecycle_fixture" | rg -q "$lifecycle_merge_suite_command_pattern"; then
+        echo "  ERROR: Merge evidence rejected authoritative suite command: $lifecycle_fixture"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_suite_contract_invalid=true
+      fi
+    done
+    for lifecycle_fixture in "${lifecycle_merge_command_negative_fixtures[@]}"; do
+      if printf '%s\n' "$lifecycle_fixture" | rg -q "$lifecycle_merge_suite_command_pattern"; then
+        echo "  ERROR: Merge evidence accepted non-authoritative suite command: $lifecycle_fixture"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_suite_contract_invalid=true
+      fi
+    done
     lifecycle_verify_file="$plugin_dir/skills/verify/SKILL.md"
     if [ "$(rg -Fc '<!-- lifecycle-suite-capability: full-suite-owner -->' "$lifecycle_verify_file")" -ne 1 ] || \
       [ "$(rg -Fc "$lifecycle_owner_contract" "$lifecycle_verify_file")" -ne 1 ] || \
@@ -417,7 +454,7 @@ complete + referee -> refereeing
       ! rg -Fq 'verification-head: <full-head-sha>' "$lifecycle_verify_file" || \
       ! rg -Fq 'suite-executions: 0 | 1' "$lifecycle_verify_file" || \
       ! rg -Fq 'suite-exit-status: <integer> | n/a' "$lifecycle_verify_file" || \
-      ! rg -Fq 'Accept `pass` only with a non-`none` suite command, exactly one execution, and exit status 0.' "$plugin_dir/skills/merge-pr/SKILL.md" || \
+      ! rg -Fq "Accept \`pass\` only when \`suite-command\` exactly matches the target repository's authoritative suite command established during verification, or an accepted explicit-shell form that invokes that exact command and nothing else, with exactly one execution and exit status 0." "$plugin_dir/skills/merge-pr/SKILL.md" || \
       ! rg -Fq 'Accept `not-required` only after independently inspecting the changed files and confirming that every change is documentation or comments only, with command `none`, zero executions, and status `n/a`.' "$plugin_dir/skills/merge-pr/SKILL.md"; then
       echo "  ERROR: Verification evidence and merge must remain bound to the exact PR head"
       ERRORS=$((ERRORS + 1))
