@@ -13,6 +13,10 @@ metadata:
 
 # PR Standards Check
 
+<!-- lifecycle-suite-capability: focused-only -->
+
+**Suite capability: `focused-only`. Run focused acceptance commands only. Do not run `./validate-all.sh`, an explicit shell invocation of that alias, or any full, complete, entire, repository-wide, or lifecycle-wide test suite. Final verification owns the authoritative suite.**
+
 Pre-flight validation for PRs.
 
 ```text
