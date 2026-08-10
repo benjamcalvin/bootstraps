@@ -281,6 +281,111 @@ for plugin_dir in plugins/*/; do
     if [ "$lifecycle_reviewer_contract_missing" = false ]; then
       echo "  OK: Lifecycle reviewer skills prohibit modifying reviewed code and posting to GitHub"
     fi
+
+    lifecycle_suite_contract='Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run.'
+    lifecycle_suite_contract_missing=false
+    lifecycle_non_verification_skills=(
+      implement-code implement-address review-general review-correctness review-security
+      review-architecture review-testing review-docs merge-pr
+    )
+    for lifecycle_skill in "${lifecycle_non_verification_skills[@]}"; do
+      lifecycle_skill_file="$plugin_dir/skills/$lifecycle_skill/SKILL.md"
+      if ! rg -Fq "$lifecycle_suite_contract" "$lifecycle_skill_file"; then
+        echo "  ERROR: $lifecycle_skill must prohibit lifecycle-wide and equivalent complete-suite commands while allowing focused acceptance commands"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_suite_contract_missing=true
+      fi
+      lifecycle_positive_suite_instruction=$(awk '
+        {
+          line = tolower($0)
+        }
+        line ~ /(run|execute|invoke).*(full|complete|entire|lifecycle-wide|repository-wide).*(suite|test)/ &&
+          line !~ /(do not|don.t|must not|never|prohibited|owned by|owns that run|without.*rerun)/ {
+          print NR ":" $0
+        }
+      ' "$lifecycle_skill_file")
+      if [ -n "$lifecycle_positive_suite_instruction" ]; then
+        echo "  ERROR: $lifecycle_skill authorizes a complete-suite run: $lifecycle_positive_suite_instruction"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_suite_contract_missing=true
+      fi
+    done
+    if ! rg -Fq "Outside final verification, $lifecycle_suite_contract" "$lifecycle_implement_skill"; then
+      echo "  ERROR: implement must prohibit lifecycle-wide and equivalent complete-suite commands outside final verification"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_suite_contract_missing=true
+    fi
+    if [ "$lifecycle_suite_contract_missing" = false ]; then
+      echo "  OK: Non-verification lifecycle phases reserve complete-suite execution for final verification"
+    fi
+
+    lifecycle_verify_skill="$plugin_dir/skills/verify/SKILL.md"
+    lifecycle_verification_contract_missing=false
+    for verification_contract in \
+      'Record the final commit SHA before selecting commands.' \
+      'A successful authoritative full-suite result is reusable only when its recorded commit SHA exactly matches that final commit.' \
+      'Execute the authoritative full-suite command at most once for that commit.' \
+      'Do not rerun it to uncache results, filter output, recover an exit status, count results, or improve report formatting.' \
+      'Capture output and the original exit status from that single execution.'; do
+      if ! rg -Fq "$verification_contract" "$lifecycle_verify_skill"; then
+        echo "  ERROR: verify is missing exact-head single-execution contract: $verification_contract"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_verification_contract_missing=true
+      fi
+    done
+    if [ "$lifecycle_verification_contract_missing" = false ]; then
+      echo "  OK: Verification records exact-head evidence and preserves one authoritative suite execution"
+    fi
+
+    lifecycle_docs_gate_contract_missing=false
+    for docs_gate_contract in \
+      '`review-required` → `reviewed-with-findings` → `addressed` → `re-review-required` → `clean`' \
+      'Verification may begin only when the documentation-gate state is `clean` or `skipped-not-relevant`.' \
+      'The `addressed` state must transition to `re-review-required`; it must never transition directly to verification.'; do
+      if ! rg -Fq "$docs_gate_contract" "$lifecycle_implement_skill"; then
+        echo "  ERROR: Documentation gate is missing required review/address/re-review state: $docs_gate_contract"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_docs_gate_contract_missing=true
+      fi
+    done
+    if [ "$lifecycle_docs_gate_contract_missing" = false ]; then
+      echo "  OK: Documentation gate prevents addressed-to-verification transitions without re-review"
+    fi
+
+    lifecycle_pi_contract_missing=false
+    for pi_contract in \
+      '`context: "fresh"`' \
+      'Empty captured reviewer output is an incomplete delegation' \
+      'Action Required / Recommended / Minor / Summary'; do
+      if ! rg -Fq "$pi_contract" "$lifecycle_implement_skill"; then
+        echo "  ERROR: Pi adapter is missing fresh-context or reviewer-result contract: $pi_contract"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_pi_contract_missing=true
+      fi
+    done
+    if [ "$lifecycle_pi_contract_missing" = false ]; then
+      echo "  OK: Pi delegations require fresh context and recover non-empty canonical reviewer results"
+    fi
+
+    lifecycle_reviewer_result_contract_missing=false
+    for lifecycle_reviewer in review-general review-correctness review-security review-architecture review-testing review-docs; do
+      lifecycle_reviewer_file="$plugin_dir/skills/$lifecycle_reviewer/SKILL.md"
+      if ! rg -Fq 'as your final message, in exactly this structure:' "$lifecycle_reviewer_file"; then
+        echo "  ERROR: $lifecycle_reviewer must return its canonical report as the final captured result"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_reviewer_result_contract_missing=true
+      fi
+      for reviewer_heading in '### Action Required' '### Recommended' '### Minor' '### Summary'; do
+        if ! rg -Fq "$reviewer_heading" "$lifecycle_reviewer_file"; then
+          echo "  ERROR: $lifecycle_reviewer is missing canonical result heading: $reviewer_heading"
+          ERRORS=$((ERRORS + 1))
+          lifecycle_reviewer_result_contract_missing=true
+        fi
+      done
+    done
+    if [ "$lifecycle_reviewer_result_contract_missing" = false ]; then
+      echo "  OK: Every lifecycle reviewer returns the canonical report as its final captured result"
+    fi
   fi
 
   # Run self-contained hook tests (test files that contain "# autotest" marker)

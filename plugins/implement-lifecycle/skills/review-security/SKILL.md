@@ -53,6 +53,8 @@ Review in light of that guidance. If you raise a convention or security-requirem
 
 ## How to Review
 
+Run focused acceptance commands when they help verify a finding. Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run.
+
 1. **Read each changed file** using the Read tool. Understand the full context.
 2. **Map trust boundaries** — identify where untrusted input enters and trace it through the code.
 3. **Check authorization** — every endpoint and data access method must enforce access control.

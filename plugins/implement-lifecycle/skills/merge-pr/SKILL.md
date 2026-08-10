@@ -27,6 +27,8 @@ At runtime, parse the PR number and fetch its metadata, comments, and checks.
 
 ## Instructions
 
+Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run. Consume the verification evidence already recorded for the final commit; merge readiness checks must not rerun the authoritative suite.
+
 ### Step 1: Validate Readiness
 
 Check that the PR is safe to merge. For each check, determine pass/fail:

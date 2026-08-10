@@ -77,6 +77,8 @@ Write the minimum code to make all tests pass:
 
 Run the tests, linters, and a build for the packages/modules you changed. Every test you touched must pass; every lint must pass. If tests fail, fix the code (not the tests). Do NOT re-run the entire repository suite here — the authoritative full-suite run is owned by `verify` once at the final head (see the implement skill). Running the full suite at every implement/address phase is the single biggest wall-clock waste in the lifecycle.
 
+Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run.
+
 ### Step 5: Manual Verification
 
 If your changes include **runnable artifacts** — CLI commands, scripts, API endpoints, or configuration that produces observable behavior — verify them against a real environment before proceeding.
@@ -130,7 +132,7 @@ git fetch origin "$BASE_BRANCH"
 git rebase "origin/$BASE_BRANCH"
 ```
 
-If conflicts arise, resolve them and re-run the test suite before continuing.
+If conflicts arise, resolve them and re-run the affected focused tests before continuing.
 
 Push the branch (first push uses `-u` to set upstream):
 

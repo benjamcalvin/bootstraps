@@ -34,6 +34,8 @@ Actively seek out the testing standards that apply to this PR: required test lay
 
 ## Step 2: Map Changed Code to Test Coverage
 
+Run focused acceptance commands when they help verify a finding. Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run.
+
 1. **Identify every new or modified code path** in the production code changes. For each:
    - Is there a corresponding test?
    - Does the test actually exercise that specific path?

@@ -35,6 +35,8 @@ Actively seek out the architectural standards that apply to this change: layerin
 
 ## Step 2: Review for Architectural Alignment
 
+Run focused acceptance commands when they help verify a finding. Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run.
+
 For each changed file, evaluate:
 
 ### Pattern Consistency

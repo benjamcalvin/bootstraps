@@ -67,11 +67,13 @@ For every delegation, use the adapter for the active harness to create a fresh i
 
 **Codex adapter.** Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:<skill>`, followed by the complete payload and fresh context bundle.
 
-**Pi adapter.** With the user-installed `pi-subagents` prerequisite available, launch a fresh generic `delegate` child with `skill: <skill>` and the complete payload and fresh context bundle. Do not use or distribute custom Pi agent definitions.
+**Pi adapter.** With the user-installed `pi-subagents` prerequisite available, launch a generic `delegate` child with `skill: <skill>`, `context: "fresh"`, and the complete payload and fresh context bundle. Set `context: "fresh"` on every delegation rather than relying on the delegate's default. Do not use or distribute custom Pi agent definitions.
 
 **Generic adapter.** A compatible harness must create a fresh isolated child, load the mapped Agent Skill explicitly, pass the complete payload and fresh context bundle, and return the child result. A harness that cannot provide isolated delegation or load the required skill must report the failed phase and must not execute it inline.
 
 When specialists are selected, every adapter launches the selected reviewers in parallel and waits for all their results before refereeing.
+
+Every reviewer child must return a non-empty final captured result in the canonical **Action Required / Recommended / Minor / Summary** structure. **Empty captured reviewer output is an incomplete delegation**: do not referee it or advance the lifecycle. Recover the child result from the harness when available; otherwise retry once as a new fresh-context child with the same canonical skill and context bundle. If recovery and retry both return empty, report the failed review phase and stop.
 
 **Isolate delegated context.** Each delegated agent (implementer, addresser, reviewer, verifier) should be launched with MINIMAL, FRESH context: the PR/issue being worked, the governing contract (issue body, ADR, or spec), the current diff, and any prior accepted/rejected findings — NOT the orchestrator's accumulated cross-PR history. Long-lived or reused sessions (e.g., a docs gate or verifier kept alive across multiple PRs) accumulate unrelated context and degrade review quality; reset or bound them per PR. Assemble a single shared **context bundle** (issue, contract, diff, prior findings, referee decisions) and pass the same bundle to every child for that PR, so each starts from the same ground truth instead of re-deriving it.
 
@@ -162,7 +164,7 @@ If conflicts arise, resolving them is a **permitted git-mechanical carve-out** t
 git push --force-with-lease
 ```
 
-**Run the authoritative full suite ONCE per lifecycle, owned by `verify` at the final head.** Implementer and addresser run focused package tests + lint + build on their own changes; they do NOT re-run the entire suite at every phase. The single full-suite run happens in Phase 5 (verify) against the final merged state. This avoids the repeated full-suite re-runs that dominate wall-clock across phases.
+**Run the authoritative full suite ONCE per lifecycle, owned by `verify` at the final head.** Implementer and addresser run focused package tests + lint + build on their own changes; they do NOT re-run the entire suite at every phase. The single full-suite run happens in Phase 5 (verify) against the final commit. This avoids the repeated full-suite re-runs that dominate wall-clock across phases. Outside final verification, Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run.
 
 **Pin the toolchain once.** Use the project's pinned Go/toolchain version (e.g. `mise` or `go.mod`'s `go` directive) consistently across every phase. Do not let implementer, addresser, and verify each resolve a different toolchain — a mismatch (e.g. 1.25.5 vs 1.25.7) causes wasted full-suite failures that are not real regressions.
 
@@ -349,6 +351,8 @@ After the code review/address loop converges, run the docs curation gate. **This
 
 **Do NOT include `review-docs` in the Phase 4 reviewer pool.** It runs only here, after the code review loop is complete — this is the single docs owner for the lifecycle. **Do NOT skip this phase** just because the file list shows no `.md` files; judge docs-relevance by the observable surface, not the file list. When in doubt, run it — it is cheap and it catches real stale-docs gaps.
 
+Track the documentation gate explicitly. A docs-relevant PR follows `review-required` → `reviewed-with-findings` → `addressed` → `re-review-required` → `clean`; a non-docs-relevant PR is `skipped-not-relevant`. Verification may begin only when the documentation-gate state is `clean` or `skipped-not-relevant`. The `addressed` state must transition to `re-review-required`; it must never transition directly to verification. Record the state in the task tracker or orchestration notes after every transition so a resumed lifecycle can enforce the same guard.
+
 #### Step A: Invoke Docs Reviewer
 
 ```
@@ -356,6 +360,8 @@ Payload: Review PR #<pr-number> for documentation compliance, round <round-numbe
 ```
 
 The docs reviewer fetches PR context, maps code changes to existing documentation, and identifies gaps — not just inaccuracies in changed docs, but missing docs for new behavior and stale docs contradicted by code changes. It returns findings to you and posts nothing itself; you remain the sole publisher.
+
+Set the gate to `review-required` before invoking the reviewer. A clean review transitions to `clean`; a review with findings that survive referee filtering transitions to `reviewed-with-findings`.
 
 #### Step B: Referee Evaluation
 
@@ -409,15 +415,19 @@ EOF
 Payload: <pr-number> docs-<round-number> /tmp/implement-docs-findings-pr-<PR>-round-<N>.md
 ```
 
+After the addresser completes, record `addressed` and immediately transition to `re-review-required`.
+
 #### Step D: Evaluate Continuation
 
-Re-invoke the docs reviewer to verify fixes. The round counter starts from round 1 (independent of Phase 4 rounds). Loop until clean. Apply the same round-2 convergence audit and convergence-based escalation (round-5 ceiling) as Phase 4.
+When the state is `re-review-required`, re-invoke the docs reviewer to verify fixes before Phase 5. The round counter starts from round 1 (independent of Phase 4 rounds). Loop until a review returns zero actionable findings and the state becomes `clean`. Apply the same round-2 convergence audit and convergence-based escalation (round-5 ceiling) as Phase 4; if escalation fires, run that existing recovery path and do not enter verification.
 
 ---
 
 ### Phase 5: Manual Verification Gate
 
 After the review loop completes, invoke the verification agent to test the PR's changes with real-world execution before merging:
+
+Before delegating, assert that the documentation-gate state is `clean` or `skipped-not-relevant`. Any other state blocks this transition.
 
 ```
 Payload: <pr-number>

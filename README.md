@@ -58,7 +58,7 @@ Pi can install the plugin directory as a local package. From a checkout of this 
 pi install ./plugins/implement-lifecycle
 ```
 
-This package exposes its `skills/` directory through `package.json`; restart Pi, then use `/skill:implement #42`. For lifecycle delegation, separately install [`pi-subagents`](https://github.com/nicobailon/pi-subagents); it supplies the fresh generic `delegate` child used by the Pi adapter. It is a user-managed prerequisite, not a bundled dependency.
+This package exposes its `skills/` directory through `package.json`; restart Pi, then use `/skill:implement #42`. For lifecycle delegation, separately install [`pi-subagents`](https://github.com/nicobailon/pi-subagents); it supplies the generic `delegate` child used by the Pi adapter. The adapter explicitly requests fresh context for every child and retries or recovers empty reviewer results before refereeing. It is a user-managed prerequisite, not a bundled dependency.
 
 ## Install a Plugin in Claude Code
 
@@ -183,7 +183,9 @@ Provides a shared lifecycle orchestrator, two utility skills, three delegated wo
 | `review-testing` | Optional targeted specialist for test coverage, assertion quality, edge cases, and test anti-patterns. |
 | `review-docs` | Separate Phase 4.5 docs-compliance gate for missing docs, stale docs, and frontmatter/cross-link correctness. |
 
-Heavy phases always run in fresh generic isolated delegated children. The canonical phase-to-skill mapping is shared by every harness: Claude Code selects `implement-lifecycle:<skill>`, Codex selects `$implement-lifecycle:<skill>`, and Pi's user-installed `pi-subagents` launches a generic `delegate` child with `skill: <skill>`. Compatible harnesses must explicitly load the mapped Agent Skill, pass the complete payload and context bundle, return the child result, and never fall back to inline execution when isolation or skill loading is unavailable. Selected reviewers run in parallel and all results return before refereeing. Model selection remains a per-delegation decision.
+Heavy phases always run in fresh generic isolated delegated children. The canonical phase-to-skill mapping is shared by every harness: Claude Code selects `implement-lifecycle:<skill>`, Codex selects `$implement-lifecycle:<skill>`, and Pi's user-installed `pi-subagents` launches a generic `delegate` child with `skill: <skill>` and explicit fresh context. Compatible harnesses must explicitly load the mapped Agent Skill, pass the complete payload and context bundle, return a non-empty child result, and never fall back to inline execution when isolation or skill loading is unavailable. Selected reviewers run in parallel and all canonical structured results return before refereeing. Model selection remains a per-delegation decision.
+
+Focused acceptance commands belong to implementation and review workers. Final verification alone owns the lifecycle-wide suite, records its exit status on the exact final commit, and runs it no more than once; matching recorded evidence is reused. Documentation findings always pass through review, address, and re-review before verification.
 
 The skill-local `agents/openai.yaml` files are optional OpenAI skill metadata that supplies presentation and invocation policy. They are not subagent definitions, are retained for Codex compatibility, and do not change the harness-neutral worker behavior. No custom Pi agent templates are distributed.
 
