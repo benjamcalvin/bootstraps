@@ -288,6 +288,7 @@ for plugin_dir in plugins/*/; do
       implement implement-code implement-address review-general review-correctness
       review-security review-architecture review-testing review-docs merge-pr pr-check
     )
+    lifecycle_authoritative_suite_pattern='((^|[[:space:]`"\x27(;])\./validate-all\.sh([[:space:]`"\x27;|&)<>]|$)|(^|[[:space:]`"\x27(;])((ba|z|k)?sh)[[:space:]]+(\./)?validate-all\.sh([[:space:]`"\x27;|&)<>]|$)|(^|[^[:alnum:]_])(full|complete|entire|repository-wide|lifecycle-wide)(-suite|[[:space:]]+(test[- ]?)?suite|[[:space:]]+tests?|[[:space:]]+(repository|lifecycle)(-wide)?[[:space:]]+(test[- ]?)?suite)([^[:alnum:]_]|$))'
     lifecycle_suite_contract_invalid=false
     for lifecycle_skill in "${lifecycle_focused_skills[@]}"; do
       lifecycle_skill_file="$plugin_dir/skills/$lifecycle_skill/SKILL.md"
@@ -303,7 +304,40 @@ for plugin_dir in plugins/*/; do
         echo "  ERROR: $lifecycle_skill contains a non-canonical authoritative-suite reference: $suite_reference"
         ERRORS=$((ERRORS + 1))
         lifecycle_suite_contract_invalid=true
-      done < <(rg -i -N '(\./validate-all\.sh|(^|[[:space:]])((ba|z|k)?sh)[[:space:]]+(\./)?validate-all\.sh|(^|[^[:alnum:]_])(full|complete|entire|repository-wide|lifecycle-wide)(-suite|[[:space:]]+(test[- ]?)?suite|[[:space:]]+tests?)([^[:alnum:]_]|$))' "$lifecycle_skill_file" || true)
+      done < <(rg -i -N "$lifecycle_authoritative_suite_pattern" "$lifecycle_skill_file" || true)
+    done
+
+    lifecycle_suite_positive_fixtures=(
+      './validate-all.sh'
+      'Run bash validate-all.sh now.'
+      'Run the complete repository test suite.'
+      'Run the full lifecycle test suite.'
+    )
+    lifecycle_suite_negative_fixtures=(
+      './validate-all.sh.bak'
+      'docs/./validate-all.sh'
+      'scripts/validate-all.sh'
+      'bash validate-all.sh.bak'
+      'bash scripts/validate-all.sh'
+      'Run tests for the affected packages.'
+      'Run tests for the touched packages.'
+      'Use the tested helper.'
+      'Run focused tests.'
+      'Run package-scope tests.'
+    )
+    for lifecycle_fixture in "${lifecycle_suite_positive_fixtures[@]}"; do
+      if ! printf '%s\n' "$lifecycle_fixture" | rg -iq "$lifecycle_authoritative_suite_pattern"; then
+        echo "  ERROR: Lifecycle suite classifier missed positive fixture: $lifecycle_fixture"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_suite_contract_invalid=true
+      fi
+    done
+    for lifecycle_fixture in "${lifecycle_suite_negative_fixtures[@]}"; do
+      if printf '%s\n' "$lifecycle_fixture" | rg -iq "$lifecycle_authoritative_suite_pattern"; then
+        echo "  ERROR: Lifecycle suite classifier matched negative fixture: $lifecycle_fixture"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_suite_contract_invalid=true
+      fi
     done
     lifecycle_verify_file="$plugin_dir/skills/verify/SKILL.md"
     if [ "$(rg -Fc '<!-- lifecycle-suite-capability: full-suite-owner -->' "$lifecycle_verify_file")" -ne 1 ] || \
@@ -376,11 +410,15 @@ complete + referee -> refereeing
       echo "  OK: Every reviewer requires a non-empty four-heading canonical result"
     fi
 
-    if ! rg -Fq 'gh pr merge <pr-number> --squash --delete-branch --match-head-commit "$VERIFIED_SHA"' \
+    if ! rg -Fq 'Any complete authoritative evidence record for that identical SHA consumes its one-execution allowance, whether the recorded result passed or failed.' "$lifecycle_verify_file" || \
+      ! rg -Fq 'For a complete failing record, return FAIL and require addressing that produces a new head before another authoritative execution.' "$lifecycle_verify_file" || \
+      ! rg -Fq 'gh pr merge <pr-number> --squash --delete-branch --match-head-commit "$VERIFIED_SHA"' \
       "$plugin_dir/skills/merge-pr/SKILL.md" || \
       ! rg -Fq 'verification-head: <full-head-sha>' "$lifecycle_verify_file" || \
       ! rg -Fq 'suite-executions: 0 | 1' "$lifecycle_verify_file" || \
-      ! rg -Fq 'suite-exit-status: <integer> | n/a' "$lifecycle_verify_file"; then
+      ! rg -Fq 'suite-exit-status: <integer> | n/a' "$lifecycle_verify_file" || \
+      ! rg -Fq 'Accept `pass` only with a non-`none` suite command, exactly one execution, and exit status 0.' "$plugin_dir/skills/merge-pr/SKILL.md" || \
+      ! rg -Fq 'Accept `not-required` only after independently inspecting the changed files and confirming that every change is documentation or comments only, with command `none`, zero executions, and status `n/a`.' "$plugin_dir/skills/merge-pr/SKILL.md"; then
       echo "  ERROR: Verification evidence and merge must remain bound to the exact PR head"
       ERRORS=$((ERRORS + 1))
     else
