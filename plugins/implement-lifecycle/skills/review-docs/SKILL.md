@@ -32,7 +32,9 @@ Do NOT hardcode any project-specific rules. Derive all standards from what you f
 
 ## Step 2: Review Documentation Compliance
 
-Run focused acceptance commands when they help verify a finding. Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run.
+Run focused acceptance commands when they help verify a finding.
+
+Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run.
 
 Separate changed files into **code files** and **documentation files**, then evaluate each category.
 

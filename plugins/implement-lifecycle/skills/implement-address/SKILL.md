@@ -63,7 +63,7 @@ For each finding, take one of these actions:
 
 After addressing all findings:
 
-1. **Run focused tests, linters, and a build** on the packages you changed. Every test you touched must pass; every lint must pass. If tests fail, fix the code — not the tests. Do NOT re-run the entire repository suite here: the authoritative full-suite run is owned by `verify` once at the final head (see the implement skill). Running the full suite at every address pass is the single biggest wall-clock waste in the lifecycle.
+1. **Run focused tests, linters, and a build** on the packages you changed. Every test you touched must pass; every lint must pass. If tests fail, fix the code — not the tests.
 2. **Spot-check your changes** — Read through your own diff. Did you introduce any new issues while fixing the review feedback?
 
 Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run.

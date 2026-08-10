@@ -75,6 +75,20 @@ When specialists are selected, every adapter launches the selected reviewers in 
 
 Every reviewer child must return a non-empty final captured result containing all four canonical headings: **Action Required / Recommended / Minor / Summary**. Empty categories contain `None.`; headings are never omitted. **Empty captured reviewer output or a result missing any canonical heading is an incomplete delegation**: do not referee it or advance the lifecycle. Recover a complete child result from the harness when available; otherwise retry once as a new fresh-context child with the same canonical skill and context bundle. If recovery and retry both return empty or structurally incomplete results, report the failed review phase and stop.
 
+The following state machine is the authoritative reviewer-recovery contract; only its listed transitions are allowed:
+
+<!-- lifecycle-contract:reviewer-recovery:begin -->
+```text
+empty-output -> incomplete
+missing-heading -> incomplete
+incomplete + recover-complete -> structurally-complete
+incomplete + recover-unavailable -> fresh-retry
+fresh-retry + complete -> structurally-complete
+fresh-retry + incomplete -> stop
+structurally-complete -> referee
+```
+<!-- lifecycle-contract:reviewer-recovery:end -->
+
 **Isolate delegated context.** Each delegated agent (implementer, addresser, reviewer, verifier) should be launched with MINIMAL, FRESH context: the PR/issue being worked, the governing contract (issue body, ADR, or spec), the current diff, and any prior accepted/rejected findings — NOT the orchestrator's accumulated cross-PR history. Long-lived or reused sessions (e.g., a docs gate or verifier kept alive across multiple PRs) accumulate unrelated context and degrade review quality; reset or bound them per PR. Assemble a single shared **context bundle** (issue, contract, diff, prior findings, referee decisions) and pass the same bundle to every child for that PR, so each starts from the same ground truth instead of re-deriving it.
 
 ---
@@ -352,6 +366,22 @@ After the code review/address loop converges, run the docs curation gate. **This
 **Do NOT include `review-docs` in the Phase 4 reviewer pool.** It runs only here, after the code review loop is complete — this is the single docs owner for the lifecycle. **Do NOT skip this phase** just because the file list shows no `.md` files; judge docs-relevance by the observable surface, not the file list. When in doubt, run it — it is cheap and it catches real stale-docs gaps.
 
 Track the documentation gate explicitly. A docs-relevant PR follows `review-required` → `reviewed-with-findings` → `addressed` → `re-review-required` → `clean`; a non-docs-relevant PR is `skipped-not-relevant`. Verification may begin only when the documentation-gate state is `clean` or `skipped-not-relevant`. The `addressed` state must transition to `re-review-required`; it must never transition directly to verification. Record the state in the task tracker or orchestration notes after every transition so a resumed lifecycle can enforce the same guard.
+
+The following state machine is the authoritative documentation-gate contract; only its listed transitions are allowed:
+
+<!-- lifecycle-contract:docs-gate:begin -->
+```text
+initial + docs-relevant -> review-required
+initial + not-docs-relevant -> skipped-not-relevant
+review-required + actionable -> reviewed-with-findings
+review-required + zero-actionable -> clean
+reviewed-with-findings -> addressed
+addressed -> re-review-required
+re-review-required -> review-required
+clean -> verification
+skipped-not-relevant -> verification
+```
+<!-- lifecycle-contract:docs-gate:end -->
 
 #### Step A: Invoke Docs Reviewer
 

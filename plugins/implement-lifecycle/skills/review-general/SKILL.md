@@ -41,7 +41,9 @@ Check the whole changed surface for:
 - **Maintainability and integration** — responsibilities remain clear and callers, consumers, compatibility, and adjacent behavior still fit
 - **Tests** — important changed behavior has meaningful coverage and assertions bind the claimed outcome
 
-Run the PR's own focused acceptance commands when feasible. Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run. If execution is unavailable or impractical, state that limitation.
+Run the PR's own focused acceptance commands when feasible. If execution is unavailable or impractical, state that limitation.
+
+Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run.
 
 Stay proportionate. Cover routine concerns across all domains, but leave unusually deep security, architecture, test-strategy, concurrency, or algorithmic analysis to any specialist explicitly selected by the orchestrator. Do not manufacture findings to justify another reviewer.
 

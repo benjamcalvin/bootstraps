@@ -27,7 +27,9 @@ At runtime, parse the PR number and fetch its metadata, comments, and checks.
 
 ## Instructions
 
-Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run. Consume the durable verification evidence record passed by the orchestrator; merge readiness checks must not rerun the authoritative suite.
+Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run.
+
+Consume the durable verification evidence record passed by the orchestrator; merge readiness checks must not execute verification commands.
 
 ### Step 1: Validate Readiness
 
@@ -41,7 +43,15 @@ Check that the PR is safe to merge. For each check, determine pass/fail:
    - If `CHANGES_REQUESTED`, stop and report.
    - If merging to `main` or `master`: require `APPROVED`. If `REVIEW_REQUIRED` or empty/null, escalate to the user and wait for explicit confirmation.
    - If merging to any other branch: human approval is not required. Proceed if CI passes and all other checks are satisfied.
-6. **Exact verified head** — Fetch the current PR head SHA and compare it with the verified commit SHA in the durable authoritative-suite evidence record. For a code change, they must be equal and the recorded original exit status must be zero. Missing evidence, a nonzero status, or a SHA mismatch blocks merge; do not rerun the suite. Pure documentation changes may instead carry the verifier's N/A record for that same current head.
+6. **Exact verified head.**
+
+Fetch the current PR head SHA and compare it with the verified commit SHA in the durable authoritative-suite evidence record.
+
+For a code change, they must be equal and the recorded original exit status must be zero.
+
+Missing evidence, a nonzero status, or a SHA mismatch blocks merge; do not rerun the suite.
+
+Pure documentation changes may instead carry the verifier's N/A record for that same current head.
 
 **If validation fails**, stop and report exactly what needs to be fixed. Do not merge.
 

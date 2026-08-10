@@ -75,7 +75,7 @@ Write the minimum code to make all tests pass:
 
 ### Step 4: Run Focused Verification
 
-Run the tests, linters, and a build for the packages/modules you changed. Every test you touched must pass; every lint must pass. If tests fail, fix the code (not the tests). Do NOT re-run the entire repository suite here — the authoritative full-suite run is owned by `verify` once at the final head (see the implement skill). Running the full suite at every implement/address phase is the single biggest wall-clock waste in the lifecycle.
+Run the tests, linters, and a build for the packages/modules you changed. Every test you touched must pass; every lint must pass. If tests fail, fix the code (not the tests).
 
 Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run.
 
