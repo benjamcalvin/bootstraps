@@ -47,8 +47,6 @@ Use the current client's task or plan tracker throughout when available.
 3. **Break down dynamically.** Add sub-tasks when entering a phase or when unexpected work surfaces.
 4. **Keep the list truthful.** Delete irrelevant tasks, update descriptions if scope changes.
 
----
-
 ### Harness-neutral delegation
 
 The lifecycle maps each heavy phase to one canonical worker skill:
@@ -96,8 +94,6 @@ On an incomplete result, first recover the final captured result from the harnes
 
 **Isolate delegated context.** Each delegated agent (implementer, addresser, reviewer, verifier) should be launched with MINIMAL, FRESH context: the PR/issue being worked, the governing contract (issue body, ADR, or spec), the current diff, and any prior accepted/rejected findings — NOT the orchestrator's accumulated cross-PR history. Long-lived or reused sessions (e.g., a docs gate or verifier kept alive across multiple PRs) accumulate unrelated context and degrade review quality; reset or bound them per PR. Assemble a single shared **context bundle** (issue, contract, diff, prior findings, referee decisions) and pass the same bundle to every child for that PR, so each starts from the same ground truth instead of re-deriving it.
 
----
-
 ### Entry Point
 
 Parse the invocation input to determine **what to work on** and **what to do**.
@@ -122,8 +118,6 @@ Any text after the leading token is **instructions that control what you do**. T
 | Any other specific direction | Use judgment — execute the phases that match the intent, skip the rest. |
 
 The table above is illustrative, not exhaustive. Interpret the user's intent and execute accordingly. When in doubt, do more rather than less — the default full lifecycle is always safe.
-
----
 
 ### Phase 1–3: Plan, Implement & Create PR
 
@@ -155,8 +149,6 @@ Entering adversarial review phase.
 EOF
 )"
 ```
-
----
 
 ### Phase 4: Review/Address Loop {#review-loop}
 
@@ -362,8 +354,6 @@ Then stop and inform the user directly.
 
 3. **Continue:** Re-fetch the changed-files summary and the latest address commit's delta, increment the round counter, and return to Step A. Continue autonomously unless the convergence audit requires human direction or another scope guard fires.
 
----
-
 ### Phase 4.5: Docs Compliance Gate
 
 The docs-gate contract is this exact state graph:
@@ -449,8 +439,6 @@ Payload: <pr-number> docs-<round-number> /tmp/implement-docs-findings-pr-<PR>-ro
 
 Re-invoke the docs reviewer to verify fixes. The round counter starts from round 1 (independent of Phase 4 rounds). Loop until clean. Apply the same round-2 convergence audit and convergence-based escalation (round-5 ceiling) as Phase 4.
 
----
-
 ### Phase 5: Manual Verification Gate
 
 After the review loop completes, invoke the verification agent to test the PR's changes with real-world execution before merging:
@@ -482,8 +470,6 @@ Payload: <pr-number> verify-<round-number> /tmp/implement-verify-findings-pr-<PR
 
 The round counter starts from round 1 (independent of Phase 4 rounds) and increments each FAIL → address → re-verify cycle. After the addresser pushes fixes, re-invoke `verify` and repeat until **PASS** or **N/A**, then proceed to Phase 6.
 
----
-
 ### Phase 6: Merge & Finalize
 
 Invoke `merge-pr` in Claude Code or `$implement-lifecycle:merge-pr` in Codex:
@@ -495,8 +481,6 @@ Payload: <pr-number>
 This validates the PR, squash-merges it, deletes the branch, and posts updates on linked issues.
 
 Report the result to the user.
-
----
 
 ## Escalation
 
