@@ -9,6 +9,59 @@ ERRORS=0
 WARNINGS=0
 CODEX_MARKETPLACE_VALID=false
 
+# Print complete-suite authorizations from non-verification lifecycle prose.
+# Clauses are checked independently so a prohibition in one clause cannot hide
+# an authorization later on the same line.
+lifecycle_suite_authorizations() {
+  awk '
+    function inspect(clause, line, broad, authorizes, negates) {
+      clause = tolower(clause)
+      broad = clause ~ /((full|complete|entire|lifecycle-wide|repository-wide).*(suite|test)|(suite|test).*(full|complete|entire|lifecycle-wide|repository-wide)|(all|every).*(repository|repo).*(test|suite)|(repository|repo).*(all|every).*(test|suite)|\.\/validate-all\.sh)/
+      authorizes = clause ~ /(^|[^[:alpha:]])(run|execute|invoke)([^[:alpha:]]|$)/ || clause ~ /(must|shall|should|needs? to|required to|has to).*(run|execute|invoke|be run|be executed)/
+      negates = clause ~ /(do not|don.t|must not|shall not|should not|never|prohibit(ed)?|may not|without).*(run|execute|invoke|be run|be executed|suite|test|validate-all)/
+      if (broad && authorizes && !negates) print NR ":" line
+    }
+    {
+      count = split($0, clauses, /;/)
+      for (i = 1; i <= count; i++) inspect(clauses[i], $0)
+    }
+  '
+}
+
+lifecycle_forbidden_docs_transitions() {
+  awk '
+    {
+      line = tolower($0)
+      if ((line ~ /addressed.*(advance|proceed|transition|enter).*(verify|verification)/ ||
+           line ~ /addressed.*(→|->).*(verify|verification)/) &&
+          line !~ /(do not|don.t|must not|never|block|prohibit)/) print NR ":" $0
+    }
+  '
+}
+
+lifecycle_forbidden_incomplete_advancement() {
+  awk '
+    {
+      line = tolower($0)
+      if ((line ~ /(empty|incomplete).*(reviewer|captured.*output|(^|[^[:alpha:]])results?([^[:alpha:]]|$)).*(advance|proceed|referee|verification)/ ||
+           line ~ /(reviewer|captured.*output|(^|[^[:alpha:]])results?([^[:alpha:]]|$)).*(empty|incomplete|missing.*heading).*(advance|proceed|referee|verification)/) &&
+          line !~ /(do not|don.t|must not|never|stop|block)/) print NR ":" $0
+    }
+  '
+}
+
+lifecycle_reviewer_result_complete() {
+  reviewer_contract=$1
+  rg -Fq 'as your final message, in exactly this structure:' "$reviewer_contract" &&
+    rg -Fq 'Always include all four headings.' "$reviewer_contract" &&
+    rg -Fq 'Write `None.` under any empty finding category.' "$reviewer_contract" &&
+    ! rg -qi 'omit (any )?(empty )?(category|categories)' "$reviewer_contract" &&
+    rg -Fq '### Action Required' "$reviewer_contract" &&
+    rg -Fq '### Recommended' "$reviewer_contract" &&
+    rg -Fq '### Minor' "$reviewer_contract" &&
+    rg -Fq '### Summary' "$reviewer_contract"
+}
+
 echo "=== Bootstraps Plugin Validation ==="
 echo ""
 
@@ -295,15 +348,7 @@ for plugin_dir in plugins/*/; do
         ERRORS=$((ERRORS + 1))
         lifecycle_suite_contract_missing=true
       fi
-      lifecycle_positive_suite_instruction=$(awk '
-        {
-          line = tolower($0)
-        }
-        line ~ /(run|execute|invoke).*(full|complete|entire|lifecycle-wide|repository-wide).*(suite|test)/ &&
-          line !~ /(do not|don.t|must not|never|prohibited|owned by|owns that run|without.*rerun)/ {
-          print NR ":" $0
-        }
-      ' "$lifecycle_skill_file")
+      lifecycle_positive_suite_instruction=$(lifecycle_suite_authorizations < "$lifecycle_skill_file")
       if [ -n "$lifecycle_positive_suite_instruction" ]; then
         echo "  ERROR: $lifecycle_skill authorizes a complete-suite run: $lifecycle_positive_suite_instruction"
         ERRORS=$((ERRORS + 1))
@@ -319,14 +364,40 @@ for plugin_dir in plugins/*/; do
       echo "  OK: Non-verification lifecycle phases reserve complete-suite execution for final verification"
     fi
 
+    lifecycle_suite_mutations=(
+      'The full test suite must be run before continuing.'
+      'Run all repository tests before returning.'
+      'Run the test suite across the entire repository before returning.'
+      'Run ./validate-all.sh before returning.'
+      'Do not skip validation; run the full repository test suite before returning.'
+    )
+    for lifecycle_suite_mutation in "${lifecycle_suite_mutations[@]}"; do
+      if [ -z "$(printf '%s\n' "$lifecycle_suite_mutation" | lifecycle_suite_authorizations)" ]; then
+        echo "  ERROR: Complete-suite detector missed mutation: $lifecycle_suite_mutation"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_suite_contract_missing=true
+      fi
+    done
+    for lifecycle_suite_prohibition in \
+      'Do not run the full test suite.' \
+      'Lifecycle-wide repository test suites are prohibited.'; do
+      if [ -n "$(printf '%s\n' "$lifecycle_suite_prohibition" | lifecycle_suite_authorizations)" ]; then
+        echo "  ERROR: Complete-suite detector rejected explicit prohibition: $lifecycle_suite_prohibition"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_suite_contract_missing=true
+      fi
+    done
+
     lifecycle_verify_skill="$plugin_dir/skills/verify/SKILL.md"
     lifecycle_verification_contract_missing=false
     for verification_contract in \
       'Record the final commit SHA before selecting commands.' \
-      'A successful authoritative full-suite result is reusable only when its recorded commit SHA exactly matches that final commit.' \
+      'Any complete authoritative-suite result, passing or failing, consumes the one-run allowance when its recorded commit SHA exactly matches that final commit.' \
       'Execute the authoritative full-suite command at most once for that commit.' \
       'Do not rerun it to uncache results, filter output, recover an exit status, count results, or improve report formatting.' \
-      'Capture output and the original exit status from that single execution.'; do
+      'Capture output and the original exit status from that single execution.' \
+      'Immediately after the execution, fetch the current PR head again.' \
+      'Return a concise durable evidence record with the command, verified commit SHA, original exit status, and an output/evidence pointer.'; do
       if ! rg -Fq "$verification_contract" "$lifecycle_verify_skill"; then
         echo "  ERROR: verify is missing exact-head single-execution contract: $verification_contract"
         ERRORS=$((ERRORS + 1))
@@ -336,14 +407,41 @@ for plugin_dir in plugins/*/; do
     if [ "$lifecycle_verification_contract_missing" = false ]; then
       echo "  OK: Verification records exact-head evidence and preserves one authoritative suite execution"
     fi
+    lifecycle_merge_skill="$plugin_dir/skills/merge-pr/SKILL.md"
+    for merge_evidence_contract in \
+      'Consume the durable verification evidence record passed by the orchestrator' \
+      'compare it with the verified commit SHA in the durable authoritative-suite evidence record' \
+      'Missing evidence, a nonzero status, or a SHA mismatch blocks merge; do not rerun the suite.'; do
+      if ! rg -Fq "$merge_evidence_contract" "$lifecycle_merge_skill"; then
+        echo "  ERROR: merge-pr is missing exact-head evidence handoff contract: $merge_evidence_contract"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_verification_contract_missing=true
+      fi
+    done
 
     lifecycle_docs_gate_contract_missing=false
     for docs_gate_contract in \
       '`review-required` → `reviewed-with-findings` → `addressed` → `re-review-required` → `clean`' \
       'Verification may begin only when the documentation-gate state is `clean` or `skipped-not-relevant`.' \
-      'The `addressed` state must transition to `re-review-required`; it must never transition directly to verification.'; do
+      'The `addressed` state must transition to `re-review-required`; it must never transition directly to verification.' \
+      'zero actionable findings always transitions the gate to `clean`, including a round whose raw findings were all rejected.'; do
       if ! rg -Fq "$docs_gate_contract" "$lifecycle_implement_skill"; then
         echo "  ERROR: Documentation gate is missing required review/address/re-review state: $docs_gate_contract"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_docs_gate_contract_missing=true
+      fi
+    done
+    lifecycle_docs_transition_violation=$(lifecycle_forbidden_docs_transitions < "$lifecycle_implement_skill")
+    if [ -n "$lifecycle_docs_transition_violation" ]; then
+      echo "  ERROR: Documentation gate permits addressed-to-verification transition: $lifecycle_docs_transition_violation"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_docs_gate_contract_missing=true
+    fi
+    for lifecycle_docs_mutation in \
+      'After findings are addressed, proceed directly to verification.' \
+      'Documentation gate: addressed → verification.'; do
+      if [ -z "$(printf '%s\n' "$lifecycle_docs_mutation" | lifecycle_forbidden_docs_transitions)" ]; then
+        echo "  ERROR: Documentation transition detector missed direct addressed-to-verification mutation: $lifecycle_docs_mutation"
         ERRORS=$((ERRORS + 1))
         lifecycle_docs_gate_contract_missing=true
       fi
@@ -355,10 +453,27 @@ for plugin_dir in plugins/*/; do
     lifecycle_pi_contract_missing=false
     for pi_contract in \
       '`context: "fresh"`' \
-      'Empty captured reviewer output is an incomplete delegation' \
-      'Action Required / Recommended / Minor / Summary'; do
+      'Empty captured reviewer output or a result missing any canonical heading is an incomplete delegation' \
+      'retry once as a new fresh-context child' \
+      'report the failed review phase and stop'; do
       if ! rg -Fq "$pi_contract" "$lifecycle_implement_skill"; then
         echo "  ERROR: Pi adapter is missing fresh-context or reviewer-result contract: $pi_contract"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_pi_contract_missing=true
+      fi
+    done
+    lifecycle_incomplete_advancement=$(lifecycle_forbidden_incomplete_advancement < "$lifecycle_implement_skill")
+    if [ -n "$lifecycle_incomplete_advancement" ]; then
+      echo "  ERROR: Pi reviewer contract permits advancement after incomplete output: $lifecycle_incomplete_advancement"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_pi_contract_missing=true
+    fi
+    for lifecycle_pi_mutation in \
+      'After empty reviewer output, advance directly to refereeing.' \
+      'After incomplete reviewer output, proceed to verification.' \
+      'When the result is missing a heading, referee it immediately.'; do
+      if [ -z "$(printf '%s\n' "$lifecycle_pi_mutation" | lifecycle_forbidden_incomplete_advancement)" ]; then
+        echo "  ERROR: Pi recovery detector missed incomplete-output advancement mutation: $lifecycle_pi_mutation"
         ERRORS=$((ERRORS + 1))
         lifecycle_pi_contract_missing=true
       fi
@@ -370,19 +485,24 @@ for plugin_dir in plugins/*/; do
     lifecycle_reviewer_result_contract_missing=false
     for lifecycle_reviewer in review-general review-correctness review-security review-architecture review-testing review-docs; do
       lifecycle_reviewer_file="$plugin_dir/skills/$lifecycle_reviewer/SKILL.md"
-      if ! rg -Fq 'as your final message, in exactly this structure:' "$lifecycle_reviewer_file"; then
-        echo "  ERROR: $lifecycle_reviewer must return its canonical report as the final captured result"
+      if ! lifecycle_reviewer_result_complete "$lifecycle_reviewer_file"; then
+        echo "  ERROR: $lifecycle_reviewer must require all canonical headings and None. placeholders"
         ERRORS=$((ERRORS + 1))
         lifecycle_reviewer_result_contract_missing=true
       fi
-      for reviewer_heading in '### Action Required' '### Recommended' '### Minor' '### Summary'; do
-        if ! rg -Fq "$reviewer_heading" "$lifecycle_reviewer_file"; then
-          echo "  ERROR: $lifecycle_reviewer is missing canonical result heading: $reviewer_heading"
-          ERRORS=$((ERRORS + 1))
-          lifecycle_reviewer_result_contract_missing=true
-        fi
-      done
     done
+    lifecycle_incomplete_reviewer_fixture=$(mktemp)
+    printf '%s\n' \
+      'Return findings to the orchestrator as your final message, in exactly this structure:' \
+      'Always include all four headings.' \
+      'Write `None.` under any empty finding category.' \
+      '### Action Required' '### Recommended' '### Summary' > "$lifecycle_incomplete_reviewer_fixture"
+    if lifecycle_reviewer_result_complete "$lifecycle_incomplete_reviewer_fixture"; then
+      echo "  ERROR: Reviewer result validator accepted a structurally incomplete canonical result"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_reviewer_result_contract_missing=true
+    fi
+    rm -f "$lifecycle_incomplete_reviewer_fixture"
     if [ "$lifecycle_reviewer_result_contract_missing" = false ]; then
       echo "  OK: Every lifecycle reviewer returns the canonical report as its final captured result"
     fi

@@ -99,4 +99,4 @@ Return findings to the orchestrator as your final message, in exactly this struc
 ### Summary
 <1-2 sentence assessment focused on correctness>
 
-Omit any category that has no findings. If the code is correct, say so explicitly.
+Always include all four headings. Write `None.` under any empty finding category. If the code is correct, say so explicitly in the summary.

@@ -124,4 +124,4 @@ Return findings to the orchestrator as your final message, in exactly this struc
 ### Summary
 <1-2 sentence assessment focused on test adequacy and quality>
 
-Omit any category that has no findings. If test coverage and quality look solid, say so explicitly.
+Always include all four headings. Write `None.` under any empty finding category. If test coverage and quality look solid, say so explicitly in the summary.

@@ -102,4 +102,4 @@ Return findings to the orchestrator as your final message, in exactly this struc
 ### Summary
 <1-2 sentence assessment focused on security posture and security-sensitive requirements>
 
-Omit any category that has no findings. If the security posture is sound, say so explicitly.
+Always include all four headings. Write `None.` under any empty finding category. If the security posture is sound, say so explicitly in the summary.

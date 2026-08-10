@@ -36,10 +36,12 @@ You are the last line of defense before merge. Be thorough.
 For any code change, enforce this exact-head execution discipline:
 
 1. **Record the final commit SHA before selecting commands.**
-2. Search the PR description and comments for an authoritative full-suite record containing the command, complete output, original exit status, and commit SHA.
-3. **A successful authoritative full-suite result is reusable only when its recorded commit SHA exactly matches that final commit.** Consume valid matching evidence without rerunning the suite.
-4. When no valid matching evidence exists, perform the authoritative run. **Execute the authoritative full-suite command at most once for that commit.** Capture output and the original exit status from that single execution. Use a shell form that records the status immediately while preserving it as the verification outcome.
+2. Search the delegation payload, orchestration notes, PR description, and comments for a durable authoritative-suite record containing the command, commit SHA, original exit status, and an output/evidence pointer.
+3. **Any complete authoritative-suite result, passing or failing, consumes the one-run allowance when its recorded commit SHA exactly matches that final commit.** Reuse a passing result; report a nonzero result as verification failure without rerunning it.
+4. When no matching execution record exists, perform the authoritative run. **Execute the authoritative full-suite command at most once for that commit.** Capture output and the original exit status from that single execution. Use a shell form that records the status immediately while preserving it as the verification outcome.
 5. **Do not rerun it to uncache results, filter output, recover an exit status, count results, or improve report formatting.** Derive any presentation summary from the captured output. If the single execution's evidence is incomplete, report verification as incomplete or failed instead of executing the suite again.
+6. Immediately after the execution, fetch the current PR head again. If it differs from the recorded commit, preserve the stale commit's evidence record, report that the current head remains unverified, and do not reuse or rerun the suite for the stale commit.
+7. Return a concise durable evidence record with the command, verified commit SHA, original exit status, and an output/evidence pointer. The orchestrator must retain this record across fresh children and resumes and pass it to merge.
 
 Use the current client's task or plan tracker when available.
 
@@ -135,7 +137,7 @@ If a verification step fails:
 
 ### Step 5: Report Findings
 
-Post your verification results to the PR. **Keep the comment concise — verdict + evidence pointers, not the full verbose transcript.** Post the verdict, the system flow verified, a short list of evidence pointers (command + one-line result each), issues found, and the holistic assessment. Do not dump full multi-line command output into the PR comment; capture it in your returned findings instead. A bloated verification comment buries the verdict.
+Post your verification results to the PR. **Keep the main comment concise — verdict + evidence pointers, not an expanded verbose transcript.** The comment must contain the durable authoritative-suite record: command, verified commit SHA, original exit status, and a stable output/evidence pointer. Prefer an existing CI log or artifact URL as the pointer. When no durable external pointer exists for a locally executed suite, preserve its complete output in a collapsed `<details>` block in the same PR comment and point the record to that block. This keeps the evidence discoverable across fresh children and resumed runs without obscuring the verdict.
 
 ```
 gh pr comment <pr-number> --body "<concise results>"
@@ -152,7 +154,7 @@ Return findings in this structure:
 <exact commit SHA verified>
 
 ### Authoritative Suite
-<command, exact-head evidence source, original exit status, and whether the evidence was reused or executed once>
+<command, verified commit SHA, original exit status, output/evidence pointer, and whether the evidence was reused or executed once>
 
 ### System Flow Verified
 <brief description of the end-to-end flow that was exercised>

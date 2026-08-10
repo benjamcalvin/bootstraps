@@ -117,4 +117,4 @@ Return findings to the orchestrator as your final message, in exactly this struc
 ### Summary
 <1-2 sentence assessment focused on documentation accuracy and compliance>
 
-Omit any category that has no findings. If documentation is accurate and complete, say so explicitly.
+Always include all four headings. Write `None.` under any empty finding category. If documentation is accurate and complete, say so explicitly in the summary.

@@ -73,7 +73,7 @@ For every delegation, use the adapter for the active harness to create a fresh i
 
 When specialists are selected, every adapter launches the selected reviewers in parallel and waits for all their results before refereeing.
 
-Every reviewer child must return a non-empty final captured result in the canonical **Action Required / Recommended / Minor / Summary** structure. **Empty captured reviewer output is an incomplete delegation**: do not referee it or advance the lifecycle. Recover the child result from the harness when available; otherwise retry once as a new fresh-context child with the same canonical skill and context bundle. If recovery and retry both return empty, report the failed review phase and stop.
+Every reviewer child must return a non-empty final captured result containing all four canonical headings: **Action Required / Recommended / Minor / Summary**. Empty categories contain `None.`; headings are never omitted. **Empty captured reviewer output or a result missing any canonical heading is an incomplete delegation**: do not referee it or advance the lifecycle. Recover a complete child result from the harness when available; otherwise retry once as a new fresh-context child with the same canonical skill and context bundle. If recovery and retry both return empty or structurally incomplete results, report the failed review phase and stop.
 
 **Isolate delegated context.** Each delegated agent (implementer, addresser, reviewer, verifier) should be launched with MINIMAL, FRESH context: the PR/issue being worked, the governing contract (issue body, ADR, or spec), the current diff, and any prior accepted/rejected findings — NOT the orchestrator's accumulated cross-PR history. Long-lived or reused sessions (e.g., a docs gate or verifier kept alive across multiple PRs) accumulate unrelated context and degrade review quality; reset or bound them per PR. Assemble a single shared **context bundle** (issue, contract, diff, prior findings, referee decisions) and pass the same bundle to every child for that PR, so each starts from the same ground truth instead of re-deriving it.
 
@@ -164,7 +164,7 @@ If conflicts arise, resolving them is a **permitted git-mechanical carve-out** t
 git push --force-with-lease
 ```
 
-**Run the authoritative full suite ONCE per lifecycle, owned by `verify` at the final head.** Implementer and addresser run focused package tests + lint + build on their own changes; they do NOT re-run the entire suite at every phase. The single full-suite run happens in Phase 5 (verify) against the final commit. This avoids the repeated full-suite re-runs that dominate wall-clock across phases. Outside final verification, Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run.
+**Run the authoritative full suite at most once per commit, owned by `verify`.** Implementer and addresser run focused package tests + lint + build on their own changes; they do NOT re-run the entire suite at every phase. Final verification consumes or performs the one authoritative run for the commit it verifies. A failed run may lead to address and re-verify on a new commit, but the failed commit is never rerun. Outside final verification, Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run.
 
 **Pin the toolchain once.** Use the project's pinned Go/toolchain version (e.g. `mise` or `go.mod`'s `go` directive) consistently across every phase. Do not let implementer, addresser, and verify each resolve a different toolchain — a mismatch (e.g. 1.25.5 vs 1.25.7) causes wasted full-suite failures that are not real regressions.
 
@@ -361,7 +361,7 @@ Payload: Review PR #<pr-number> for documentation compliance, round <round-numbe
 
 The docs reviewer fetches PR context, maps code changes to existing documentation, and identifies gaps — not just inaccuracies in changed docs, but missing docs for new behavior and stale docs contradicted by code changes. It returns findings to you and posts nothing itself; you remain the sole publisher.
 
-Set the gate to `review-required` before invoking the reviewer. A clean review transitions to `clean`; a review with findings that survive referee filtering transitions to `reviewed-with-findings`.
+Set the gate to `review-required` before invoking the reviewer. After referee filtering, zero actionable findings always transitions the gate to `clean`, including a round whose raw findings were all rejected. One or more surviving findings transitions it to `reviewed-with-findings`.
 
 #### Step B: Referee Evaluation
 
@@ -427,13 +427,13 @@ When the state is `re-review-required`, re-invoke the docs reviewer to verify fi
 
 After the review loop completes, invoke the verification agent to test the PR's changes with real-world execution before merging:
 
-Before delegating, assert that the documentation-gate state is `clean` or `skipped-not-relevant`. Any other state blocks this transition.
+Before delegating, assert that the documentation-gate state is `clean` or `skipped-not-relevant`. Any other state blocks this transition. In particular, never advance from `addressed` to verification or advance after empty or structurally incomplete reviewer output.
 
 ```
-Payload: <pr-number>
+Payload: <pr-number> <durable-authoritative-suite-evidence-record-or-none>
 ```
 
-The verification agent will classify the change type, devise a verification plan, execute it, and report structured evidence. If **PASS** or **N/A**, proceed to Phase 6. If the verdict is **FAIL**, delegate the fixes — do **not** fix the code yourself.
+The verification agent will classify the change type, devise a verification plan, execute it, and report structured evidence. Preserve its concise durable authoritative-suite evidence record in orchestration notes and pass it to every fresh verifier and the merge phase. If **PASS** or **N/A**, proceed to Phase 6. If the verdict is **FAIL**, delegate the fixes — do **not** fix the code yourself.
 
 Because `implement-address` reads its findings from a file argument (and aborts if that file is missing or empty), you must **write the verification findings to a temp file first**, reusing the findings-file mechanics of Phase 4 Step C/D (write a temp findings file, then invoke `implement-address` with its path). Unlike Phase 4, there is no referee accept/reject step here: `verify` is a single, self-vetting source rather than several parallel reviewers who can disagree, so its findings pass straight through. The `verify` skill only posts a PR comment; it does not write this file, so the orchestrator must create it:
 
@@ -463,7 +463,7 @@ The round counter starts from round 1 (independent of Phase 4 rounds) and increm
 Invoke `merge-pr` in Claude Code or `$implement-lifecycle:merge-pr` in Codex:
 
 ```
-Payload: <pr-number>
+Payload: <pr-number> <durable-authoritative-suite-evidence-record>
 ```
 
 This validates the PR, squash-merges it, deletes the branch, and posts updates on linked issues.

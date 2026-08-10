@@ -107,4 +107,4 @@ Return findings to the orchestrator as your final message, in exactly this struc
 ### Summary
 <1-2 sentence assessment focused on architectural fit and long-term health>
 
-Omit any category that has no findings. If the architecture looks solid, say so explicitly.
+Always include all four headings. Write `None.` under any empty finding category. If the architecture looks solid, say so explicitly in the summary.

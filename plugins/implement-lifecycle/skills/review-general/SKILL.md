@@ -81,4 +81,4 @@ Return findings to the orchestrator as your final message, in exactly this struc
 ### Summary
 <1-2 sentence holistic assessment, including which standards and acceptance requirements were checked and any execution limitation>
 
-Omit empty categories. If the PR is sound, say so explicitly.
+Always include all four headings. Write `None.` under any empty finding category. If the PR is sound, say so explicitly in the summary.
