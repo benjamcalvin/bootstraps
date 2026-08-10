@@ -266,5 +266,8 @@ suite-executions: 0
 suite-exit-status: n/a
 suite-command-results: []
 
+handoff-artifact:
+  {"verification-record":"v1","verification-head":"<full-head-sha>","suite-result":"not-required","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}
+
 Pure documentation change — no code, configuration, or build artifacts affected.
 ```

@@ -288,7 +288,7 @@ for plugin_dir in plugins/*/; do
       implement implement-code implement-address review-general review-correctness
       review-security review-architecture review-testing review-docs merge-pr pr-check
     )
-    lifecycle_prohibited_runtime_pattern='((^|[^[:alnum:]_.-])(\./)?validate-all\.sh([^[:alnum:]_.-]|$)|(^|[^[:alnum:]_])(go\.mod|go\.work|mise|golangci-lint|pinned[[:space:]]+go|go[[:space:]-]+toolchain|go[[:space:]]+test|go[[:space:]]+1\.[0-9]+)([^[:alnum:]_]|$)|(^|[^[:alnum:]_])/tmp(/|[^[:alnum:]_]|$))'
+    lifecycle_prohibited_runtime_pattern='((^|[^[:alnum:]_.-])(\./)?validate-all\.sh([^[:alnum:]_.-]|$)|(^|[^[:alnum:]_])(go\.mod|go\.work|mise|golangci-lint|pinned[[:space:]]+go|go[[:space:]-]+toolchain|go[[:space:]]+1\.[0-9]+)([^[:alnum:]_]|$)|(^|[^[:alnum:]_])go[[:space:]]+test([^[:alnum:]_-]|$)|(^|[^[:alnum:]_])/tmp(/|[^[:alnum:]_]|$))'
     lifecycle_suite_contract_invalid=false
     for lifecycle_skill in "${lifecycle_focused_skills[@]}"; do
       lifecycle_skill_file="$plugin_dir/skills/$lifecycle_skill/SKILL.md"
@@ -310,6 +310,7 @@ for plugin_dir in plugins/*/; do
     lifecycle_prohibited_positive_fixtures=(
       'Run go test ./...'
       'Run go test.'
+      'Run go test,'
       'Run `go test`.'
       'Use the Go toolchain selected by this repository'
       'golangci-lint run'
@@ -321,6 +322,8 @@ for plugin_dir in plugins/*/; do
       'Document ongoing testing work'
       'Reference go.workshop as an ordinary dotted name'
       'Discuss golangci-linting without naming a command'
+      'Describe go test-driven examples'
+      'Describe a go test-related workflow'
       'Use a system-provided temporary directory'
     )
     for lifecycle_fixture in "${lifecycle_prohibited_positive_fixtures[@]}"; do
@@ -370,35 +373,55 @@ for plugin_dir in plugins/*/; do
     lifecycle_evidence_is_mergeable() {
       local expected_sha="$1"
       local expected_plan_json="$2"
-      local serialized_record="$3"
-      jq -e --arg expected_sha "$expected_sha" --argjson expected_plan "$expected_plan_json" '
+      local change_scope="$3"
+      local serialized_record="$4"
+      jq -e --arg expected_sha "$expected_sha" --argjson expected_plan "$expected_plan_json" --arg change_scope "$change_scope" '
         . as $record |
-        (if ($expected_plan | type) == "array" then $expected_plan else [$expected_plan] end) as $expected_commands |
         $record["verification-record"] == "v1" and
         $record["verification-head"] == $expected_sha and
-        $record["suite-result"] == "pass" and
-        $record["suite-command"] == $expected_plan and
-        $record["suite-executions"] == 1 and
-        $record["suite-exit-status"] == 0 and
-        ($record["suite-command-results"] | type == "array") and
-        ($record["suite-command-results"] | length) == ($expected_commands | length) and
-        ($record["suite-evidence"] | type == "object") and
-        all(range(0; $expected_commands | length); . as $index |
-          ($record["suite-command-results"][$index]["evidence-pointer"] == "#/suite-evidence/command-\($index + 1)") and
-          $record["suite-command-results"][$index]["command"] == $expected_commands[$index] and
-          $record["suite-command-results"][$index]["result"] == "pass" and
-          $record["suite-command-results"][$index]["exit-status"] == 0 and
-          $record["suite-evidence"]["command-\($index + 1)"]["command"] == $expected_commands[$index] and
-          ($record["suite-evidence"]["command-\($index + 1)"]["output"] | type == "string" and length > 0)
-        )
+        if $change_scope == "documentation-only" then
+          $expected_plan == null and
+          $record["suite-result"] == "not-required" and
+          $record["suite-command"] == null and
+          $record["suite-executions"] == 0 and
+          $record["suite-exit-status"] == null and
+          $record["suite-command-results"] == [] and
+          $record["suite-evidence"] == {}
+        else
+          ((($expected_plan | type) == "string" and ($expected_plan | length) > 0) or
+            (($expected_plan | type) == "array" and ($expected_plan | length) > 0 and
+              all($expected_plan[]; type == "string" and length > 0))) and
+          (if ($expected_plan | type) == "array" then $expected_plan else [$expected_plan] end) as $expected_commands |
+          $record["suite-result"] == "pass" and
+          $record["suite-command"] == $expected_plan and
+          $record["suite-executions"] == 1 and
+          $record["suite-exit-status"] == 0 and
+          ($record["suite-command-results"] | type == "array") and
+          ($record["suite-command-results"] | length) == ($expected_commands | length) and
+          ($record["suite-evidence"] | type == "object") and
+          all(range(0; $expected_commands | length); . as $index |
+            ($record["suite-command-results"][$index]["evidence-pointer"] == "#/suite-evidence/command-\($index + 1)") and
+            $record["suite-command-results"][$index]["command"] == $expected_commands[$index] and
+            $record["suite-command-results"][$index]["result"] == "pass" and
+            $record["suite-command-results"][$index]["exit-status"] == 0 and
+            $record["suite-evidence"]["command-\($index + 1)"]["command"] == $expected_commands[$index] and
+            ($record["suite-evidence"]["command-\($index + 1)"]["output"] | type == "string" and length > 0)
+          )
+        end
       ' <<< "$serialized_record" > /dev/null 2>&1
     }
 
     lifecycle_expected_sha='0123456789abcdef0123456789abcdef01234567'
     lifecycle_evidence_fixtures=(
-      'exact|["npm run lint","npm test"]|accept|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test","output":"tests passed"}}}'
+      'exact|["npm run lint","npm test"]|executable|accept|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test","output":"tests passed"}}}'
       'equivalent-array-json|["npm run lint", "npm test"]|accept|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test","output":"tests passed"}}}'
       'scalar-command|"npm test"|accept|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":"npm test","suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"}],"suite-evidence":{"command-1":{"command":"npm test","output":"tests passed"}}}'
+      'null-plan|null|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":null,"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":null,"result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"}],"suite-evidence":{"command-1":{"command":null,"output":"invalid plan"}}}'
+      'empty-scalar|""|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":"","suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"}],"suite-evidence":{"command-1":{"command":"","output":"invalid plan"}}}'
+      'empty-array|[]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":[],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[],"suite-evidence":{}}'
+      'empty-array-element|["npm test",""]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm test",""],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm test","output":"tests passed"},"command-2":{"command":"","output":"invalid plan"}}}'
+      'nonstring-array-element|["npm test",1]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm test",1],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":1,"result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm test","output":"tests passed"},"command-2":{"command":1,"output":"invalid plan"}}}'
+      'documentation-only|null|documentation-only|accept|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"not-required","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}'
       'missing-contract|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"missing-contract","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}'
       'reordered|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm test","npm run lint"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm test","output":"tests passed"},"command-2":{"command":"npm run lint","output":"lint passed"}}}'
       'altered-arguments|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test -- --quick"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test -- --quick","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test -- --quick","output":"tests passed"}}}'
@@ -410,9 +433,17 @@ for plugin_dir in plugins/*/; do
       'mismatched-evidence|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test -- --quick","output":"quick tests passed"}}}'
     )
     for lifecycle_fixture in "${lifecycle_evidence_fixtures[@]}"; do
-      IFS='|' read -r lifecycle_fixture_name lifecycle_fixture_plan lifecycle_expected_outcome lifecycle_serialized_record <<< "$lifecycle_fixture"
+      IFS='|' read -r lifecycle_fixture_name lifecycle_fixture_plan lifecycle_fixture_field_3 lifecycle_fixture_field_4 lifecycle_fixture_field_5 <<< "$lifecycle_fixture"
+      lifecycle_change_scope='executable'
+      lifecycle_expected_outcome="$lifecycle_fixture_field_3"
+      lifecycle_serialized_record="$lifecycle_fixture_field_4"
+      if [ "$lifecycle_fixture_field_3" = executable ] || [ "$lifecycle_fixture_field_3" = documentation-only ]; then
+        lifecycle_change_scope="$lifecycle_fixture_field_3"
+        lifecycle_expected_outcome="$lifecycle_fixture_field_4"
+        lifecycle_serialized_record="$lifecycle_fixture_field_5"
+      fi
       lifecycle_actual_outcome='reject'
-      if lifecycle_evidence_is_mergeable "$lifecycle_expected_sha" "$lifecycle_fixture_plan" "$lifecycle_serialized_record"; then
+      if lifecycle_evidence_is_mergeable "$lifecycle_expected_sha" "$lifecycle_fixture_plan" "$lifecycle_change_scope" "$lifecycle_serialized_record"; then
         lifecycle_actual_outcome='accept'
       fi
       if [ "$lifecycle_actual_outcome" != "$lifecycle_expected_outcome" ]; then
@@ -507,9 +538,11 @@ complete + referee -> refereeing
       ! rg -Fq 'suite-command: <exact-command-or-ordered-JSON-command-array> | none' "$lifecycle_verify_file" || \
       ! rg -Fq 'suite-command-results:' "$lifecycle_verify_file" || \
       ! rg -Fq 'The missing-contract/PARTIAL record is canonical:' "$lifecycle_verify_file" || \
-      ! rg -Fq 'Read the explicitly handed-off durable `verification-record:v1` and require it to match the complete record in the latest verification PR comment.' "$lifecycle_merge_file" || \
-      ! rg -Fq 'Reject different commands, reordered plans, missing command results, wrappers, arguments, prefixes, suffixes, stale or mismatched handoff/comment records, `missing-contract`' "$lifecycle_merge_file" || \
-      ! rg -Fq 'Capture the verifier'"'"'s complete durable `verification-record:v1`' "$lifecycle_implement_skill" || \
+      ! rg -Fq '{"verification-record":"v1","verification-head":"<full-head-sha>","suite-result":"not-required","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}' "$lifecycle_verify_file" || \
+      ! rg -Fq 'If the path is absent, unreadable, or does not contain a complete `verification-record:v1` plus its referenced `suite-evidence`, stop rather than reconstructing evidence from an inaccessible parent transcript.' "$lifecycle_merge_file" || \
+      ! rg -Fq 'For every result, require its `#/suite-evidence/command-<N>` pointer to resolve inside the handed-off object' "$lifecycle_merge_file" || \
+      ! rg -Fq 'Accept `not-required` only after independently inspecting the changed files and confirming that every change is documentation or comments only' "$lifecycle_merge_file" || \
+      ! rg -Fq 'Capture the verifier'"'"'s returned handoff-artifact JSON object: the complete durable `verification-record:v1`' "$lifecycle_implement_skill" || \
       ! rg -Fq 'Payload: <pr-number> <resolved-verification-record-path>' "$lifecycle_implement_skill"; then
       echo "  ERROR: Verification evidence and merge must remain bound to the exact PR head"
       ERRORS=$((ERRORS + 1))
