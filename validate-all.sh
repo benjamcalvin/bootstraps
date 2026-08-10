@@ -282,13 +282,13 @@ for plugin_dir in plugins/*/; do
       echo "  OK: Lifecycle reviewer skills prohibit modifying reviewed code and posting to GitHub"
     fi
 
-    lifecycle_focused_contract='**Suite capability: `focused-only`. Run focused acceptance commands only. Do not run `./validate-all.sh`, an explicit shell invocation of that alias, or any full, complete, entire, repository-wide, or lifecycle-wide test suite. Final verification owns the authoritative suite.**'
-    lifecycle_owner_contract='**Suite capability: `full-suite-owner`. Verification is the sole phase authorized to run the authoritative lifecycle-wide repository suite, at most once for the exact PR head.**'
+    lifecycle_focused_contract="**Suite capability: \`focused-only\`. Run focused tests, lint, builds, and acceptance commands only. Do not execute or consume the target repository's authoritative verification command or ordered command plan. Final verification owns that evidence.**"
+    lifecycle_owner_contract="**Suite capability: \`full-suite-owner\`. Verification is the sole phase authorized to execute or consume the target repository's authoritative verification command or ordered command plan, at most once for the exact PR head.**"
     lifecycle_focused_skills=(
       implement implement-code implement-address review-general review-correctness
       review-security review-architecture review-testing review-docs merge-pr pr-check
     )
-    lifecycle_authoritative_suite_pattern='((^|[[:space:]`"\x27(;])\./validate-all\.sh([[:space:]`"\x27;|&)<>]|$)|(^|[[:space:]`"\x27(;])((ba|z|k)?sh)[[:space:]]+(\./)?validate-all\.sh([[:space:]`"\x27;|&)<>]|$)|(^|[^[:alnum:]_])(full|complete|entire|repository-wide|lifecycle-wide)(-suite|[[:space:]]+(test[- ]?)?suite|[[:space:]]+tests?|[[:space:]]+(repository|lifecycle)(-wide)?[[:space:]]+(test[- ]?)?suite)([^[:alnum:]_]|$))'
+    lifecycle_prohibited_runtime_pattern='((^|[^[:alnum:]_.-])(\./)?validate-all\.sh([^[:alnum:]_.-]|$)|(^|[^[:alnum:]_])(go\.mod|go\.work|mise|golangci-lint|pinned[[:space:]]+go|go[[:space:]-]+toolchain|go[[:space:]]+1\.[0-9]+)([^[:alnum:]_]|$)|(^|[^[:alnum:]_])go[[:space:]]+test([^[:alnum:]_-]|$)|(^|[^[:alnum:]_])/tmp(/|[^[:alnum:]_]|$))'
     lifecycle_suite_contract_invalid=false
     for lifecycle_skill in "${lifecycle_focused_skills[@]}"; do
       lifecycle_skill_file="$plugin_dir/skills/$lifecycle_skill/SKILL.md"
@@ -299,79 +299,157 @@ for plugin_dir in plugins/*/; do
         lifecycle_suite_contract_invalid=true
       fi
 
-      while IFS= read -r suite_reference; do
-        [ "$suite_reference" = "$lifecycle_focused_contract" ] && continue
-        echo "  ERROR: $lifecycle_skill contains a non-canonical authoritative-suite reference: $suite_reference"
-        ERRORS=$((ERRORS + 1))
-        lifecycle_suite_contract_invalid=true
-      done < <(rg -i -N "$lifecycle_authoritative_suite_pattern" "$lifecycle_skill_file" || true)
     done
 
-    lifecycle_suite_positive_fixtures=(
-      './validate-all.sh'
-      'Run bash validate-all.sh now.'
-      'Run the complete repository test suite.'
-      'Run the full lifecycle test suite.'
+    while IFS= read -r lifecycle_prohibited_reference; do
+      echo "  ERROR: Distributed lifecycle skill contains a source-repository or language-specific runtime assumption: $lifecycle_prohibited_reference"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_suite_contract_invalid=true
+    done < <(rg -i -N "$lifecycle_prohibited_runtime_pattern" "$plugin_dir/skills"/*/SKILL.md || true)
+
+    lifecycle_prohibited_positive_fixtures=(
+      'Run go test ./...'
+      'Run go test.'
+      'Run go test,'
+      'Run `go test`.'
+      'Use the Go toolchain selected by this repository'
+      'golangci-lint run'
+      'Create a go.work file'
     )
-    lifecycle_suite_negative_fixtures=(
-      './validate-all.sh.bak'
-      'docs/./validate-all.sh'
-      'scripts/validate-all.sh'
-      'bash validate-all.sh.bak'
-      'bash scripts/validate-all.sh'
-      'Run tests for the affected packages.'
-      'Run tests for the touched packages.'
-      'Use the tested helper.'
-      'Run focused tests.'
-      'Run package-scope tests.'
+    lifecycle_prohibited_negative_fixtures=(
+      'Run the target repository authoritative command'
+      'Use its pinned runtime, compiler, package manager, or toolchain'
+      'Document ongoing testing work'
+      'Reference go.workshop as an ordinary dotted name'
+      'Discuss golangci-linting without naming a command'
+      'Describe go test-driven examples'
+      'Describe a go test-related workflow'
+      'Use a system-provided temporary directory'
     )
-    for lifecycle_fixture in "${lifecycle_suite_positive_fixtures[@]}"; do
-      if ! printf '%s\n' "$lifecycle_fixture" | rg -iq "$lifecycle_authoritative_suite_pattern"; then
-        echo "  ERROR: Lifecycle suite classifier missed positive fixture: $lifecycle_fixture"
+    for lifecycle_fixture in "${lifecycle_prohibited_positive_fixtures[@]}"; do
+      if ! printf '%s\n' "$lifecycle_fixture" | rg -iq "$lifecycle_prohibited_runtime_pattern"; then
+        echo "  ERROR: Prohibited-assumption classifier missed positive fixture: $lifecycle_fixture"
         ERRORS=$((ERRORS + 1))
         lifecycle_suite_contract_invalid=true
       fi
     done
-    for lifecycle_fixture in "${lifecycle_suite_negative_fixtures[@]}"; do
-      if printf '%s\n' "$lifecycle_fixture" | rg -iq "$lifecycle_authoritative_suite_pattern"; then
-        echo "  ERROR: Lifecycle suite classifier matched negative fixture: $lifecycle_fixture"
+    for lifecycle_fixture in "${lifecycle_prohibited_negative_fixtures[@]}"; do
+      if printf '%s\n' "$lifecycle_fixture" | rg -iq "$lifecycle_prohibited_runtime_pattern"; then
+        echo "  ERROR: Prohibited-assumption classifier rejected negative fixture: $lifecycle_fixture"
         ERRORS=$((ERRORS + 1))
         lifecycle_suite_contract_invalid=true
       fi
     done
 
-    lifecycle_merge_suite_command_pattern='^(\./validate-all\.sh|((ba|z|k)?sh)[[:space:]]+(\./)?validate-all\.sh)$'
-    lifecycle_merge_command_positive_fixtures=(
-      './validate-all.sh'
-      'sh validate-all.sh'
-      'sh ./validate-all.sh'
-      'bash validate-all.sh'
-      'bash ./validate-all.sh'
-      'zsh validate-all.sh'
-      'zsh ./validate-all.sh'
-      'ksh validate-all.sh'
-      'ksh ./validate-all.sh'
+    lifecycle_capability_allows_command() {
+      local capability="$1"
+      local candidate_plan="$2"
+      local authoritative_plan="$3"
+      if [ "$capability" = full-suite-owner ]; then
+        return 0
+      fi
+      ! jq -e -n --argjson candidate "$candidate_plan" --argjson authoritative "$authoritative_plan" \
+        '$candidate == $authoritative' > /dev/null 2>&1
+    }
+    lifecycle_capability_fixtures=(
+      'focused-authoritative-plan|focused-only|["npm run lint","npm test"]|["npm run lint","npm test"]|reject'
+      'focused-equivalent-json-plan|focused-only|["npm run lint", "npm test"]|["npm run lint","npm test"]|reject'
+      'focused-nonauthoritative-command|focused-only|["npm run lint -- --changed"]|["npm run lint","npm test"]|accept'
+      'owner-authoritative-plan|full-suite-owner|["npm run lint","npm test"]|["npm run lint","npm test"]|accept'
     )
-    lifecycle_merge_command_negative_fixtures=(
-      'true'
-      'make test'
-      './validate-all.sh.bak'
-      './validate-all.sh --quick'
-      'bash validate-all.sh.bak'
-      'bash scripts/validate-all.sh'
-      'bash -c ./validate-all.sh'
-      'env CI=1 ./validate-all.sh'
-    )
-    for lifecycle_fixture in "${lifecycle_merge_command_positive_fixtures[@]}"; do
-      if ! printf '%s\n' "$lifecycle_fixture" | rg -q "$lifecycle_merge_suite_command_pattern"; then
-        echo "  ERROR: Merge evidence rejected authoritative suite command: $lifecycle_fixture"
+    for lifecycle_fixture in "${lifecycle_capability_fixtures[@]}"; do
+      IFS='|' read -r lifecycle_fixture_name lifecycle_capability lifecycle_candidate_plan lifecycle_authoritative_plan lifecycle_expected_outcome <<< "$lifecycle_fixture"
+      lifecycle_actual_outcome='reject'
+      if lifecycle_capability_allows_command "$lifecycle_capability" "$lifecycle_candidate_plan" "$lifecycle_authoritative_plan"; then
+        lifecycle_actual_outcome='accept'
+      fi
+      if [ "$lifecycle_actual_outcome" != "$lifecycle_expected_outcome" ]; then
+        echo "  ERROR: Suite capability fixture $lifecycle_fixture_name expected $lifecycle_expected_outcome, got $lifecycle_actual_outcome"
         ERRORS=$((ERRORS + 1))
         lifecycle_suite_contract_invalid=true
       fi
     done
-    for lifecycle_fixture in "${lifecycle_merge_command_negative_fixtures[@]}"; do
-      if printf '%s\n' "$lifecycle_fixture" | rg -q "$lifecycle_merge_suite_command_pattern"; then
-        echo "  ERROR: Merge evidence accepted non-authoritative suite command: $lifecycle_fixture"
+
+    lifecycle_evidence_is_mergeable() {
+      local expected_sha="$1"
+      local expected_plan_json="$2"
+      local change_scope="$3"
+      local serialized_record="$4"
+      jq -e --arg expected_sha "$expected_sha" --argjson expected_plan "$expected_plan_json" --arg change_scope "$change_scope" '
+        . as $record |
+        $record["verification-record"] == "v1" and
+        $record["verification-head"] == $expected_sha and
+        if $change_scope == "documentation-only" then
+          $record["suite-result"] == "not-required" and
+          $record["suite-command"] == null and
+          $record["suite-executions"] == 0 and
+          $record["suite-exit-status"] == null and
+          $record["suite-command-results"] == [] and
+          $record["suite-evidence"] == {}
+        else
+          ((($expected_plan | type) == "string" and ($expected_plan | test("\\S"))) or
+            (($expected_plan | type) == "array" and ($expected_plan | length) > 0 and
+              all($expected_plan[]; type == "string" and test("\\S")))) and
+          (if ($expected_plan | type) == "array" then $expected_plan else [$expected_plan] end) as $expected_commands |
+          $record["suite-result"] == "pass" and
+          $record["suite-command"] == $expected_plan and
+          $record["suite-executions"] == 1 and
+          $record["suite-exit-status"] == 0 and
+          ($record["suite-command-results"] | type == "array") and
+          ($record["suite-command-results"] | length) == ($expected_commands | length) and
+          ($record["suite-evidence"] | type == "object") and
+          all(range(0; $expected_commands | length); . as $index |
+            ($record["suite-command-results"][$index]["evidence-pointer"] == "#/suite-evidence/command-\($index + 1)") and
+            $record["suite-command-results"][$index]["command"] == $expected_commands[$index] and
+            $record["suite-command-results"][$index]["result"] == "pass" and
+            $record["suite-command-results"][$index]["exit-status"] == 0 and
+            $record["suite-evidence"]["command-\($index + 1)"]["command"] == $expected_commands[$index] and
+            ($record["suite-evidence"]["command-\($index + 1)"]["output"] | type == "string" and length > 0)
+          )
+        end
+      ' <<< "$serialized_record" > /dev/null 2>&1
+    }
+
+    lifecycle_expected_sha='0123456789abcdef0123456789abcdef01234567'
+    lifecycle_evidence_fixtures=(
+      'exact|["npm run lint","npm test"]|executable|accept|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test","output":"tests passed"}}}'
+      'equivalent-array-json|["npm run lint", "npm test"]|accept|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test","output":"tests passed"}}}'
+      'scalar-command|"npm test"|accept|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":"npm test","suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"}],"suite-evidence":{"command-1":{"command":"npm test","output":"tests passed"}}}'
+      'null-plan|null|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":null,"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":null,"result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"}],"suite-evidence":{"command-1":{"command":null,"output":"invalid plan"}}}'
+      'empty-scalar|""|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":"","suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"}],"suite-evidence":{"command-1":{"command":"","output":"invalid plan"}}}'
+      'whitespace-scalar|"   "|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":"   ","suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"   ","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"}],"suite-evidence":{"command-1":{"command":"   ","output":"invalid plan"}}}'
+      'empty-array|[]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":[],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[],"suite-evidence":{}}'
+      'empty-array-element|["npm test",""]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm test",""],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm test","output":"tests passed"},"command-2":{"command":"","output":"invalid plan"}}}'
+      'whitespace-array-element|["npm test","   "]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm test","   "],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"   ","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm test","output":"tests passed"},"command-2":{"command":"   ","output":"invalid plan"}}}'
+      'nonstring-array-element|["npm test",1]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm test",1],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":1,"result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm test","output":"tests passed"},"command-2":{"command":1,"output":"invalid plan"}}}'
+      'documentation-only-with-plan|"npm test"|documentation-only|accept|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"not-required","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}'
+      'executable-not-required|"npm test"|executable|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"not-required","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}'
+      'missing-contract|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"missing-contract","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}'
+      'reordered|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm test","npm run lint"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm test","output":"tests passed"},"command-2":{"command":"npm run lint","output":"lint passed"}}}'
+      'altered-arguments|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test -- --quick"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test -- --quick","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test -- --quick","output":"tests passed"}}}'
+      'wrong-sha|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"ffffffffffffffffffffffffffffffffffffffff","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test","output":"tests passed"}}}'
+      'incomplete-results|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"}}}'
+      'wrong-execution-count|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":2,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test","output":"tests passed"}}}'
+      'wrong-status|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"fail","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":1,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"fail","exit-status":1,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test","output":"tests failed"}}}'
+      'dangling-evidence|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"}}}'
+      'mismatched-evidence|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test -- --quick","output":"quick tests passed"}}}'
+    )
+    for lifecycle_fixture in "${lifecycle_evidence_fixtures[@]}"; do
+      IFS='|' read -r lifecycle_fixture_name lifecycle_fixture_plan lifecycle_fixture_field_3 lifecycle_fixture_field_4 lifecycle_fixture_field_5 <<< "$lifecycle_fixture"
+      lifecycle_change_scope='executable'
+      lifecycle_expected_outcome="$lifecycle_fixture_field_3"
+      lifecycle_serialized_record="$lifecycle_fixture_field_4"
+      if [ "$lifecycle_fixture_field_3" = executable ] || [ "$lifecycle_fixture_field_3" = documentation-only ]; then
+        lifecycle_change_scope="$lifecycle_fixture_field_3"
+        lifecycle_expected_outcome="$lifecycle_fixture_field_4"
+        lifecycle_serialized_record="$lifecycle_fixture_field_5"
+      fi
+      lifecycle_actual_outcome='reject'
+      if lifecycle_evidence_is_mergeable "$lifecycle_expected_sha" "$lifecycle_fixture_plan" "$lifecycle_change_scope" "$lifecycle_serialized_record"; then
+        lifecycle_actual_outcome='accept'
+      fi
+      if [ "$lifecycle_actual_outcome" != "$lifecycle_expected_outcome" ]; then
+        echo "  ERROR: Serialized verification fixture $lifecycle_fixture_name expected $lifecycle_expected_outcome, got $lifecycle_actual_outcome"
         ERRORS=$((ERRORS + 1))
         lifecycle_suite_contract_invalid=true
       fi
@@ -447,19 +525,130 @@ complete + referee -> refereeing
       echo "  OK: Every reviewer requires a non-empty four-heading canonical result"
     fi
 
-    if ! rg -Fq 'Any complete authoritative evidence record for that identical SHA consumes its one-execution allowance, whether the recorded result passed or failed.' "$lifecycle_verify_file" || \
+    lifecycle_merge_file="$plugin_dir/skills/merge-pr/SKILL.md"
+    if ! rg -Fq "Apply repository instructions first, then CI configuration, documented development commands, and build or test configuration." "$lifecycle_verify_file" || \
+      ! rg -Fq 'When it declares several required commands, preserve their order as one authoritative plan; do not select a subset or reorder them.' "$lifecycle_verify_file" || \
+      ! rg -Fq 'If these sources do not establish an authoritative command or plan, report the missing contract explicitly and return PARTIAL without executing a guessed substitute.' "$lifecycle_verify_file" || \
+      ! rg -Fq 'Any complete authoritative evidence record for that identical SHA consumes its one-execution allowance, whether the recorded result passed or failed.' "$lifecycle_verify_file" || \
       ! rg -Fq 'For a complete failing record, return FAIL and require addressing that produces a new head before another authoritative execution.' "$lifecycle_verify_file" || \
-      ! rg -Fq 'gh pr merge <pr-number> --squash --delete-branch --match-head-commit "$VERIFIED_SHA"' \
-      "$plugin_dir/skills/merge-pr/SKILL.md" || \
+      ! rg -Fq 'gh pr merge <pr-number> <merge-method-flag> <optional-delete-branch-flag> --match-head-commit "$VERIFIED_SHA"' "$lifecycle_merge_file" || \
       ! rg -Fq 'verification-head: <full-head-sha>' "$lifecycle_verify_file" || \
+      ! rg -Fq 'verification-record: v1' "$lifecycle_verify_file" || \
       ! rg -Fq 'suite-executions: 0 | 1' "$lifecycle_verify_file" || \
       ! rg -Fq 'suite-exit-status: <integer> | n/a' "$lifecycle_verify_file" || \
-      ! rg -Fq "Accept \`pass\` only when \`suite-command\` exactly matches the target repository's authoritative suite command established during verification, or an accepted explicit-shell form that invokes that exact command and nothing else, with exactly one execution and exit status 0." "$plugin_dir/skills/merge-pr/SKILL.md" || \
-      ! rg -Fq 'Accept `not-required` only after independently inspecting the changed files and confirming that every change is documentation or comments only, with command `none`, zero executions, and status `n/a`.' "$plugin_dir/skills/merge-pr/SKILL.md"; then
+      ! rg -Fq 'suite-result: pass | fail | missing-contract | not-required' "$lifecycle_verify_file" || \
+      ! rg -Fq 'suite-command: <exact-command-or-ordered-JSON-command-array> | none' "$lifecycle_verify_file" || \
+      ! rg -Fq 'suite-command-results:' "$lifecycle_verify_file" || \
+      ! rg -Fq 'The missing-contract/PARTIAL record is canonical:' "$lifecycle_verify_file" || \
+      ! rg -Fq '{"verification-record":"v1","verification-head":"<full-head-sha>","suite-result":"not-required","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}' "$lifecycle_verify_file" || \
+      ! rg -Fq 'If the path is absent, unreadable, or does not contain a complete `verification-record:v1` plus its referenced `suite-evidence`, stop rather than reconstructing evidence from an inaccessible parent transcript.' "$lifecycle_merge_file" || \
+      ! rg -Fq 'For every result, require its `#/suite-evidence/command-<N>` pointer to resolve inside the handed-off object' "$lifecycle_merge_file" || \
+      ! rg -Fq 'Accept `not-required` only after independently inspecting the changed files and confirming that every change is documentation or comments only' "$lifecycle_merge_file" || \
+      ! rg -Fq 'Capture the verifier'"'"'s returned handoff-artifact JSON object: the complete durable `verification-record:v1`' "$lifecycle_implement_skill" || \
+      ! rg -Fq 'Payload: <pr-number> <resolved-verification-record-path>' "$lifecycle_implement_skill"; then
       echo "  ERROR: Verification evidence and merge must remain bound to the exact PR head"
       ERRORS=$((ERRORS + 1))
     else
       echo "  OK: Verification evidence is exact-head and merge uses an atomic head guard"
+    fi
+
+    lifecycle_policy_decision() {
+      local checks_pass="$1"
+      local approvals_required="$2"
+      local approvals_met="$3"
+      local billing_failure="$4"
+      local repository_billing="$5"
+      local user_billing="$6"
+      local repository_methods="$7"
+      local user_method="$8"
+      local repository_retention="$9"
+      local user_retention="${10}"
+      local selected_method
+      local delete_branch=false
+
+      if [ "$checks_pass" != true ] || \
+        { [ "$approvals_required" = true ] && [ "$approvals_met" != true ]; }; then
+        printf '%s\n' '{"outcome":"reject"}'
+        return
+      fi
+      if [ "$billing_failure" = true ]; then
+        if [ "$repository_billing" = deny ] || \
+          { [ "$repository_billing" = silent ] && [ "$user_billing" != allow ]; }; then
+          printf '%s\n' '{"outcome":"reject"}'
+          return
+        fi
+      fi
+
+      selected_method="$user_method"
+      if [ "$selected_method" = silent ]; then
+        selected_method="${repository_methods%%,*}"
+      elif [[ ",$repository_methods," != *",$selected_method,"* ]]; then
+        printf '%s\n' '{"outcome":"reject"}'
+        return
+      fi
+
+      if [ "$repository_retention" != silent ] && \
+        [ "$user_retention" != silent ] && \
+        [ "$repository_retention" != "$user_retention" ]; then
+        printf '%s\n' '{"outcome":"reject"}'
+        return
+      fi
+      if [ "$repository_retention" = delete ] || \
+        { [ "$repository_retention" = silent ] && [ "$user_retention" = delete ]; }; then
+        delete_branch=true
+      fi
+      jq -cn --arg method "$selected_method" --argjson delete_branch "$delete_branch" \
+        '{outcome:"accept",merge_method:$method,delete_branch:$delete_branch}'
+    }
+
+    lifecycle_policy_fixtures=(
+      'no-review-required|true|false|false|false|silent|silent|merge,squash|merge|silent|silent|{"outcome":"accept","merge_method":"merge","delete_branch":false}'
+      'required-check-failure|false|false|false|false|silent|silent|merge|merge|silent|silent|{"outcome":"reject"}'
+      'approval-required-missing|true|true|false|false|silent|silent|merge|merge|silent|silent|{"outcome":"reject"}'
+      'approval-required-met|true|true|true|false|silent|silent|merge|merge|silent|silent|{"outcome":"accept","merge_method":"merge","delete_branch":false}'
+      'billing-exception-allowed|true|false|false|true|allow|silent|squash|squash|silent|silent|{"outcome":"accept","merge_method":"squash","delete_branch":false}'
+      'billing-exception-policy-denied|true|false|false|true|deny|allow|squash|squash|silent|silent|{"outcome":"reject"}'
+      'repository-method-selected|true|false|false|false|silent|silent|merge,rebase|rebase|silent|silent|{"outcome":"accept","merge_method":"rebase","delete_branch":false}'
+      'disallowed-method|true|false|false|false|silent|silent|merge,squash|rebase|silent|silent|{"outcome":"reject"}'
+      'retained-branch|true|false|false|false|silent|silent|merge|merge|retain|silent|{"outcome":"accept","merge_method":"merge","delete_branch":false}'
+      'retention-conflict|true|false|false|false|silent|silent|merge|merge|retain|delete|{"outcome":"reject"}'
+    )
+    for lifecycle_fixture in "${lifecycle_policy_fixtures[@]}"; do
+      IFS='|' read -r lifecycle_fixture_name lifecycle_checks_pass lifecycle_approvals_required lifecycle_approvals_met lifecycle_billing_failure lifecycle_repository_billing lifecycle_user_billing lifecycle_repository_methods lifecycle_user_method lifecycle_repository_retention lifecycle_user_retention lifecycle_expected_decision <<< "$lifecycle_fixture"
+      lifecycle_actual_decision=$(lifecycle_policy_decision \
+        "$lifecycle_checks_pass" "$lifecycle_approvals_required" "$lifecycle_approvals_met" \
+        "$lifecycle_billing_failure" "$lifecycle_repository_billing" "$lifecycle_user_billing" \
+        "$lifecycle_repository_methods" "$lifecycle_user_method" \
+        "$lifecycle_repository_retention" "$lifecycle_user_retention")
+      if [ "$lifecycle_actual_decision" != "$lifecycle_expected_decision" ]; then
+        echo "  ERROR: Merge policy fixture $lifecycle_fixture_name expected $lifecycle_expected_decision, got $lifecycle_actual_decision"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_suite_contract_invalid=true
+      fi
+    done
+
+    if ! rg -Fq 'Enforced repository constraints are binding.' "$lifecycle_merge_file" || \
+      ! rg -Fq 'Explicit user direction may select only among choices those constraints permit; it cannot waive or contradict them.' "$lifecycle_merge_file" || \
+      ! rg -Fq 'Apply this precedence consistently to required checks, approvals, billing exceptions, merge method, and branch retention.' "$lifecycle_merge_file" || \
+      ! rg -Fq 'If the established policy does not require approval, do not invent a requirement from the base branch name.' "$lifecycle_merge_file" || \
+      ! rg -Fq 'Use the corresponding supported GitHub CLI method flag (`--merge`, `--squash`, or `--rebase`).' "$lifecycle_merge_file" || \
+      ! rg -Fq 'omit it when the branch must be retained' "$lifecycle_merge_file"; then
+      echo "  ERROR: Merge readiness must defer checks, approvals, billing exceptions, merge method, and branch retention to target policy"
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "  OK: Merge policy fixtures cover approvals, billing, non-squash methods, and retained branches"
+    fi
+
+    if ! rg -Fq 'Claude Code, Codex, Pi, or generic adapter' "$lifecycle_implement_skill" || \
+      ! rg -Fq '**Claude Code:** use the Task/subagent facility, explicitly load the canonical `pr-check` skill' "$lifecycle_merge_file" || \
+      ! rg -Fq '**Codex:** spawn a fresh subagent, instruct it to load the canonical `pr-check` skill' "$lifecycle_merge_file" || \
+      ! rg -Fq '**Pi:** use `pi-subagents` with `context: "fresh"`, explicitly select the canonical `pr-check` skill' "$lifecycle_merge_file" || \
+      ! rg -Fq '**Generic:** use the client'"'"'s isolated delegation mechanism with a fresh context and explicit canonical `pr-check` skill selection' "$lifecycle_merge_file" || \
+      ! rg -Fq 'If isolated dispatch, fresh context, explicit skill loading, or result capture is unavailable, fail closed' "$lifecycle_merge_file"; then
+      echo "  ERROR: Phase 6 and nested pr-check must use the shared harness-neutral adapter contract"
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "  OK: Phase 6 and nested pr-check support Claude Code, Codex, Pi, and generic adapters"
     fi
   fi
 

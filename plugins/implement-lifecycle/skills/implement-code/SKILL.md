@@ -12,7 +12,7 @@ metadata:
 
 <!-- lifecycle-suite-capability: focused-only -->
 
-**Suite capability: `focused-only`. Run focused acceptance commands only. Do not run `./validate-all.sh`, an explicit shell invocation of that alias, or any full, complete, entire, repository-wide, or lifecycle-wide test suite. Final verification owns the authoritative suite.**
+**Suite capability: `focused-only`. Run focused tests, lint, builds, and acceptance commands only. Do not execute or consume the target repository's authoritative verification command or ordered command plan. Final verification owns that evidence.**
 
 Implement the task supplied by the orchestrator. The first token is the linked issue number, or `0` if none.
 
@@ -52,13 +52,15 @@ Do not return the plan to the orchestrator. Proceed directly to Step 1 with the 
 
 ### Step 1: Create a Branch
 
+Read explicit user direction and the target repository's governing instructions before choosing branch names, commit format, PR structure, checks, or delivery behavior. Those sources override the bundled fallback conventions in this skill.
+
 If you're on the shared base branch for this work (for example the repository default branch or a shared integration branch), create a feature branch:
 
 ```bash
 git checkout -b <type>/<short-description>
 ```
 
-Branch naming: `<type>/<short-description>` where type is `feat`, `fix`, `refactor`, `docs`, `test`, or `chore`. Lowercase, hyphen-separated. No issue numbers in the branch name.
+Bundled branch fallback: `<type>/<short-description>` where type is `feat`, `fix`, `refactor`, `docs`, `test`, or `chore`. Lowercase, hyphen-separated. No issue numbers in the branch name. Apply it only when target-repository policy is silent.
 
 If already on a feature branch or stacked branch for this work, stay on it.
 
@@ -114,7 +116,7 @@ Fix anything you find before proceeding.
 
 ### Step 7: Commit
 
-Commit with `<type>: <summary>` format. Imperative mood, no period.
+Follow the target repository's commit policy. When it is silent, use the bundled `<type>: <summary>` fallback in imperative mood with no period.
 - Separate logically distinct changes into separate commits
 - No "WIP", "fixup", or "wip" commits
 
@@ -134,7 +136,7 @@ git fetch origin "$BASE_BRANCH"
 git rebase "origin/$BASE_BRANCH"
 ```
 
-If conflicts arise, resolve them and re-run the test suite before continuing.
+If conflicts arise, resolve them and rerun only the focused checks affected by the conflict before continuing. Do not execute or consume the authoritative verification command or ordered command plan.
 
 Push the branch (first push uses `-u` to set upstream):
 
@@ -142,7 +144,7 @@ Push the branch (first push uses `-u` to set upstream):
 git push -u origin HEAD
 ```
 
-Create the PR. If the issue number is not `0`, include an issue reference after the TL;DR section:
+Create the PR using the target repository's template and formatting policy when present. The bundled structure below is a fallback. If the issue number is not `0`, include an issue reference after the TL;DR section unless target policy specifies another placement:
 - Use `Closes #N` only when this single PR **fully completes** the issue
 - Use `Part of #N` when this PR is **one of several** addressing the issue (default to this when unsure)
 

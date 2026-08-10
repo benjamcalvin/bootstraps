@@ -15,7 +15,7 @@ metadata:
 
 <!-- lifecycle-suite-capability: focused-only -->
 
-**Suite capability: `focused-only`. Run focused acceptance commands only. Do not run `./validate-all.sh`, an explicit shell invocation of that alias, or any full, complete, entire, repository-wide, or lifecycle-wide test suite. Final verification owns the authoritative suite.**
+**Suite capability: `focused-only`. Run focused tests, lint, builds, and acceptance commands only. Do not execute or consume the target repository's authoritative verification command or ordered command plan. Final verification owns that evidence.**
 
 Pre-flight validation for PRs.
 
@@ -27,11 +27,11 @@ If the current client leaves `$ARGUMENTS` literal, use the user's invoking promp
 
 ## Context
 
-At runtime, inspect the current branch and fetch available PR metadata and comments. Determine the actual base branch before inspecting commits and diff size.
+At runtime, inspect the current branch and fetch available PR metadata and comments. Determine the actual base branch before inspecting commits and diff size. Read explicit user direction and the target repository's governing instructions and contribution documentation before applying standards.
 
 ## Instructions
 
-Validate the current PR against each standard below. If no PR exists, check only what can be validated locally and note that no PR exists yet.
+Validate the current PR against target-repository policy first. Explicit user direction and repository instructions take precedence over the bundled checks below for branch names, commits, PR formatting, required references, and blocking/advisory status. Use a bundled check only as a fallback where target policy is silent, and identify that fallback in the result. If no PR exists, check only what can be validated locally and note that no PR exists yet.
 
 For each check, output one of:
 - **PASS** — Meets the standard
@@ -40,29 +40,29 @@ For each check, output one of:
 
 ### Checks
 
-**1. Branch Naming**
+**1. Branch Naming (bundled fallback)**
 Branch must match `<type>/<short-description>` where type is one of: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`. Must be lowercase, hyphen-separated.
 
-**2. PR Title**
+**2. PR Title (bundled fallback)**
 Must match `<type>: <imperative summary>`. Type prefix should match branch type. Under 72 characters. No period at the end. Imperative mood ("Add", "Fix"), not past tense ("Added", "Fixed").
 
-**3. PR Description — TL;DR**
+**3. PR Description — TL;DR (bundled fallback)**
 Must open with 2-4 plain-language sentences explaining what the change does and why (a `## TL;DR` or `## Summary` section, before any mechanism). FAIL if the description opens with implementation bullets instead of prose a non-reader of the code could follow.
 
-**4. PR Description — Test Evidence**
+**4. PR Description — Test Evidence (bundled fallback)**
 Must include how the change was verified: test output, manual steps, or "covered by existing tests."
 
-**5. Commit Messages**
+**5. Commit Messages (bundled fallback)**
 Each commit message should follow `<type>: <summary>` format. No "WIP", "fixup", or "wip" commits.
 
-**6. References**
+**6. References (bundled fallback)**
 If the change relates to a GitHub issue, it should reference it with an appropriate keyword:
 - `Closes #N` / `Fixes #N` — only when this single PR fully completes the issue
 - `Part of #N` — when the PR is one of several addressing the issue
 
 WARN if no references found (not all PRs need them, but flag for awareness). WARN if `Closes #N` is used but the PR appears to be a sub-task of a larger issue (e.g., the issue has multiple acceptance criteria and the PR only addresses some).
 
-**7. Altitude Layering**
+**7. Altitude Layering (bundled fallback)**
 The description must descend through altitude layers rather than mixing them:
 - The TL;DR contains **no** file paths, function names, or line numbers — behavior in plain language only
 - Design reasoning (when present) is in component terms; code identifiers appear only in implementation-level sections (Implementation Notes, Test evidence, Review focus)

@@ -7,7 +7,7 @@ description: Review a pull request for logic bugs, edge cases, error handling, r
 
 <!-- lifecycle-suite-capability: focused-only -->
 
-**Suite capability: `focused-only`. Run focused acceptance commands only. Do not run `./validate-all.sh`, an explicit shell invocation of that alias, or any full, complete, entire, repository-wide, or lifecycle-wide test suite. Final verification owns the authoritative suite.**
+**Suite capability: `focused-only`. Run focused tests, lint, builds, and acceptance commands only. Do not execute or consume the target repository's authoritative verification command or ordered command plan. Final verification owns that evidence.**
 
 You are a **correctness specialist reviewer**. Your job is to find logic bugs, edge cases, error handling gaps, and race conditions in a PR. Be adversarial — verify claims, don't trust assertions.
 

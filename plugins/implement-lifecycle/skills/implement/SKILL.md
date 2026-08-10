@@ -15,7 +15,7 @@ metadata:
 
 <!-- lifecycle-suite-capability: focused-only -->
 
-**Suite capability: `focused-only`. Run focused acceptance commands only. Do not run `./validate-all.sh`, an explicit shell invocation of that alias, or any full, complete, entire, repository-wide, or lifecycle-wide test suite. Final verification owns the authoritative suite.**
+**Suite capability: `focused-only`. Run focused tests, lint, builds, and acceptance commands only. Do not execute or consume the target repository's authoritative verification command or ordered command plan. Final verification owns that evidence.**
 
 Orchestrate the full implementation lifecycle using the task supplied with the skill invocation.
 
@@ -33,7 +33,7 @@ At runtime, inspect the current branch and recent commits. Fetch any referenced 
 
 You are a **lean orchestrator** — a supervisor who delegates, not an implementer. Every heavy phase runs in an isolated delegated agent; worker skills define the work but do not create that isolation themselves. **You MUST NOT use file-editing tools to modify source code, tests, or documentation.** You may use the shell for git/gh commands and tests, and the current client's read/search capabilities for refereeing, but never edit the codebase under review yourself.
 
-**Permitted carve-out — orchestration scratch files:** Writing non-source orchestration files (e.g. the `/tmp/implement-findings-*.md` findings files described in Phase 4) via Bash is expected and allowed. The prohibition targets modifying the codebase under review — source, tests, and docs — not writing your own scratch/findings files to `/tmp`.
+**Permitted carve-out — orchestration scratch files:** Writing non-source orchestration files for findings handoff is expected and allowed. Resolve a writable scratch location through the harness when it provides one; otherwise ask the operating system to create a temporary file or directory. Record each resolved path and pass it explicitly to the receiving worker. The prohibition targets modifying the codebase under review — source, tests, and docs — not writing orchestration scratch files.
 
 **You are the sole publisher to the PR timeline.** Reviewers return their findings to you and post nothing themselves; you publish exactly **one consolidated comment per review round** carrying every reviewer's findings alongside your referee decisions. If a reviewer reports having posted to GitHub, it violated its contract — note it and continue; do not mirror the duplicate.
 
@@ -177,7 +177,7 @@ git push --force-with-lease
 
 The orchestrator does not execute verification's authoritative suite. It hands the exact current PR head and any durable evidence for that same head to `verify`; all earlier phases remain focused-only.
 
-**Pin the toolchain once.** Use the project's pinned Go/toolchain version (e.g. `mise` or `go.mod`'s `go` directive) consistently across every phase. Do not let implementer, addresser, and verify each resolve a different toolchain — a mismatch (e.g. 1.25.5 vs 1.25.7) creates failures that are not real regressions.
+**Pin the toolchain once.** Discover the target repository's pinned runtime, compiler, package manager, and toolchain from its governing instructions and project configuration, then use those exact selections consistently across every phase. Do not let implementer, addresser, and verify resolve different toolchain versions; version drift creates failures that are not real regressions.
 
 Then fetch a lightweight PR summary for your own reference:
 ```bash
@@ -300,7 +300,7 @@ If the body is long enough to be unwieldy on the command line, write it to a tem
 Write the filtered findings (accepted only) to a temp file for the addresser:
 
 ```bash
-cat > /tmp/implement-findings-pr-<PR>-round-<N>.md <<'EOF'
+cat > <resolved-findings-path> <<'EOF'
 # Filtered Findings — Round <N>
 
 | # | Finding | Severity | Details |
@@ -313,7 +313,7 @@ EOF
 #### Step D: Invoke Addresser
 
 ```
-Payload: <pr-number> <round-number> /tmp/implement-findings-pr-<PR>-round-<N>.md
+Payload: <pr-number> <round-number> <resolved-findings-path>
 ```
 
 The addresser will fix issues, run tests, commit, push, and return a summary.
@@ -421,7 +421,7 @@ EOF
 Write findings to a temp file and invoke the addresser:
 
 ```bash
-cat > /tmp/implement-docs-findings-pr-<PR>-round-<N>.md <<'EOF'
+cat > <resolved-docs-findings-path> <<'EOF'
 # Docs Compliance Findings — Round <N>
 
 | # | Finding | Severity | Details |
@@ -432,7 +432,7 @@ EOF
 ```
 
 ```
-Payload: <pr-number> docs-<round-number> /tmp/implement-docs-findings-pr-<PR>-round-<N>.md
+Payload: <pr-number> docs-<round-number> <resolved-docs-findings-path>
 ```
 
 #### Step D: Evaluate Continuation
@@ -447,12 +447,14 @@ After the review loop completes, invoke the verification agent to test the PR's 
 Payload: <pr-number>
 ```
 
-The verification agent will classify the change type, devise a verification plan, execute it, and report structured evidence. If **PASS** or **N/A**, proceed to Phase 6. If the verdict is **FAIL**, delegate the fixes — do **not** fix the code yourself.
+The verification agent will classify the change type, devise a verification plan, execute it, and report structured evidence. If **PASS** or **N/A**, proceed to Phase 6. If the verdict is **FAIL**, delegate the fixes — do **not** fix the code yourself. If it is **PARTIAL** because the target repository has no authoritative verification contract, stop and report that missing contract; do not merge or invent a substitute.
+
+Capture the verifier's returned handoff-artifact JSON object: the complete durable `verification-record:v1` (exact command or ordered JSON plan, execution count, overall status, and ordered per-command result/status/evidence-pointer entries) plus its `suite-evidence` object. Confirm every `#/suite-evidence/command-<N>` pointer resolves inside that object to the matching exact command and complete unedited output. Write the whole object byte-for-byte to a harness-provided temporary file, or a uniquely created file under the operating system's temporary directory when the harness provides none, and pass the resolved path explicitly to `merge-pr`. The verifier publishes only the matching concise canonical record in its PR comment; `suite-evidence` remains in the temporary handoff and is never posted as persistent output. If the returned object is absent, malformed, or has a dangling or mismatched pointer, stop rather than reconstructing it from the parent transcript.
 
 Because `implement-address` reads its findings from a file argument (and aborts if that file is missing or empty), you must **write the verification findings to a temp file first**, reusing the findings-file mechanics of Phase 4 Step C/D (write a temp findings file, then invoke `implement-address` with its path). Unlike Phase 4, there is no referee accept/reject step here: `verify` is a single, self-vetting source rather than several parallel reviewers who can disagree, so its findings pass straight through. The `verify` skill only posts a PR comment; it does not write this file, so the orchestrator must create it:
 
 ```bash
-cat > /tmp/implement-verify-findings-pr-<PR>-round-<N>.md <<'EOF'
+cat > <resolved-verify-findings-path> <<'EOF'
 # Verification Findings — Round <N>
 
 | # | Finding | Severity | Details |
@@ -465,20 +467,20 @@ EOF
 Then invoke the addresser with that file path, using a `verify-<round-number>` round token (analogous to Phase 4.5's `docs-<N>`):
 
 ```
-Payload: <pr-number> verify-<round-number> /tmp/implement-verify-findings-pr-<PR>-round-<N>.md
+Payload: <pr-number> verify-<round-number> <resolved-verify-findings-path>
 ```
 
 The round counter starts from round 1 (independent of Phase 4 rounds) and increments each FAIL → address → re-verify cycle. After the addresser pushes fixes, re-invoke `verify` and repeat until **PASS** or **N/A**, then proceed to Phase 6.
 
 ### Phase 6: Merge & Finalize
 
-Invoke `merge-pr` in Claude Code or `$implement-lifecycle:merge-pr` in Codex:
+Invoke `merge-pr` through the same harness-neutral adapter contract used for every other lifecycle phase. Select the Claude Code, Codex, Pi, or generic adapter for the active harness, load the canonical `merge-pr` skill explicitly, pass fresh PR context, and capture its returned result:
 
 ```
-Payload: <pr-number>
+Payload: <pr-number> <resolved-verification-record-path>
 ```
 
-This validates the PR, squash-merges it, deletes the branch, and posts updates on linked issues.
+This validates the PR, applies the target repository's merge and branch-retention policy, and posts updates on linked issues.
 
 Report the result to the user.
 
