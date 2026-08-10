@@ -2,7 +2,7 @@
 name: merge-pr
 description: >-
   Merge a PR and update upstream GitHub issues with progress.
-  Validates readiness, squash-merges, deletes branch, and posts issue updates.
+  Validates readiness, follows repository merge policy, and posts issue updates.
   Triggers: /merge-pr, merge this PR
 license: MIT
 metadata:
@@ -15,7 +15,7 @@ metadata:
 
 <!-- lifecycle-suite-capability: focused-only -->
 
-**Suite capability: `focused-only`. Run focused acceptance commands only. Do not run `./validate-all.sh`, an explicit shell invocation of that alias, or any full, complete, entire, repository-wide, or lifecycle-wide test suite. Final verification owns the authoritative suite.**
+**Suite capability: `focused-only`. Run focused tests, lint, builds, and acceptance commands only. Do not execute or consume the target repository's authoritative verification command or ordered command plan. Final verification owns that evidence.**
 
 Merge the PR supplied with the invocation and update linked GitHub issues with what was delivered.
 
@@ -33,17 +33,19 @@ At runtime, parse the PR number and fetch its metadata, comments, and checks.
 
 ### Step 1: Validate Readiness
 
+Before evaluating readiness, read explicit user direction and the target repository's governing instructions, branch-protection/ruleset configuration when accessible, and documented contribution policy. Those sources take precedence over every bundled fallback below. Resolve and record the required checks, approval rule, merge method, and branch-retention rule. Do not infer policy from this plugin's source repository.
+
 Check that the PR is safe to merge. For each check, determine pass/fail:
 
 1. **State** — PR must be `OPEN`. If already merged or closed, report and stop.
 2. **Merge conflicts** — `mergeable` must not be `CONFLICTING`. If conflicts exist, report and stop.
-3. **CI status** — All status checks must pass. If any check is failing, report which ones and stop. **Exception — billing-only failure:** if a check failed purely because the account spending limit prevented any job from running, that is NOT a code gate. Classify a failure as billing-only ONLY when the run or job message carries an explicit billing/payment signal (e.g. "job was not started because recent account payments have failed", or a spending-limit error in the run output). Do NOT infer billing from timing — a job that fails in seconds before any step ran may be a genuine fast failure (config syntax, missing secret, immediate lint/compile error). When in doubt, treat it as a real failure. Record a confirmed billing exception in your report and proceed — do not block or report it as a red code failure.
-4. **PR standards** — Invoke `pr-check` in Claude Code or `$implement-lifecycle:pr-check` in Codex against the PR. All scored checks must pass (WARN is acceptable, FAIL is not). Fix any failures if possible; otherwise report what needs to be fixed and stop. The **scope note is advisory** — surface it in your report, but never block a merge on it. A cohesive change is mergeable whatever its diff size, and a PR whose scope is already under review is past the point where splitting is cheap.
-5. **Review decision** — Check `reviewDecision` and `baseRefName`:
+3. **CI status** — Enforce the checks required by target-repository policy and explicit user direction. If either requires all reported checks, enforce all of them. Report every blocking failure and stop. A billing or account-status failure remains blocking unless repository policy or explicit user direction specifically permits that exception; an exception is never global. Even when permitted, classify the failure as billing-only only when the run or job carries an explicit billing/payment signal. Never infer billing from timing, and record every applied exception.
+4. **PR standards** — Invoke the canonical `pr-check` skill through the shared adapter for the active harness: Claude Code, Codex, Pi, or generic. The adapter must explicitly load `pr-check`, pass the PR and fresh repository-policy context, and return its result; if isolated skill dispatch is unavailable, report the failed readiness step instead of running an improvised inline substitute. Apply the target repository's blocking standards. Bundled checks are fallbacks only when repository policy is silent. The bundled scope note remains advisory unless target policy makes scope a gate.
+5. **Review decision** — Check `reviewDecision` and the approval rule established from repository policy and explicit user direction:
    - If `CHANGES_REQUESTED`, stop and report.
-   - If merging to `main` or `master`: require `APPROVED`. If `REVIEW_REQUIRED` or empty/null, escalate to the user and wait for explicit confirmation.
-   - If merging to any other branch: human approval is not required. Proceed if CI passes and all other checks are satisfied.
-6. **Exact-head verification evidence** — Read the latest successful verification comment/result. Require all five fields: `verification-head`, `suite-result`, `suite-command`, `suite-executions`, and `suite-exit-status`. Fetch the current `headRefOid` and require it to equal `verification-head`. Accept `pass` only when `suite-command` exactly matches the target repository's authoritative suite command established during verification, or an accepted explicit-shell form that invokes that exact command and nothing else, with exactly one execution and exit status 0. Reject arbitrary commands, wrappers, arguments, prefixes, and suffixes. Accept `not-required` only after independently inspecting the changed files and confirming that every change is documentation or comments only, with command `none`, zero executions, and status `n/a`. Reject every other combination. Store the matching head as `VERIFIED_SHA`. Do not execute any suite during merge readiness checks.
+   - If the established policy requires approvals, require the declared number and kind of approvals; otherwise stop and report the missing approval.
+   - If the established policy does not require approval, do not invent a requirement from the base branch name. Proceed autonomously when the other gates pass.
+6. **Exact-head verification evidence** — Read the latest successful verification comment/result. Require all five fields: `verification-head`, `suite-result`, `suite-command`, `suite-executions`, and `suite-exit-status`. Independently establish the target repository's authoritative command or ordered command plan from the same target sources used by verification. Fetch the current `headRefOid` and require it to equal `verification-head`. Accept `pass` only when `suite-command` exactly matches that established command or ordered JSON command array, with the same command boundaries and order, exactly one plan execution, original overall exit status 0, and per-command results for every command in a plan. Reject different commands, reordered plans, missing command results, wrappers, arguments, prefixes, suffixes, or evidence when no target contract can be established. Accept `not-required` only after independently inspecting the changed files and confirming that every change is documentation or comments only, with command `none`, zero executions, and status `n/a`. Reject every other combination. Store the matching head as `VERIFIED_SHA`. Do not execute or consume the authoritative command or plan during merge readiness checks; validation reads verification's recorded result only.
 
 **If validation fails**, stop and report exactly what needs to be fixed. Do not merge.
 
@@ -51,10 +53,10 @@ Check that the PR is safe to merge. For each check, determine pass/fail:
 
 ### Step 2: Merge
 
-Squash-merge the PR and delete the remote branch:
+Select the merge method and branch behavior established before readiness. Use the corresponding supported GitHub CLI method flag (`--merge`, `--squash`, or `--rebase`). Add `--delete-branch` only when repository policy or explicit user direction calls for deletion; omit it when the branch must be retained. When policy is silent, use an enabled repository merge method and retain the branch.
 
 ```
-gh pr merge <pr-number> --squash --delete-branch --match-head-commit "$VERIFIED_SHA"
+gh pr merge <pr-number> <merge-method-flag> <optional-delete-branch-flag> --match-head-commit "$VERIFIED_SHA"
 ```
 
 The `--match-head-commit` precondition makes the evidence check and merge atomic: if the PR head changes after readiness validation, the merge fails rather than merging an unverified commit. If the merge fails, report the error and stop.

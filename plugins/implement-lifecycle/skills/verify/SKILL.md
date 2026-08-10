@@ -15,7 +15,7 @@ metadata:
 
 <!-- lifecycle-suite-capability: full-suite-owner -->
 
-**Suite capability: `full-suite-owner`. Verification is the sole phase authorized to run the authoritative lifecycle-wide repository suite, at most once for the exact PR head.**
+**Suite capability: `full-suite-owner`. Verification is the sole phase authorized to execute or consume the target repository's authoritative verification command or ordered command plan, at most once for the exact PR head.**
 
 Verify the PR supplied with the invocation in the real, running system — not in isolation.
 
@@ -35,17 +35,21 @@ You are the **verification agent** for the implementation lifecycle. Unit tests 
 
 You are the last line of defense before merge. Be thorough.
 
-For a code-changing PR, obtain the exact current head with `gh pr view <number> --json headRefOid --jq .headRefOid`. Any complete authoritative evidence record for that identical SHA consumes its one-execution allowance, whether the recorded result passed or failed. A complete record has the exact command, an execution count of one, the integer exit status, and the corresponding `pass`/zero-status or `fail`/nonzero-status result. Consume a complete passing record without executing the command again. For a complete failing record, return FAIL and require addressing that produces a new head before another authoritative execution. Evidence for any other SHA is stale. If no complete evidence exists for the exact head, execute the repository's authoritative suite exactly once and preserve that execution's exit status; never rerun it to uncache results, filter output, recover status, count packages, or improve formatting. A pure documentation change may record the suite as not required.
+First establish the target repository's authoritative verification contract. Apply repository instructions first, then CI configuration, documented development commands, and build or test configuration. Use an explicit command when the repository declares one. When it declares several required commands, preserve their order as one authoritative plan; do not select a subset or reorder them. Do not derive this contract from the plugin's source repository, invent a replacement, or silently promote a focused command. If these sources do not establish an authoritative command or plan, report the missing contract explicitly and return PARTIAL without executing a guessed substitute.
+
+For a code-changing PR, obtain the exact current head with `gh pr view <number> --json headRefOid --jq .headRefOid`. Any complete authoritative evidence record for that identical SHA consumes its one-execution allowance, whether the recorded result passed or failed. A complete record has the exact command or ordered plan, an execution count of one, the original overall exit status, and the corresponding `pass`/zero-status or `fail`/nonzero-status result. Independently establish the target contract before consuming evidence, and consume a complete passing record only when its command or plan exactly matches. Do not execute it again. For a complete failing record, return FAIL and require addressing that produces a new head before another authoritative execution. Evidence for any other SHA is stale. If no complete evidence exists for the exact head, execute the established command or ordered plan exactly once and preserve each command's output plus the plan's original exit status; stop the plan at the first failure unless the target repository explicitly requires otherwise. Never rerun it to uncache results, filter output, recover status, count packages, or improve formatting. A pure documentation change may record verification as not required.
 
 Record suite evidence in the returned result and PR comment using these exact fields:
 
 ```text
 verification-head: <full-head-sha>
 suite-result: pass | fail | not-required
-suite-command: <exact-command> | none
+suite-command: <exact-command-or-ordered-JSON-command-array> | none
 suite-executions: 0 | 1
 suite-exit-status: <integer> | n/a
 ```
+
+For an ordered plan, follow those fields with a `suite-command-results` list that records each command actually executed, in order, with its unedited output and original exit status. A passing plan must contain evidence for every declared command. A failing plan records the commands reached through the failure; unexecuted trailing commands remain part of `suite-command` but must not be represented as executed.
 
 After execution, fetch `headRefOid` again. If it differs from `verification-head`, report FAIL and do not claim evidence for the new head. A subsequent verification attempt may run once for that new exact commit.
 
@@ -110,7 +114,7 @@ For each scenario, plan the **full round-trip** — from trigger to final observ
 5. **State transitions** — If the change affects data, verify the before/after state. Can you create → read → update → delete through the real system? Is the data consistent across views?
 
 6. **Internal/indirect verification** — For changes without a direct user-facing surface, find the observable artifact:
-   - **Refactors:** Run the build, run the full test suite, compare output/behavior before and after. Verify no change in observable behavior.
+   - **Refactors:** Run the applicable build and the established authoritative verification plan, then compare output or behavior before and after. Verify no change in observable behavior.
    - **Data model changes:** Query the database before and after migration. Verify schema, constraints, indexes, and existing data integrity.
    - **Library/utility changes:** Find a caller in the codebase and exercise it through a real entry point. Trace the result end-to-end.
    - **Configuration changes:** Start the service with the new config, verify it loads and the configured behavior is observable (logs, health check, feature toggle).
@@ -126,7 +130,7 @@ For each scenario, plan the **full round-trip** — from trigger to final observ
 
 ### Step 4: Execute Verification
 
-When the authoritative command must run, capture output and status from the same execution. A shell pattern such as the following is acceptable; substitute the repository-defined command and do not invoke it elsewhere in the verification attempt:
+When the authoritative command or ordered plan must run, capture output and status from that same execution. A shell pattern such as the following is acceptable for a single command; substitute the target-repository command and do not invoke it elsewhere in the verification attempt. For an ordered plan, apply the same status-preserving rule to each declared command, execute the plan once in order, and record the exact commands actually reached:
 
 ```bash
 set +e

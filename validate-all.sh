@@ -282,13 +282,13 @@ for plugin_dir in plugins/*/; do
       echo "  OK: Lifecycle reviewer skills prohibit modifying reviewed code and posting to GitHub"
     fi
 
-    lifecycle_focused_contract='**Suite capability: `focused-only`. Run focused acceptance commands only. Do not run `./validate-all.sh`, an explicit shell invocation of that alias, or any full, complete, entire, repository-wide, or lifecycle-wide test suite. Final verification owns the authoritative suite.**'
-    lifecycle_owner_contract='**Suite capability: `full-suite-owner`. Verification is the sole phase authorized to run the authoritative lifecycle-wide repository suite, at most once for the exact PR head.**'
+    lifecycle_focused_contract="**Suite capability: \`focused-only\`. Run focused tests, lint, builds, and acceptance commands only. Do not execute or consume the target repository's authoritative verification command or ordered command plan. Final verification owns that evidence.**"
+    lifecycle_owner_contract="**Suite capability: \`full-suite-owner\`. Verification is the sole phase authorized to execute or consume the target repository's authoritative verification command or ordered command plan, at most once for the exact PR head.**"
     lifecycle_focused_skills=(
       implement implement-code implement-address review-general review-correctness
       review-security review-architecture review-testing review-docs merge-pr pr-check
     )
-    lifecycle_authoritative_suite_pattern='((^|[[:space:]`"\x27(;])\./validate-all\.sh([[:space:]`"\x27;|&)<>]|$)|(^|[[:space:]`"\x27(;])((ba|z|k)?sh)[[:space:]]+(\./)?validate-all\.sh([[:space:]`"\x27;|&)<>]|$)|(^|[^[:alnum:]_])(full|complete|entire|repository-wide|lifecycle-wide)(-suite|[[:space:]]+(test[- ]?)?suite|[[:space:]]+tests?|[[:space:]]+(repository|lifecycle)(-wide)?[[:space:]]+(test[- ]?)?suite)([^[:alnum:]_]|$))'
+    lifecycle_prohibited_runtime_pattern='((^|[^[:alnum:]_.-])(\./)?validate-all\.sh([^[:alnum:]_.-]|$)|(^|[^[:alnum:]_])(go\.mod|mise|pinned[[:space:]]+go|go[[:space:]]+1\.[0-9]+)([^[:alnum:]_]|$)|(^|[^[:alnum:]_])/tmp(/|[^[:alnum:]_]|$))'
     lifecycle_suite_contract_invalid=false
     for lifecycle_skill in "${lifecycle_focused_skills[@]}"; do
       lifecycle_skill_file="$plugin_dir/skills/$lifecycle_skill/SKILL.md"
@@ -299,79 +299,37 @@ for plugin_dir in plugins/*/; do
         lifecycle_suite_contract_invalid=true
       fi
 
-      while IFS= read -r suite_reference; do
-        [ "$suite_reference" = "$lifecycle_focused_contract" ] && continue
-        echo "  ERROR: $lifecycle_skill contains a non-canonical authoritative-suite reference: $suite_reference"
-        ERRORS=$((ERRORS + 1))
-        lifecycle_suite_contract_invalid=true
-      done < <(rg -i -N "$lifecycle_authoritative_suite_pattern" "$lifecycle_skill_file" || true)
     done
 
-    lifecycle_suite_positive_fixtures=(
-      './validate-all.sh'
-      'Run bash validate-all.sh now.'
-      'Run the complete repository test suite.'
-      'Run the full lifecycle test suite.'
-    )
-    lifecycle_suite_negative_fixtures=(
-      './validate-all.sh.bak'
-      'docs/./validate-all.sh'
-      'scripts/validate-all.sh'
-      'bash validate-all.sh.bak'
-      'bash scripts/validate-all.sh'
-      'Run tests for the affected packages.'
-      'Run tests for the touched packages.'
-      'Use the tested helper.'
-      'Run focused tests.'
-      'Run package-scope tests.'
-    )
-    for lifecycle_fixture in "${lifecycle_suite_positive_fixtures[@]}"; do
-      if ! printf '%s\n' "$lifecycle_fixture" | rg -iq "$lifecycle_authoritative_suite_pattern"; then
-        echo "  ERROR: Lifecycle suite classifier missed positive fixture: $lifecycle_fixture"
-        ERRORS=$((ERRORS + 1))
-        lifecycle_suite_contract_invalid=true
-      fi
-    done
-    for lifecycle_fixture in "${lifecycle_suite_negative_fixtures[@]}"; do
-      if printf '%s\n' "$lifecycle_fixture" | rg -iq "$lifecycle_authoritative_suite_pattern"; then
-        echo "  ERROR: Lifecycle suite classifier matched negative fixture: $lifecycle_fixture"
-        ERRORS=$((ERRORS + 1))
-        lifecycle_suite_contract_invalid=true
-      fi
-    done
+    while IFS= read -r lifecycle_prohibited_reference; do
+      echo "  ERROR: Distributed lifecycle skill contains a source-repository or language-specific runtime assumption: $lifecycle_prohibited_reference"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_suite_contract_invalid=true
+    done < <(rg -i -N "$lifecycle_prohibited_runtime_pattern" "$plugin_dir/skills"/*/SKILL.md || true)
 
-    lifecycle_merge_suite_command_pattern='^(\./validate-all\.sh|((ba|z|k)?sh)[[:space:]]+(\./)?validate-all\.sh)$'
-    lifecycle_merge_command_positive_fixtures=(
-      './validate-all.sh'
-      'sh validate-all.sh'
-      'sh ./validate-all.sh'
-      'bash validate-all.sh'
-      'bash ./validate-all.sh'
-      'zsh validate-all.sh'
-      'zsh ./validate-all.sh'
-      'ksh validate-all.sh'
-      'ksh ./validate-all.sh'
+    lifecycle_target_single_plan='make verify'
+    lifecycle_target_multi_plan=$'npm run lint\nnpm test'
+    lifecycle_matching_evidence=(
+      'make verify'
+      $'npm run lint\nnpm test'
     )
-    lifecycle_merge_command_negative_fixtures=(
-      'true'
+    lifecycle_nonmatching_evidence=(
       'make test'
-      './validate-all.sh.bak'
-      './validate-all.sh --quick'
-      'bash validate-all.sh.bak'
-      'bash scripts/validate-all.sh'
-      'bash -c ./validate-all.sh'
-      'env CI=1 ./validate-all.sh'
+      $'npm test\nnpm run lint'
+      $'npm run lint\nnpm test -- --quick'
     )
-    for lifecycle_fixture in "${lifecycle_merge_command_positive_fixtures[@]}"; do
-      if ! printf '%s\n' "$lifecycle_fixture" | rg -q "$lifecycle_merge_suite_command_pattern"; then
-        echo "  ERROR: Merge evidence rejected authoritative suite command: $lifecycle_fixture"
+    for lifecycle_fixture in "${lifecycle_matching_evidence[@]}"; do
+      if [ "$lifecycle_fixture" != "$lifecycle_target_single_plan" ] && \
+        [ "$lifecycle_fixture" != "$lifecycle_target_multi_plan" ]; then
+        echo "  ERROR: Merge evidence rejected an exact target-repository command plan"
         ERRORS=$((ERRORS + 1))
         lifecycle_suite_contract_invalid=true
       fi
     done
-    for lifecycle_fixture in "${lifecycle_merge_command_negative_fixtures[@]}"; do
-      if printf '%s\n' "$lifecycle_fixture" | rg -q "$lifecycle_merge_suite_command_pattern"; then
-        echo "  ERROR: Merge evidence accepted non-authoritative suite command: $lifecycle_fixture"
+    for lifecycle_fixture in "${lifecycle_nonmatching_evidence[@]}"; do
+      if [ "$lifecycle_fixture" = "$lifecycle_target_single_plan" ] || \
+        [ "$lifecycle_fixture" = "$lifecycle_target_multi_plan" ]; then
+        echo "  ERROR: Merge evidence accepted a different or reordered command plan"
         ERRORS=$((ERRORS + 1))
         lifecycle_suite_contract_invalid=true
       fi
@@ -447,19 +405,41 @@ complete + referee -> refereeing
       echo "  OK: Every reviewer requires a non-empty four-heading canonical result"
     fi
 
-    if ! rg -Fq 'Any complete authoritative evidence record for that identical SHA consumes its one-execution allowance, whether the recorded result passed or failed.' "$lifecycle_verify_file" || \
+    lifecycle_merge_file="$plugin_dir/skills/merge-pr/SKILL.md"
+    if ! rg -Fq "Apply repository instructions first, then CI configuration, documented development commands, and build or test configuration." "$lifecycle_verify_file" || \
+      ! rg -Fq 'When it declares several required commands, preserve their order as one authoritative plan; do not select a subset or reorder them.' "$lifecycle_verify_file" || \
+      ! rg -Fq 'If these sources do not establish an authoritative command or plan, report the missing contract explicitly and return PARTIAL without executing a guessed substitute.' "$lifecycle_verify_file" || \
+      ! rg -Fq 'Any complete authoritative evidence record for that identical SHA consumes its one-execution allowance, whether the recorded result passed or failed.' "$lifecycle_verify_file" || \
       ! rg -Fq 'For a complete failing record, return FAIL and require addressing that produces a new head before another authoritative execution.' "$lifecycle_verify_file" || \
-      ! rg -Fq 'gh pr merge <pr-number> --squash --delete-branch --match-head-commit "$VERIFIED_SHA"' \
-      "$plugin_dir/skills/merge-pr/SKILL.md" || \
+      ! rg -Fq 'gh pr merge <pr-number> <merge-method-flag> <optional-delete-branch-flag> --match-head-commit "$VERIFIED_SHA"' "$lifecycle_merge_file" || \
       ! rg -Fq 'verification-head: <full-head-sha>' "$lifecycle_verify_file" || \
       ! rg -Fq 'suite-executions: 0 | 1' "$lifecycle_verify_file" || \
       ! rg -Fq 'suite-exit-status: <integer> | n/a' "$lifecycle_verify_file" || \
-      ! rg -Fq "Accept \`pass\` only when \`suite-command\` exactly matches the target repository's authoritative suite command established during verification, or an accepted explicit-shell form that invokes that exact command and nothing else, with exactly one execution and exit status 0." "$plugin_dir/skills/merge-pr/SKILL.md" || \
-      ! rg -Fq 'Accept `not-required` only after independently inspecting the changed files and confirming that every change is documentation or comments only, with command `none`, zero executions, and status `n/a`.' "$plugin_dir/skills/merge-pr/SKILL.md"; then
+      ! rg -Fq 'Accept `pass` only when `suite-command` exactly matches that established command or ordered JSON command array, with the same command boundaries and order, exactly one plan execution, original overall exit status 0, and per-command results for every command in a plan.' "$lifecycle_merge_file" || \
+      ! rg -Fq 'Accept `not-required` only after independently inspecting the changed files and confirming that every change is documentation or comments only, with command `none`, zero executions, and status `n/a`.' "$lifecycle_merge_file"; then
       echo "  ERROR: Verification evidence and merge must remain bound to the exact PR head"
       ERRORS=$((ERRORS + 1))
     else
       echo "  OK: Verification evidence is exact-head and merge uses an atomic head guard"
+    fi
+
+    if ! rg -Fq 'A billing or account-status failure remains blocking unless repository policy or explicit user direction specifically permits that exception; an exception is never global.' "$lifecycle_merge_file" || \
+      ! rg -Fq 'If the established policy requires approvals, require the declared number and kind of approvals; otherwise stop and report the missing approval.' "$lifecycle_merge_file" || \
+      ! rg -Fq 'If the established policy does not require approval, do not invent a requirement from the base branch name.' "$lifecycle_merge_file" || \
+      ! rg -Fq 'Use the corresponding supported GitHub CLI method flag (`--merge`, `--squash`, or `--rebase`).' "$lifecycle_merge_file" || \
+      ! rg -Fq 'omit it when the branch must be retained' "$lifecycle_merge_file"; then
+      echo "  ERROR: Merge readiness must defer checks, approvals, billing exceptions, merge method, and branch retention to target policy"
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "  OK: Merge policy fixtures cover approvals, billing, non-squash methods, and retained branches"
+    fi
+
+    if ! rg -Fq 'Claude Code, Codex, Pi, or generic adapter' "$lifecycle_implement_skill" || \
+      ! rg -Fq 'Claude Code, Codex, Pi, or generic' "$lifecycle_merge_file"; then
+      echo "  ERROR: Phase 6 and nested pr-check must use the shared harness-neutral adapter contract"
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "  OK: Phase 6 and nested pr-check support Claude Code, Codex, Pi, and generic adapters"
     fi
   fi
 
