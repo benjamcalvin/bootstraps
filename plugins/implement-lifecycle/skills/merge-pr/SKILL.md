@@ -52,8 +52,10 @@ Check that the PR is safe to merge. For each check, determine pass/fail:
 Squash-merge the PR and delete the remote branch:
 
 ```
-gh pr merge <pr-number> --squash --delete-branch
+gh pr merge <pr-number> --squash --delete-branch --match-head-commit <verified-sha>
 ```
+
+Use the verified commit SHA already validated in Step 1. The `--match-head-commit` precondition makes the exact-head check atomic with GitHub's merge operation; do not fetch a replacement SHA or weaken repository-specific readiness and approval requirements.
 
 If the merge fails, report the error and stop.
 

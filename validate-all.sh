@@ -14,39 +14,94 @@ CODEX_MARKETPLACE_VALID=false
 # an authorization later on the same line.
 lifecycle_suite_authorizations() {
   awk '
-    function inspect(clause, line, broad, authorizes, negates) {
+    function inspect(clause, source, broad, authorizes, negates, prohibited) {
       clause = tolower(clause)
-      broad = clause ~ /((full|complete|entire|lifecycle-wide|repository-wide).*(suite|test)|(suite|test).*(full|complete|entire|lifecycle-wide|repository-wide)|(all|every).*(repository|repo).*(test|suite)|(repository|repo).*(all|every).*(test|suite)|\.\/validate-all\.sh)/
+      broad = clause ~ /((full|complete|entire|lifecycle-wide|repository-wide).*(suite|test)|(suite|test).*(full|complete|entire|lifecycle-wide|repository-wide)|(all|every).*(repository|repo).*(test|suite)|(all|every).*(test|suite).*(repository|repo)|(repository|repo).*(all|every).*(test|suite)|\.\/validate-all\.sh)/
       authorizes = clause ~ /(^|[^[:alpha:]])(run|execute|invoke)([^[:alpha:]]|$)/ || clause ~ /(must|shall|should|needs? to|required to|has to).*(run|execute|invoke|be run|be executed)/
-      negates = clause ~ /(do not|don.t|must not|shall not|should not|never|prohibit(ed)?|may not|without).*(run|execute|invoke|be run|be executed|suite|test|validate-all)/
-      if (broad && authorizes && !negates) print NR ":" line
+      # Only a negation attached to the execution phrase suppresses a match.
+      # Unrelated prefixes ("without changing dependencies") and suffixes
+      # ("without rerunning tests") must not hide an authorization.
+      negates = clause ~ /(do not|don.t|must not|shall not|should not|may not|never)[[:space:]]+(re-?)?(run|execute|invoke)([^[:alpha:]]|$)/ || clause ~ /(must not|shall not|should not|may not|never)[[:space:]]+be[[:space:]]+(run|executed|invoked)/
+      prohibited = clause ~ /(suite|test|validate-all).*(is|are)[[:space:]]+prohibit(ed)?/
+      if (broad && authorizes && !negates && !prohibited) print source
     }
-    {
-      count = split($0, clauses, /;/)
-      for (i = 1; i <= count; i++) inspect(clauses[i], $0)
+    function flush(   normalized, count, i) {
+      if (paragraph == "") return
+      normalized = paragraph
+      gsub(/[[:space:]]+/, " ", normalized)
+      gsub(/[.;!?][[:space:]]+/, "\n", normalized)
+      gsub(/[[:space:]]+[Bb][Uu][Tt][[:space:]]+/, "\n", normalized)
+      count = split(normalized, clauses, /\n/)
+      for (i = 1; i <= count; i++) inspect(clauses[i], start_line ":" paragraph)
+      paragraph = ""
     }
+    /^[[:space:]]*$/ { flush(); next }
+    { if (paragraph == "") start_line = NR; paragraph = paragraph " " $0 }
+    END { flush() }
   '
 }
 
 lifecycle_forbidden_docs_transitions() {
   awk '
-    {
-      line = tolower($0)
-      if ((line ~ /addressed.*(advance|proceed|transition|enter).*(verify|verification)/ ||
-           line ~ /addressed.*(→|->).*(verify|verification)/) &&
-          line !~ /(do not|don.t|must not|never|block|prohibit)/) print NR ":" $0
+    function inspect(sentence, source, addressed, rereview, clean, verify) {
+      sentence = tolower(sentence)
+      addressed = index(sentence, "addressed")
+      verify = index(sentence, "verification")
+      if (!verify) verify = index(sentence, "verify")
+      if (!addressed || !verify || addressed > verify) return
+      if (sentence ~ /(do not|don.t|must not|never|block|prohibit).*(advance|proceed|transition|enter|→|->).*(verify|verification)/) return
+      rereview = index(sentence, "re-review")
+      clean = index(sentence, "clean")
+      if (!(addressed < rereview && rereview < clean && clean < verify)) print source
     }
+    function flush(   normalized, count, i) {
+      if (paragraph == "") return
+      normalized = paragraph
+      gsub(/[[:space:]]+/, " ", normalized)
+      count = split(normalized, sentences, /[.!?][[:space:]]+/)
+      for (i = 1; i <= count; i++) inspect(sentences[i], start_line ":" paragraph)
+      paragraph = ""
+    }
+    /^[[:space:]]*$/ { flush(); next }
+    { if (paragraph == "") start_line = NR; paragraph = paragraph " " $0 }
+    END { flush() }
   '
 }
 
 lifecycle_forbidden_incomplete_advancement() {
   awk '
-    {
-      line = tolower($0)
-      if ((line ~ /(empty|incomplete).*(reviewer|captured.*output|(^|[^[:alpha:]])results?([^[:alpha:]]|$)).*(advance|proceed|referee|verification)/ ||
-           line ~ /(reviewer|captured.*output|(^|[^[:alpha:]])results?([^[:alpha:]]|$)).*(empty|incomplete|missing.*heading).*(advance|proceed|referee|verification)/) &&
-          line !~ /(do not|don.t|must not|never|stop|block)/) print NR ":" $0
+    function inspect(sentence, source, incomplete, retry, complete, advance) {
+      sentence = tolower(sentence)
+      incomplete = index(sentence, "incomplete reviewer")
+      if (!incomplete) incomplete = index(sentence, "empty reviewer")
+      if (!incomplete) incomplete = index(sentence, "incomplete captured")
+      if (!incomplete) incomplete = index(sentence, "empty captured")
+      if (!incomplete) incomplete = index(sentence, "incomplete result")
+      if (!incomplete) incomplete = index(sentence, "empty result")
+      if (!incomplete) incomplete = index(sentence, "result is missing")
+      advance = index(sentence, "referee")
+      if (!advance) advance = index(sentence, "verification")
+      if (!advance) advance = index(sentence, "advance")
+      if (!advance) advance = index(sentence, "proceed")
+      if (!incomplete || !advance || incomplete > advance) return
+      if (sentence ~ /(do not|don.t|must not|never|stop|block).*(advance|proceed|referee|verification)/) return
+      retry = index(sentence, "retry")
+      if (!retry) retry = index(sentence, "recover")
+      complete = index(sentence, "complete result")
+      if (!complete) complete = index(sentence, "complete reviewer")
+      if (!(incomplete < retry && retry < complete && complete < advance)) print source
     }
+    function flush(   normalized, count, i) {
+      if (paragraph == "") return
+      normalized = paragraph
+      gsub(/[[:space:]]+/, " ", normalized)
+      count = split(normalized, sentences, /[.!?][[:space:]]+/)
+      for (i = 1; i <= count; i++) inspect(sentences[i], start_line ":" paragraph)
+      paragraph = ""
+    }
+    /^[[:space:]]*$/ { flush(); next }
+    { if (paragraph == "") start_line = NR; paragraph = paragraph " " $0 }
+    END { flush() }
   '
 }
 
@@ -367,9 +422,15 @@ for plugin_dir in plugins/*/; do
     lifecycle_suite_mutations=(
       'The full test suite must be run before continuing.'
       'Run all repository tests before returning.'
+      'Run all tests in the repository before returning.'
       'Run the test suite across the entire repository before returning.'
       'Run ./validate-all.sh before returning.'
       'Do not skip validation; run the full repository test suite before returning.'
+      'Do not forget to run the full repository test suite before returning.'
+      'Without changing dependencies, run the full repository test suite before returning.'
+      'Do not delay, run the full repository test suite before returning.'
+      'Do not run focused tests, but run the complete test suite before returning.'
+      'Run the full suite without rerunning tests.'
     )
     for lifecycle_suite_mutation in "${lifecycle_suite_mutations[@]}"; do
       if [ -z "$(printf '%s\n' "$lifecycle_suite_mutation" | lifecycle_suite_authorizations)" ]; then
@@ -380,6 +441,8 @@ for plugin_dir in plugins/*/; do
     done
     for lifecycle_suite_prohibition in \
       'Do not run the full test suite.' \
+      'The full test suite must not be run.' \
+      'Never execute all tests in the repository.' \
       'Lifecycle-wide repository test suites are prohibited.'; do
       if [ -n "$(printf '%s\n' "$lifecycle_suite_prohibition" | lifecycle_suite_authorizations)" ]; then
         echo "  ERROR: Complete-suite detector rejected explicit prohibition: $lifecycle_suite_prohibition"
@@ -411,7 +474,8 @@ for plugin_dir in plugins/*/; do
     for merge_evidence_contract in \
       'Consume the durable verification evidence record passed by the orchestrator' \
       'compare it with the verified commit SHA in the durable authoritative-suite evidence record' \
-      'Missing evidence, a nonzero status, or a SHA mismatch blocks merge; do not rerun the suite.'; do
+      'Missing evidence, a nonzero status, or a SHA mismatch blocks merge; do not rerun the suite.' \
+      'gh pr merge <pr-number> --squash --delete-branch --match-head-commit <verified-sha>'; do
       if ! rg -Fq "$merge_evidence_contract" "$lifecycle_merge_skill"; then
         echo "  ERROR: merge-pr is missing exact-head evidence handoff contract: $merge_evidence_contract"
         ERRORS=$((ERRORS + 1))
@@ -439,13 +503,20 @@ for plugin_dir in plugins/*/; do
     fi
     for lifecycle_docs_mutation in \
       'After findings are addressed, proceed directly to verification.' \
-      'Documentation gate: addressed → verification.'; do
+      'Documentation gate: addressed → verification.' \
+      $'After findings are addressed, proceed directly\nto verification.'; do
       if [ -z "$(printf '%s\n' "$lifecycle_docs_mutation" | lifecycle_forbidden_docs_transitions)" ]; then
         echo "  ERROR: Documentation transition detector missed direct addressed-to-verification mutation: $lifecycle_docs_mutation"
         ERRORS=$((ERRORS + 1))
         lifecycle_docs_gate_contract_missing=true
       fi
     done
+    lifecycle_docs_valid_sequence='Once addressed, proceed to re-review; after it is clean, enter verification.'
+    if [ -n "$(printf '%s\n' "$lifecycle_docs_valid_sequence" | lifecycle_forbidden_docs_transitions)" ]; then
+      echo "  ERROR: Documentation transition detector rejected valid re-review sequence: $lifecycle_docs_valid_sequence"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_docs_gate_contract_missing=true
+    fi
     if [ "$lifecycle_docs_gate_contract_missing" = false ]; then
       echo "  OK: Documentation gate prevents addressed-to-verification transitions without re-review"
     fi
@@ -471,13 +542,20 @@ for plugin_dir in plugins/*/; do
     for lifecycle_pi_mutation in \
       'After empty reviewer output, advance directly to refereeing.' \
       'After incomplete reviewer output, proceed to verification.' \
-      'When the result is missing a heading, referee it immediately.'; do
+      'When the incomplete result is missing a heading, referee it immediately.' \
+      $'After incomplete reviewer output, proceed directly\nto refereeing.'; do
       if [ -z "$(printf '%s\n' "$lifecycle_pi_mutation" | lifecycle_forbidden_incomplete_advancement)" ]; then
         echo "  ERROR: Pi recovery detector missed incomplete-output advancement mutation: $lifecycle_pi_mutation"
         ERRORS=$((ERRORS + 1))
         lifecycle_pi_contract_missing=true
       fi
     done
+    lifecycle_pi_valid_sequence='After incomplete reviewer output, retry once; after a complete result, proceed to refereeing.'
+    if [ -n "$(printf '%s\n' "$lifecycle_pi_valid_sequence" | lifecycle_forbidden_incomplete_advancement)" ]; then
+      echo "  ERROR: Pi recovery detector rejected valid retry sequence: $lifecycle_pi_valid_sequence"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_pi_contract_missing=true
+    fi
     if [ "$lifecycle_pi_contract_missing" = false ]; then
       echo "  OK: Pi delegations require fresh context and recover non-empty canonical reviewer results"
     fi
