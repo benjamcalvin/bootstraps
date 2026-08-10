@@ -13,6 +13,10 @@ metadata:
 
 # Implement
 
+<!-- lifecycle-suite-capability: focused-only -->
+
+**Suite capability: `focused-only`. Run focused acceptance commands only. Do not run `./validate-all.sh`, an explicit shell invocation of that alias, or any full, complete, entire, repository-wide, or lifecycle-wide test suite. Final verification owns the authoritative suite.**
+
 Orchestrate the full implementation lifecycle using the task supplied with the skill invocation.
 
 The active harness expands the payload below. If it leaves the payload literal, use the user's invoking prompt instead.
@@ -67,11 +71,28 @@ For every delegation, use the adapter for the active harness to create a fresh i
 
 **Codex adapter.** Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:<skill>`, followed by the complete payload and fresh context bundle.
 
-**Pi adapter.** With the user-installed `pi-subagents` prerequisite available, launch a fresh generic `delegate` child with `skill: <skill>` and the complete payload and fresh context bundle. Do not use or distribute custom Pi agent definitions.
+**Pi adapter.** With the user-installed `pi-subagents` prerequisite available, launch a generic `delegate` child with `skill: <skill>`, `context: "fresh"`, and the complete payload and fresh context bundle. Never rely on the delegate default for context freshness. Do not use or distribute custom Pi agent definitions.
 
 **Generic adapter.** A compatible harness must create a fresh isolated child, load the mapped Agent Skill explicitly, pass the complete payload and fresh context bundle, and return the child result. A harness that cannot provide isolated delegation or load the required skill must report the failed phase and must not execute it inline.
 
 When specialists are selected, every adapter launches the selected reviewers in parallel and waits for all their results before refereeing.
+
+Selected Pi reviewers remain parallel, read-only children. Each delegation explicitly names its canonical `skill`, sets `context: "fresh"`, and captures the child's final result. A reviewer result is complete only when it is non-empty and contains all four canonical headings: `### Action Required`, `### Recommended`, `### Minor`, and `### Summary`. Do not referee an empty, missing, or structurally incomplete result.
+
+The reviewer-result recovery contract is this exact state graph:
+
+<!-- lifecycle-reviewer-recovery:v1
+delegated + nonempty-canonical-result -> complete
+delegated + empty-or-incomplete-result -> incomplete
+incomplete + transcript-recovery-complete -> complete
+incomplete + transcript-recovery-incomplete -> fresh-retry
+incomplete + transcript-recovery-unavailable -> fresh-retry
+fresh-retry + nonempty-canonical-result -> complete
+fresh-retry + empty-or-incomplete-result -> stop
+complete + referee -> refereeing
+-->
+
+On an incomplete result, first recover the final captured result from the harness transcript when available. If recovery is unavailable or still incomplete, retry once in a new child with the same canonical skill and `context: "fresh"`. If that retry is incomplete, stop the phase and report the failed delegation. Only the `complete` state may enter refereeing.
 
 **Isolate delegated context.** Each delegated agent (implementer, addresser, reviewer, verifier) should be launched with MINIMAL, FRESH context: the PR/issue being worked, the governing contract (issue body, ADR, or spec), the current diff, and any prior accepted/rejected findings — NOT the orchestrator's accumulated cross-PR history. Long-lived or reused sessions (e.g., a docs gate or verifier kept alive across multiple PRs) accumulate unrelated context and degrade review quality; reset or bound them per PR. Assemble a single shared **context bundle** (issue, contract, diff, prior findings, referee decisions) and pass the same bundle to every child for that PR, so each starts from the same ground truth instead of re-deriving it.
 
@@ -156,15 +177,15 @@ git fetch origin "$BASE_BRANCH"
 git rebase "origin/$BASE_BRANCH"
 ```
 
-If conflicts arise, resolving them is a **permitted git-mechanical carve-out** to the no-edit contract. Keep it strictly mechanical, then run the affected package tests (focused, not the full suite — see the full-suite-once rule below) and force-push the rebased branch:
+If conflicts arise, resolving them is a **permitted git-mechanical carve-out** to the no-edit contract. Keep it strictly mechanical, then run focused tests for the affected packages and force-push the rebased branch:
 
 ```bash
 git push --force-with-lease
 ```
 
-**Run the authoritative full suite ONCE per lifecycle, owned by `verify` at the final head.** Implementer and addresser run focused package tests + lint + build on their own changes; they do NOT re-run the entire suite at every phase. The single full-suite run happens in Phase 5 (verify) against the final merged state. This avoids the repeated full-suite re-runs that dominate wall-clock across phases.
+The orchestrator does not execute verification's authoritative suite. It hands the exact current PR head and any durable evidence for that same head to `verify`; all earlier phases remain focused-only.
 
-**Pin the toolchain once.** Use the project's pinned Go/toolchain version (e.g. `mise` or `go.mod`'s `go` directive) consistently across every phase. Do not let implementer, addresser, and verify each resolve a different toolchain — a mismatch (e.g. 1.25.5 vs 1.25.7) causes wasted full-suite failures that are not real regressions.
+**Pin the toolchain once.** Use the project's pinned Go/toolchain version (e.g. `mise` or `go.mod`'s `go` directive) consistently across every phase. Do not let implementer, addresser, and verify each resolve a different toolchain — a mismatch (e.g. 1.25.5 vs 1.25.7) creates failures that are not real regressions.
 
 Then fetch a lightweight PR summary for your own reference:
 ```bash
@@ -203,7 +224,7 @@ Payload: Review PR #<pr-number>, round <round-number>
 
 Each reviewer fetches PR context and returns its findings to you. Reviewers do **not** post to GitHub — you publish their findings in the consolidated comment in Step C, so keep each reviewer's returned text until then. In round 2 and later, tell reviewers to focus on unresolved accepted findings, the latest fix delta, and regressions introduced by accepted fixes. They must not reopen rejected findings or speculatively harden unrelated surfaces.
 
-**Reviewers should EXECUTE the PR's own acceptance commands when feasible** — run the tests, linters, or commands the PR claims to satisfy — rather than only reasoning about them. Reasoning alone misses mechanical acceptance failures (self-referential scans, off-by-one anchors, unbuilt code). If a reviewer cannot execute (no environment), it must state that limitation explicitly rather than assert correctness it did not verify.
+**Reviewers should execute the PR's own focused acceptance commands when feasible** — focused tests, linters, or commands the PR claims to satisfy — rather than only reasoning about them. They must follow their `focused-only` capability. Reasoning alone misses mechanical acceptance failures (self-referential scans, off-by-one anchors, unbuilt code). If a reviewer cannot execute (no environment), it must state that limitation explicitly rather than assert correctness it did not verify.
 
 **Reassess specialists each round.** Always keep `review-general`. Re-invoke a specialist only when the latest fix delta or an unresolved accepted finding still touches its high-risk area. Drop specialists whose concern is resolved and whose area was not changed; do not spend another review merely to preserve the prior round's roster.
 
@@ -344,6 +365,21 @@ Then stop and inform the user directly.
 ---
 
 ### Phase 4.5: Docs Compliance Gate
+
+The docs-gate contract is this exact state graph:
+
+<!-- lifecycle-docs-gate:v1
+pending + review-docs -> reviewed
+reviewed + zero-actionable -> clean
+reviewed + actionable -> addressing
+addressing + address-complete -> addressed
+addressed + review-docs -> reviewed
+reviewed + convergence-escalation -> escalated
+addressed + convergence-escalation -> escalated
+clean + enter-verification -> verification
+-->
+
+Only `clean` may transition to verification. `addressed` must transition through another `review-docs` round; convergence escalation exits to `escalated`, not verification.
 
 After the code review/address loop converges, run the docs curation gate. **This gate is mandatory for any PR with a docs-relevant surface** — a change to public-facing behavior (new CLI command, changed default, public API, plugin surface, config option), a change that restructures internals with observable effects, or any change to documentation files. The docs reviewer is a curator, not a diff checker — it proactively identifies where documentation is missing, outdated, or contradicted by the code changes. A PR that adds a new CLI command, changes a default, or restructures internals may need docs updates even though no `.md` files were touched. **The gate may be skipped only for a pure internal/mechanical change with no observable or documented surface** (e.g. a private refactor with no behavior change and no docs files touched).
 

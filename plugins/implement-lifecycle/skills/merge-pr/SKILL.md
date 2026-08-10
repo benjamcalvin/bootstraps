@@ -13,6 +13,10 @@ metadata:
 
 # Merge PR and Update Issues
 
+<!-- lifecycle-suite-capability: focused-only -->
+
+**Suite capability: `focused-only`. Run focused acceptance commands only. Do not run `./validate-all.sh`, an explicit shell invocation of that alias, or any full, complete, entire, repository-wide, or lifecycle-wide test suite. Final verification owns the authoritative suite.**
+
 Merge the PR supplied with the invocation and update linked GitHub issues with what was delivered.
 
 ```text
@@ -39,6 +43,7 @@ Check that the PR is safe to merge. For each check, determine pass/fail:
    - If `CHANGES_REQUESTED`, stop and report.
    - If merging to `main` or `master`: require `APPROVED`. If `REVIEW_REQUIRED` or empty/null, escalate to the user and wait for explicit confirmation.
    - If merging to any other branch: human approval is not required. Proceed if CI passes and all other checks are satisfied.
+6. **Exact-head verification evidence** — Read the latest successful verification comment/result. Require `verification-head`, `suite-result`, `suite-executions`, and `suite-exit-status`; `suite-result` must be `pass` with one successful execution or `not-required` with zero executions. Fetch the current `headRefOid` and require it to equal `verification-head`. Store that value as `VERIFIED_SHA`. Do not execute any suite during merge readiness checks.
 
 **If validation fails**, stop and report exactly what needs to be fixed. Do not merge.
 
@@ -49,10 +54,10 @@ Check that the PR is safe to merge. For each check, determine pass/fail:
 Squash-merge the PR and delete the remote branch:
 
 ```
-gh pr merge <pr-number> --squash --delete-branch
+gh pr merge <pr-number> --squash --delete-branch --match-head-commit "$VERIFIED_SHA"
 ```
 
-If the merge fails, report the error and stop.
+The `--match-head-commit` precondition makes the evidence check and merge atomic: if the PR head changes after readiness validation, the merge fails rather than merging an unverified commit. If the merge fails, report the error and stop.
 
 ### Step 3: Update Linked Issues
 

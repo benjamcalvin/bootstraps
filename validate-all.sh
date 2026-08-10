@@ -281,6 +281,111 @@ for plugin_dir in plugins/*/; do
     if [ "$lifecycle_reviewer_contract_missing" = false ]; then
       echo "  OK: Lifecycle reviewer skills prohibit modifying reviewed code and posting to GitHub"
     fi
+
+    lifecycle_focused_contract='**Suite capability: `focused-only`. Run focused acceptance commands only. Do not run `./validate-all.sh`, an explicit shell invocation of that alias, or any full, complete, entire, repository-wide, or lifecycle-wide test suite. Final verification owns the authoritative suite.**'
+    lifecycle_owner_contract='**Suite capability: `full-suite-owner`. Verification is the sole phase authorized to run the authoritative lifecycle-wide repository suite, at most once for the exact PR head.**'
+    lifecycle_focused_skills=(
+      implement implement-code implement-address review-general review-correctness
+      review-security review-architecture review-testing review-docs merge-pr pr-check
+    )
+    lifecycle_suite_contract_invalid=false
+    for lifecycle_skill in "${lifecycle_focused_skills[@]}"; do
+      lifecycle_skill_file="$plugin_dir/skills/$lifecycle_skill/SKILL.md"
+      if [ "$(rg -Fc '<!-- lifecycle-suite-capability: focused-only -->' "$lifecycle_skill_file")" -ne 1 ] || \
+        [ "$(rg -Fc "$lifecycle_focused_contract" "$lifecycle_skill_file")" -ne 1 ]; then
+        echo "  ERROR: $lifecycle_skill must declare focused-only exactly once with the canonical contract"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_suite_contract_invalid=true
+      fi
+
+      while IFS= read -r suite_reference; do
+        [ "$suite_reference" = "$lifecycle_focused_contract" ] && continue
+        echo "  ERROR: $lifecycle_skill contains a non-canonical authoritative-suite reference: $suite_reference"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_suite_contract_invalid=true
+      done < <(rg -i -N '(\./validate-all\.sh|(^|[[:space:]])((ba|z|k)?sh)[[:space:]]+(\./)?validate-all\.sh|(^|[^[:alnum:]_])(full|complete|entire|repository-wide|lifecycle-wide)(-suite|[[:space:]]+(test[- ]?)?suite|[[:space:]]+tests?)([^[:alnum:]_]|$))' "$lifecycle_skill_file" || true)
+    done
+    lifecycle_verify_file="$plugin_dir/skills/verify/SKILL.md"
+    if [ "$(rg -Fc '<!-- lifecycle-suite-capability: full-suite-owner -->' "$lifecycle_verify_file")" -ne 1 ] || \
+      [ "$(rg -Fc "$lifecycle_owner_contract" "$lifecycle_verify_file")" -ne 1 ] || \
+      [ "$(rg -l '<!-- lifecycle-suite-capability: full-suite-owner -->' "$plugin_dir/skills"/*/SKILL.md | wc -l | tr -d ' ')" -ne 1 ]; then
+      echo "  ERROR: verify must be the sole full-suite-owner with the canonical contract"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_suite_contract_invalid=true
+    fi
+    if [ "$lifecycle_suite_contract_invalid" = false ]; then
+      echo "  OK: Lifecycle suite capabilities reserve the authoritative suite for verify"
+    fi
+
+    lifecycle_docs_graph=$(sed -n '/^<!-- lifecycle-docs-gate:v1$/,/^-->$/p' "$lifecycle_implement_skill")
+    lifecycle_expected_docs_graph='<!-- lifecycle-docs-gate:v1
+pending + review-docs -> reviewed
+reviewed + zero-actionable -> clean
+reviewed + actionable -> addressing
+addressing + address-complete -> addressed
+addressed + review-docs -> reviewed
+reviewed + convergence-escalation -> escalated
+addressed + convergence-escalation -> escalated
+clean + enter-verification -> verification
+-->'
+    if [ "$lifecycle_docs_graph" != "$lifecycle_expected_docs_graph" ]; then
+      echo "  ERROR: Lifecycle docs gate must match the authoritative review/address/re-review state graph"
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "  OK: Lifecycle docs gate requires a clean re-review before verification"
+    fi
+
+    lifecycle_recovery_graph=$(sed -n '/^<!-- lifecycle-reviewer-recovery:v1$/,/^-->$/p' "$lifecycle_implement_skill")
+    lifecycle_expected_recovery_graph='<!-- lifecycle-reviewer-recovery:v1
+delegated + nonempty-canonical-result -> complete
+delegated + empty-or-incomplete-result -> incomplete
+incomplete + transcript-recovery-complete -> complete
+incomplete + transcript-recovery-incomplete -> fresh-retry
+incomplete + transcript-recovery-unavailable -> fresh-retry
+fresh-retry + nonempty-canonical-result -> complete
+fresh-retry + empty-or-incomplete-result -> stop
+complete + referee -> refereeing
+-->'
+    if [ "$lifecycle_recovery_graph" != "$lifecycle_expected_recovery_graph" ]; then
+      echo "  ERROR: Lifecycle reviewer recovery must match the authoritative non-empty-result state graph"
+      ERRORS=$((ERRORS + 1))
+    elif [ "$(rg -Fc 'context: "fresh"' "$lifecycle_implement_skill")" -lt 3 ]; then
+      echo '  ERROR: Pi delegation and recovery must set context: "fresh" explicitly'
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "  OK: Pi reviewers use explicit fresh context and recover incomplete canonical results"
+    fi
+
+    lifecycle_reviewer_output_invalid=false
+    for lifecycle_reviewer in review-general review-correctness review-security review-architecture review-testing review-docs; do
+      lifecycle_reviewer_file="$plugin_dir/skills/$lifecycle_reviewer/SKILL.md"
+      for lifecycle_heading in '### Action Required' '### Recommended' '### Minor' '### Summary'; do
+        if [ "$(rg -Fc "$lifecycle_heading" "$lifecycle_reviewer_file")" -ne 1 ]; then
+          echo "  ERROR: $lifecycle_reviewer must return canonical heading $lifecycle_heading exactly once"
+          ERRORS=$((ERRORS + 1))
+          lifecycle_reviewer_output_invalid=true
+        fi
+      done
+      if ! rg -Fq 'Return all four headings. Write `None.` beneath every empty category.' "$lifecycle_reviewer_file"; then
+        echo "  ERROR: $lifecycle_reviewer must require all canonical result headings"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_reviewer_output_invalid=true
+      fi
+    done
+    if [ "$lifecycle_reviewer_output_invalid" = false ]; then
+      echo "  OK: Every reviewer requires a non-empty four-heading canonical result"
+    fi
+
+    if ! rg -Fq 'gh pr merge <pr-number> --squash --delete-branch --match-head-commit "$VERIFIED_SHA"' \
+      "$plugin_dir/skills/merge-pr/SKILL.md" || \
+      ! rg -Fq 'verification-head: <full-head-sha>' "$lifecycle_verify_file" || \
+      ! rg -Fq 'suite-executions: 0 | 1' "$lifecycle_verify_file" || \
+      ! rg -Fq 'suite-exit-status: <integer> | n/a' "$lifecycle_verify_file"; then
+      echo "  ERROR: Verification evidence and merge must remain bound to the exact PR head"
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "  OK: Verification evidence is exact-head and merge uses an atomic head guard"
+    fi
   fi
 
   # Run self-contained hook tests (test files that contain "# autotest" marker)

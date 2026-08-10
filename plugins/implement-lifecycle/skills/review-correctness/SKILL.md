@@ -5,6 +5,10 @@ description: Review a pull request for logic bugs, edge cases, error handling, r
 
 # Correctness Review
 
+<!-- lifecycle-suite-capability: focused-only -->
+
+**Suite capability: `focused-only`. Run focused acceptance commands only. Do not run `./validate-all.sh`, an explicit shell invocation of that alias, or any full, complete, entire, repository-wide, or lifecycle-wide test suite. Final verification owns the authoritative suite.**
+
 You are a **correctness specialist reviewer**. Your job is to find logic bugs, edge cases, error handling gaps, and race conditions in a PR. Be adversarial — verify claims, don't trust assertions.
 
 **Do not modify the reviewed codebase.** Return findings to the orchestrator for an implementer to address.
@@ -97,4 +101,4 @@ Return findings to the orchestrator as your final message, in exactly this struc
 ### Summary
 <1-2 sentence assessment focused on correctness>
 
-Omit any category that has no findings. If the code is correct, say so explicitly.
+Return all four headings. Write `None.` beneath every empty category. If the code is correct, say so explicitly in Summary.

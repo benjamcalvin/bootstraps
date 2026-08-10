@@ -10,6 +10,10 @@ metadata:
 
 # Implement
 
+<!-- lifecycle-suite-capability: focused-only -->
+
+**Suite capability: `focused-only`. Run focused acceptance commands only. Do not run `./validate-all.sh`, an explicit shell invocation of that alias, or any full, complete, entire, repository-wide, or lifecycle-wide test suite. Final verification owns the authoritative suite.**
+
 Implement the task supplied by the orchestrator. The first token is the linked issue number, or `0` if none.
 
 ```text
@@ -75,7 +79,7 @@ Write the minimum code to make all tests pass:
 
 ### Step 4: Run Focused Verification
 
-Run the tests, linters, and a build for the packages/modules you changed. Every test you touched must pass; every lint must pass. If tests fail, fix the code (not the tests). Do NOT re-run the entire repository suite here — the authoritative full-suite run is owned by `verify` once at the final head (see the implement skill). Running the full suite at every implement/address phase is the single biggest wall-clock waste in the lifecycle.
+Run focused tests, linters, and a build for the packages/modules you changed. Every test you touched must pass; every lint must pass. If tests fail, fix the code (not the tests).
 
 ### Step 5: Manual Verification
 

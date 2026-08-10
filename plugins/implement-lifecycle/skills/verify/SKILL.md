@@ -13,6 +13,10 @@ metadata:
 
 # End-to-End Verification
 
+<!-- lifecycle-suite-capability: full-suite-owner -->
+
+**Suite capability: `full-suite-owner`. Verification is the sole phase authorized to run the authoritative lifecycle-wide repository suite, at most once for the exact PR head.**
+
 Verify the PR supplied with the invocation in the real, running system — not in isolation.
 
 ```text
@@ -31,7 +35,19 @@ You are the **verification agent** for the implementation lifecycle. Unit tests 
 
 You are the last line of defense before merge. Be thorough.
 
-**You are the single authoritative owner of the full test-suite run for this lifecycle.** Implementer and addresser run focused tests on their own changes; you run (or confirm) the complete suite against the final head as part of verification. If the full suite has already been run and green at this head, verify that evidence and note it rather than blindly re-running; if it has not been run at this head, run it once here. Do not delegate the full-suite run to earlier phases. **The full-suite run is conditional on change type:** for a pure documentation change (markdown/comments only) the full suite is not required — that is the N/A path below. For any code change, run it once here.
+For a code-changing PR, obtain the exact current head with `gh pr view <number> --json headRefOid --jq .headRefOid`. Accept existing authoritative evidence only when it records that identical SHA, a passing exit status, the command, and an execution count of one. Evidence for any other SHA is stale. If valid evidence exists, consume it without executing the command again. Otherwise execute the repository's authoritative suite exactly once and preserve that execution's exit status; never rerun it to uncache results, filter output, recover status, count packages, or improve formatting. A pure documentation change may record the suite as not required.
+
+Record suite evidence in the returned result and PR comment using these exact fields:
+
+```text
+verification-head: <full-head-sha>
+suite-result: pass | fail | not-required
+suite-command: <exact-command> | none
+suite-executions: 0 | 1
+suite-exit-status: <integer> | n/a
+```
+
+After execution, fetch `headRefOid` again. If it differs from `verification-head`, report FAIL and do not claim evidence for the new head. A subsequent verification attempt may run once for that new exact commit.
 
 Use the current client's task or plan tracker when available.
 
@@ -56,12 +72,14 @@ Read the PR description's "Manual verification" section and PR comments. Look fo
 2. **Output** — complete, unedited output
 3. **Explanation** — what the output demonstrates
 
+For authoritative-suite evidence, additionally require all five exact fields above and an exact `verification-head` match. General manual evidence never substitutes for those fields.
+
 Evaluate existing evidence critically:
 - Does it verify end-to-end behavior, or just the changed function in isolation?
 - Does it cover downstream effects (e.g., "the API returns 200" but does the UI render it correctly? does the data persist?)?
 - Does it cover at least one failure mode?
 
-If evidence is adequate *and* covers holistic behavior, report it and return. If it only covers isolated behavior, note the gap and proceed.
+Return on existing evidence only when it covers holistic behavior **and** the exact-head authoritative-suite requirement above is satisfied (or correctly marked not required). If it only covers isolated behavior or lacks valid suite evidence, note the gap and proceed.
 
 ### Step 3: Devise an End-to-End Verification Plan
 
@@ -108,6 +126,17 @@ For each scenario, plan the **full round-trip** — from trigger to final observ
 
 ### Step 4: Execute Verification
 
+When the authoritative command must run, capture output and status from the same execution. A shell pattern such as the following is acceptable; substitute the repository-defined command and do not invoke it elsewhere in the verification attempt:
+
+```bash
+set +e
+<authoritative-command>
+suite_status=$?
+set -e
+```
+
+Use `suite_status` in the report. Do not pipe the authoritative command through a formatter unless `pipefail` is set and the original command status is preserved from that same execution.
+
 Run your plan against the real system. For each scenario:
 
 1. **Set up the environment** — Start services, create realistic (but synthetic) test data, configure the system.
@@ -139,6 +168,12 @@ Return findings in this structure:
 ## End-to-End Verification — PR #<number>
 
 ### Verdict: PASS / FAIL / PARTIAL / N/A
+
+verification-head: <full-head-sha>
+suite-result: pass | fail | not-required
+suite-command: <exact-command> | none
+suite-executions: 0 | 1
+suite-exit-status: <integer> | n/a
 
 ### System Flow Verified
 <brief description of the end-to-end flow that was exercised>
@@ -201,6 +236,12 @@ If verification is truly not applicable (pure documentation/comment changes only
 ## End-to-End Verification — PR #<number>
 
 ### Verdict: N/A
+
+verification-head: <full-head-sha>
+suite-result: not-required
+suite-command: none
+suite-executions: 0
+suite-exit-status: n/a
 
 Pure documentation change — no code, configuration, or build artifacts affected.
 ```

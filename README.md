@@ -170,7 +170,7 @@ Provides a shared lifecycle orchestrator, two utility skills, three delegated wo
 |-------|-------------|
 | `implement-code` | Explore codebase, plan, write tests first, implement, self-review, commit, and create PR. |
 | `implement-address` | Address filtered review findings from the referee's action plan. |
-| `verify` | End-to-end verification — exercises the real running system, checks downstream effects, regression tests existing flows. |
+| `verify` | End-to-end verification and sole authoritative-suite owner — records one execution (or exact-head reusable evidence), checks downstream effects, and regression-tests existing flows. |
 
 **Review roles:**
 
@@ -183,7 +183,9 @@ Provides a shared lifecycle orchestrator, two utility skills, three delegated wo
 | `review-testing` | Optional targeted specialist for test coverage, assertion quality, edge cases, and test anti-patterns. |
 | `review-docs` | Separate Phase 4.5 docs-compliance gate for missing docs, stale docs, and frontmatter/cross-link correctness. |
 
-Heavy phases always run in fresh generic isolated delegated children. The canonical phase-to-skill mapping is shared by every harness: Claude Code selects `implement-lifecycle:<skill>`, Codex selects `$implement-lifecycle:<skill>`, and Pi's user-installed `pi-subagents` launches a generic `delegate` child with `skill: <skill>`. Compatible harnesses must explicitly load the mapped Agent Skill, pass the complete payload and context bundle, return the child result, and never fall back to inline execution when isolation or skill loading is unavailable. Selected reviewers run in parallel and all results return before refereeing. Model selection remains a per-delegation decision.
+Heavy phases always run in fresh generic isolated delegated children. The canonical phase-to-skill mapping is shared by every harness: Claude Code selects `implement-lifecycle:<skill>`, Codex selects `$implement-lifecycle:<skill>`, and Pi's user-installed `pi-subagents` launches a generic `delegate` child with `skill: <skill>` and `context: "fresh"`. Compatible harnesses must explicitly load the mapped Agent Skill, pass the complete payload and context bundle, return the child result, and never fall back to inline execution when isolation or skill loading is unavailable. Selected reviewers run in parallel; empty or structurally incomplete reviewer results are recovered or retried before refereeing.
+
+Every lifecycle skill declares a machine-checkable suite capability. `verify` is the sole `full-suite-owner`; the orchestrator, implementers, addressers, reviewers, docs gate, PR checker, and merger are `focused-only`. Verification evidence is bound to the exact PR head, and merge uses that verified SHA as an atomic precondition. The docs gate follows an explicit review → address → re-review graph, so addressed documentation cannot skip directly to verification.
 
 The skill-local `agents/openai.yaml` files are optional OpenAI skill metadata that supplies presentation and invocation policy. They are not subagent definitions, are retained for Codex compatibility, and do not change the harness-neutral worker behavior. No custom Pi agent templates are distributed.
 
