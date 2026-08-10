@@ -51,7 +51,9 @@ suite-exit-status: <integer> | n/a
 suite-command-results: <ordered-result-list> | []
 ```
 
-For an ordered plan, follow those fields with a `suite-command-results` list that records each command actually executed, in order, with its exact command, `pass`/`fail` result, original exit status, and a stable evidence pointer. A passing plan must contain evidence for every declared command. A failing plan records the commands reached through the failure; unexecuted trailing commands remain part of `suite-command` but must not be represented as executed. Put each command's unedited output under the matching evidence pointer in the returned findings, not in the PR comment. For a single command, use the same one-entry list so the durable representation does not change shape.
+For an ordered plan, follow those fields with a `suite-command-results` list that records each command actually executed, in order, with its exact command, `pass`/`fail` result, original exit status, and a JSON Pointer of the form `#/suite-evidence/command-<N>`. A passing plan must contain evidence for every declared command. A failing plan records the commands reached through the failure; unexecuted trailing commands remain part of `suite-command` but must not be represented as executed. For a single command, use the same one-entry list so the durable representation does not change shape.
+
+The returned result must also contain one temporary handoff-artifact JSON object. It repeats the canonical fields above and adds a `suite-evidence` object. Each pointer must resolve inside that same object to an entry whose `command` exactly matches its result entry and whose `output` contains that command's complete, unedited output. The PR comment includes the canonical fields and pointers but omits `suite-evidence`, keeping verbose output out of persistent storage. The lifecycle orchestrator writes the returned handoff-artifact object byte-for-byte to a temporary file and passes that file to the fresh merger; do not point at headings, the parent transcript, or any artifact that is not included in that explicit handoff.
 
 The missing-contract/PARTIAL record is canonical: `suite-result: missing-contract`, `suite-command: none`, `suite-executions: 0`, `suite-exit-status: n/a`, and an empty `suite-command-results` list. This state is not mergeable. A documentation-only N/A record uses the same command, execution, status, and empty-results values with `suite-result: not-required`.
 
@@ -164,7 +166,7 @@ If a verification step fails:
 
 ### Step 5: Report Findings
 
-Post your verification results to the PR. **Keep the comment concise — verdict + the complete durable `verification-record:v1`, not the full verbose transcript.** Include every exact command, result, original status, and evidence pointer needed by a fresh merger. Put the unedited multi-line output under the corresponding pointers only in your returned findings. A bloated verification comment buries the verdict.
+Post your verification results to the PR. **Keep the comment concise — verdict + the complete durable `verification-record:v1`, not the full verbose transcript.** Include every exact command, result, original status, and evidence pointer. Return the handoff-artifact JSON with every pointer resolved to its unedited output; the fresh merger receives that object through its temporary file rather than relying on the comment or parent transcript. A bloated verification comment buries the verdict.
 
 ```
 gh pr comment <pr-number> --body "<concise results>"
@@ -187,7 +189,10 @@ suite-command-results:
   - command: <exact-command>
     result: pass | fail
     exit-status: <integer>
-    evidence-pointer: <matching-heading-or-artifact-reference>
+    evidence-pointer: "#/suite-evidence/command-<N>"
+
+handoff-artifact:
+  {"verification-record":"v1",...,"suite-evidence":{"command-<N>":{"command":"<exact-command>","output":"<complete-unedited-output>"}}}
 
 ### System Flow Verified
 <brief description of the end-to-end flow that was exercised>
