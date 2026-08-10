@@ -288,7 +288,7 @@ for plugin_dir in plugins/*/; do
       implement implement-code implement-address review-general review-correctness
       review-security review-architecture review-testing review-docs merge-pr pr-check
     )
-    lifecycle_prohibited_runtime_pattern='((^|[^[:alnum:]_.-])(\./)?validate-all\.sh([^[:alnum:]_.-]|$)|(^|[^[:alnum:]_])(go\.mod|go\.work|mise|golangci-lint|pinned[[:space:]]+go|go[[:space:]-]+toolchain|go[[:space:]]+test([[:space:]]|$)|go[[:space:]]+1\.[0-9]+)([^[:alnum:]_]|$)|(^|[^[:alnum:]_])/tmp(/|[^[:alnum:]_]|$))'
+    lifecycle_prohibited_runtime_pattern='((^|[^[:alnum:]_.-])(\./)?validate-all\.sh([^[:alnum:]_.-]|$)|(^|[^[:alnum:]_])(go\.mod|go\.work|mise|golangci-lint|pinned[[:space:]]+go|go[[:space:]-]+toolchain|go[[:space:]]+test|go[[:space:]]+1\.[0-9]+)([^[:alnum:]_]|$)|(^|[^[:alnum:]_])/tmp(/|[^[:alnum:]_]|$))'
     lifecycle_suite_contract_invalid=false
     for lifecycle_skill in "${lifecycle_focused_skills[@]}"; do
       lifecycle_skill_file="$plugin_dir/skills/$lifecycle_skill/SKILL.md"
@@ -309,6 +309,8 @@ for plugin_dir in plugins/*/; do
 
     lifecycle_prohibited_positive_fixtures=(
       'Run go test ./...'
+      'Run go test.'
+      'Run `go test`.'
       'Use the Go toolchain selected by this repository'
       'golangci-lint run'
       'Create a go.work file'
