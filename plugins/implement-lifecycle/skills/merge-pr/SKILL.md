@@ -17,13 +17,14 @@ metadata:
 
 **Suite capability: `focused-only`. Run focused tests, lint, builds, and acceptance commands only. Do not execute or consume the target repository's authoritative verification command or ordered command plan. Final verification owns that evidence.**
 
-Merge the PR supplied with the invocation and update linked GitHub issues with what was delivered.
+This is a lifecycle-internal merge step. Invoke it with the PR number and the temporary handoff artifact produced by lifecycle verification; it fails closed when that artifact is absent or invalid.
 
 ```text
-$ARGUMENTS
+/merge-pr <pr-number> <handoff-artifact-path>
+$implement-lifecycle:merge-pr <pr-number> <handoff-artifact-path>
 ```
 
-If the current client leaves `$ARGUMENTS` literal, use the user's invoking prompt instead.
+Treat the active invocation's arguments as `<pr-number> <handoff-artifact-path>`. If the current client exposes `$ARGUMENTS`, parse the same two values from it; otherwise use the user's invoking prompt.
 
 ## PR Context
 

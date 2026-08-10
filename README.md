@@ -161,7 +161,7 @@ Provides a shared lifecycle orchestrator, two utility skills, three delegated wo
 | Skill | Description |
 |-------|-------------|
 | `/implement` / `$implement-lifecycle:implement` | Lean orchestrator — 6-phase lifecycle (plan → implement → PR → review loop → docs gate → verify → merge). Accepts `#issue`, PR number, or freeform task. Supports trailing instructions like "just review" or "skip planning". |
-| `/merge-pr` / `$implement-lifecycle:merge-pr` | Validate readiness, follow the target repository's merge and branch-retention policy, and update linked GitHub issues with delivery status. |
+| `/merge-pr <pr-number> <handoff-artifact-path>` / `$implement-lifecycle:merge-pr <pr-number> <handoff-artifact-path>` | Lifecycle-internal merge step. Validates readiness and updates linked issues using the temporary verification artifact produced by `verify`; it fails closed without that artifact. |
 | `/pr-check` / `$implement-lifecycle:pr-check` | Pre-flight PR validation — branch naming, title, description, commits, references, plus an advisory scope note. |
 
 **Delegated worker roles** (invoked by the orchestrator, not directly):
@@ -187,7 +187,7 @@ Heavy phases always run in fresh generic isolated delegated children. The canoni
 
 Every lifecycle skill declares a machine-checkable, command-neutral suite capability. `verify` is the sole `full-suite-owner`; it discovers the target repository's authoritative verification command or ordered command plan from repository instructions, CI, development documentation, and build/test configuration. The orchestrator, implementers, addressers, reviewers, docs gate, PR checker, and merger are `focused-only` and may run focused checks without executing or consuming that plan. Verification evidence records the exact command or ordered plan once for the exact PR head, and merge uses that verified SHA as an atomic precondition.
 
-Target-repository instructions and explicit user direction take precedence over bundled fallback conventions for toolchains, branch names, commits, PR formatting, required checks, approvals, merge method, and branch retention. Findings handoffs use harness-provided or system-created temporary paths passed explicitly between workers. The docs gate follows an explicit review → address → re-review graph, so addressed documentation cannot skip directly to verification.
+Enforced target-repository constraints are binding; explicit user direction selects only among permitted choices, and unresolved conflicts stop the merge. Bundled conventions are fallbacks only when both sources are silent about toolchains, branch names, commits, PR formatting, required checks, approvals, merge method, or branch retention. Findings handoffs use harness-provided or system-created temporary paths passed explicitly between workers, and verification passes a temporary, self-contained evidence artifact to the fresh merger. The docs gate follows an explicit review → address → re-review graph, so addressed documentation cannot skip directly to verification.
 
 The skill-local `agents/openai.yaml` files are optional OpenAI skill metadata that supplies presentation and invocation policy. They are not subagent definitions, are retained for Codex compatibility, and do not change the harness-neutral worker behavior. No custom Pi agent templates are distributed.
 
