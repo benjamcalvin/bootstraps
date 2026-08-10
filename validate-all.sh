@@ -15,22 +15,24 @@ CODEX_MARKETPLACE_VALID=false
 # this explicit contract, not extending a natural-language authorization parser.
 lifecycle_forbidden_suite_references() {
   awk '
-    function inspect(sentence, source, broad, broad_object, prohibition) {
+    function inspect(sentence, source, broad, broad_object, broad_target, prohibition, validate_command) {
       sentence = tolower(sentence)
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", sentence)
       gsub(/[.!?]+$/, "", sentence)
-      broad_object = "((the )?((full|complete|entire|lifecycle-wide|repository-wide|authoritative)( repository)?( test)? suites?|(full|complete|entire|lifecycle-wide|repository-wide)( repository)? tests?|(all|every) (repository|repo) tests?|(all|every) tests? (in|across) (the )?(repository|repo|all packages)|(tests?|test suite) (across|throughout|in) (the )?(entire )?(repository|repo)))"
-      broad = sentence ~ broad_object || sentence ~ /\.\/validate-all\.sh/
+      broad_object = "((the )?(((full|complete|entire|authoritative)(-| (repository )?(test )?)|(lifecycle-wide|repository-wide) (repository )?(test )?)suites?|(full|complete|entire|lifecycle-wide|repository-wide)( repository)? tests?|(all|every)( (project|repository|repo))? tests?|(all|every) tests? (in|across) (the )?(repository|repo|all packages)|(tests?|test suite) (across|throughout|in) (the )?(entire )?(repository|repo)))"
+      validate_command = "((bash[[:space:]]+|\\./)validate-all\\.sh)"
+      broad_target = "(" broad_object "|" validate_command ")"
+      broad = sentence ~ broad_target
       if (!broad) return
 
       # Accepted prohibitions are deliberately complete, anchored sentences.
       # Anything else mentioning a broad suite is rejected by default.
-      prohibition = sentence ~ ("^(do not|don.t|must not|shall not|should not|may not|never)( ever)? (run|execute|invoke) " broad_object "$") || \
-        sentence ~ ("^(you )?(must |shall |should )?(avoid|refrain from) (ever )?(running|executing|invoking) " broad_object "$") || \
-        sentence ~ ("^" broad_object " (is|are) not required to be (run|executed|invoked)$") || \
-        sentence ~ ("^" broad_object " (must|shall|should|may) not be (run|executed|invoked)$") || \
-        sentence ~ ("^(run|execute|invoke) no " broad_object "$") || \
-        sentence ~ ("^" broad_object " (is|are) prohibited$")
+      prohibition = sentence ~ ("^(do not|don.t|must not|shall not|should not|may not|never)( ever)? (run|execute|invoke) " broad_target "$") || \
+        sentence ~ ("^(you )?(must |shall |should )?(avoid|refrain from) (ever )?(running|executing|invoking) " broad_target "$") || \
+        sentence ~ ("^" broad_target " (is|are) not required to be (run|executed|invoked)$") || \
+        sentence ~ ("^" broad_target " (must|shall|should|may) not be (run|executed|invoked)$") || \
+        sentence ~ ("^(run|execute|invoke) no " broad_target "$") || \
+        sentence ~ ("^" broad_target " (is|are) prohibited$")
       if (!prohibition) print source
     }
     function flush(   normalized, count, i) {
@@ -355,6 +357,10 @@ for plugin_dir in plugins/*/; do
     lifecycle_suite_contract='Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run.'
     lifecycle_merge_evidence_reference='Fetch the current PR head SHA and compare it with the verified commit SHA in the durable authoritative-suite evidence record.'
     lifecycle_merge_no_rerun='Missing evidence, a nonzero status, or a SHA mismatch blocks merge; do not rerun the suite.'
+    lifecycle_implement_suite_ownership='**Run the authoritative full suite at most once per commit, owned by `verify`.** Implementer and addresser run focused package tests + lint + build on their own changes; they do NOT re-run the entire suite at every phase. Final verification consumes or performs the one authoritative run for the commit it verifies. A failed run may lead to address and re-verify on a new commit, but the failed commit is never rerun. Outside final verification, Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run.'
+    lifecycle_implement_evidence_payload='Payload: <pr-number> <durable-authoritative-suite-evidence-record-or-none>'
+    lifecycle_implement_evidence_instruction='The verification agent will classify the change type, devise a verification plan, execute it, and report structured evidence. Preserve its concise durable authoritative-suite evidence record in orchestration notes and pass it to every fresh verifier and the merge phase. If **PASS** or **N/A**, proceed to Phase 6. If the verdict is **FAIL**, delegate the fixes — do **not** fix the code yourself.'
+    lifecycle_implement_merge_payload='Payload: <pr-number> <durable-authoritative-suite-evidence-record>'
     lifecycle_suite_contract_missing=false
     lifecycle_non_verification_skills=(
       implement-code implement-address review-general review-correctness review-security
@@ -384,6 +390,18 @@ for plugin_dir in plugins/*/; do
       ERRORS=$((ERRORS + 1))
       lifecycle_suite_contract_missing=true
     fi
+    lifecycle_implement_forbidden_suite_reference=$(awk \
+      -v ownership="$lifecycle_implement_suite_ownership" \
+      -v evidence_payload="$lifecycle_implement_evidence_payload" \
+      -v evidence_instruction="$lifecycle_implement_evidence_instruction" \
+      -v merge_payload="$lifecycle_implement_merge_payload" \
+      '$0 != ownership && $0 != evidence_payload && $0 != evidence_instruction && $0 != merge_payload' \
+      "$lifecycle_implement_skill" | lifecycle_forbidden_suite_references)
+    if [ -n "$lifecycle_implement_forbidden_suite_reference" ]; then
+      echo "  ERROR: implement contains a non-standard broad-suite reference: $lifecycle_implement_forbidden_suite_reference"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_suite_contract_missing=true
+    fi
     if [ "$lifecycle_suite_contract_missing" = false ]; then
       echo "  OK: Non-verification lifecycle phases reserve complete-suite execution for final verification"
     fi
@@ -403,6 +421,12 @@ for plugin_dir in plugins/*/; do
       'Running the full repository test suite is required before returning.'
       'Run every test in all packages before returning.'
       'Execute tests across the repository before returning.'
+      'Run full-suite before returning.'
+      'Run complete-suite before returning.'
+      'Run all tests before returning.'
+      'Run all project tests before returning.'
+      'Run bash validate-all.sh before returning.'
+      'During implementation, run all repository tests before review.'
     )
     for lifecycle_suite_mutation in "${lifecycle_suite_mutations[@]}"; do
       if [ -z "$(printf '%s\n' "$lifecycle_suite_mutation" | lifecycle_forbidden_suite_references)" ]; then
@@ -420,7 +444,13 @@ for plugin_dir in plugins/*/; do
       'The full test suite is not required to be run.' \
       'Run no full test suite.' \
       'Do not ever run the full test suite.' \
-      'Lifecycle-wide repository test suites are prohibited.'; do
+      'Lifecycle-wide repository test suites are prohibited.' \
+      'Do not run full-suite.' \
+      'Do not run complete-suite.' \
+      'Do not run all tests.' \
+      'Do not run all project tests.' \
+      'Do not run bash validate-all.sh.' \
+      'Run focused package tests only.'; do
       if [ -n "$(printf '%s\n' "$lifecycle_suite_prohibition" | lifecycle_forbidden_suite_references)" ]; then
         echo "  ERROR: Complete-suite detector rejected explicit prohibition: $lifecycle_suite_prohibition"
         ERRORS=$((ERRORS + 1))
@@ -531,6 +561,7 @@ EOF
 empty-output -> incomplete
 missing-heading -> incomplete
 incomplete + recover-complete -> structurally-complete
+incomplete + recover-incomplete -> fresh-retry
 incomplete + recover-unavailable -> fresh-retry
 fresh-retry + complete -> structurally-complete
 fresh-retry + incomplete -> stop

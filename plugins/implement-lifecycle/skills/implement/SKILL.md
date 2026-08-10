@@ -82,6 +82,7 @@ The following state machine is the authoritative reviewer-recovery contract; onl
 empty-output -> incomplete
 missing-heading -> incomplete
 incomplete + recover-complete -> structurally-complete
+incomplete + recover-incomplete -> fresh-retry
 incomplete + recover-unavailable -> fresh-retry
 fresh-retry + complete -> structurally-complete
 fresh-retry + incomplete -> stop
@@ -172,7 +173,7 @@ git fetch origin "$BASE_BRANCH"
 git rebase "origin/$BASE_BRANCH"
 ```
 
-If conflicts arise, resolving them is a **permitted git-mechanical carve-out** to the no-edit contract. Keep it strictly mechanical, then run the affected package tests (focused, not the full suite — see the full-suite-once rule below) and force-push the rebased branch:
+If conflicts arise, resolving them is a **permitted git-mechanical carve-out** to the no-edit contract. Keep it strictly mechanical, then run only the affected package tests and force-push the rebased branch:
 
 ```bash
 git push --force-with-lease
@@ -180,7 +181,7 @@ git push --force-with-lease
 
 **Run the authoritative full suite at most once per commit, owned by `verify`.** Implementer and addresser run focused package tests + lint + build on their own changes; they do NOT re-run the entire suite at every phase. Final verification consumes or performs the one authoritative run for the commit it verifies. A failed run may lead to address and re-verify on a new commit, but the failed commit is never rerun. Outside final verification, Focused acceptance commands are allowed; lifecycle-wide repository test suites and equivalent complete-suite commands are prohibited because final verification owns that run.
 
-**Pin the toolchain once.** Use the project's pinned Go/toolchain version (e.g. `mise` or `go.mod`'s `go` directive) consistently across every phase. Do not let implementer, addresser, and verify each resolve a different toolchain — a mismatch (e.g. 1.25.5 vs 1.25.7) causes wasted full-suite failures that are not real regressions.
+**Pin the toolchain once.** Use the project's pinned Go/toolchain version (e.g. `mise` or `go.mod`'s `go` directive) consistently across every phase. Do not let implementer, addresser, and verify each resolve a different toolchain — a mismatch (e.g. 1.25.5 vs 1.25.7) causes wasted verification failures that are not real regressions.
 
 Then fetch a lightweight PR summary for your own reference:
 ```bash
