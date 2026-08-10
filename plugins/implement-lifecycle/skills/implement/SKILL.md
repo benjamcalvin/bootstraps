@@ -447,7 +447,9 @@ After the review loop completes, invoke the verification agent to test the PR's 
 Payload: <pr-number>
 ```
 
-The verification agent will classify the change type, devise a verification plan, execute it, and report structured evidence. If **PASS** or **N/A**, proceed to Phase 6. If the verdict is **FAIL**, delegate the fixes — do **not** fix the code yourself.
+The verification agent will classify the change type, devise a verification plan, execute it, and report structured evidence. If **PASS** or **N/A**, proceed to Phase 6. If the verdict is **FAIL**, delegate the fixes — do **not** fix the code yourself. If it is **PARTIAL** because the target repository has no authoritative verification contract, stop and report that missing contract; do not merge or invent a substitute.
+
+Capture the verifier's complete durable `verification-record:v1` (exact command or ordered JSON plan, execution count, overall status, and ordered per-command result/status/evidence-pointer entries). Write that record to a harness-provided temporary file, or a uniquely created file under the operating system's temporary directory when the harness provides none. Pass the resolved path explicitly to `merge-pr`. The verifier also publishes the same concise durable record in its PR comment; verbose outputs remain in the returned findings and are not part of the merge handoff.
 
 Because `implement-address` reads its findings from a file argument (and aborts if that file is missing or empty), you must **write the verification findings to a temp file first**, reusing the findings-file mechanics of Phase 4 Step C/D (write a temp findings file, then invoke `implement-address` with its path). Unlike Phase 4, there is no referee accept/reject step here: `verify` is a single, self-vetting source rather than several parallel reviewers who can disagree, so its findings pass straight through. The `verify` skill only posts a PR comment; it does not write this file, so the orchestrator must create it:
 
@@ -475,7 +477,7 @@ The round counter starts from round 1 (independent of Phase 4 rounds) and increm
 Invoke `merge-pr` through the same harness-neutral adapter contract used for every other lifecycle phase. Select the Claude Code, Codex, Pi, or generic adapter for the active harness, load the canonical `merge-pr` skill explicitly, pass fresh PR context, and capture its returned result:
 
 ```
-Payload: <pr-number>
+Payload: <pr-number> <resolved-verification-record-path>
 ```
 
 This validates the PR, applies the target repository's merge and branch-retention policy, and posts updates on linked issues.

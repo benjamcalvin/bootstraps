@@ -39,17 +39,21 @@ First establish the target repository's authoritative verification contract. App
 
 For a code-changing PR, obtain the exact current head with `gh pr view <number> --json headRefOid --jq .headRefOid`. Any complete authoritative evidence record for that identical SHA consumes its one-execution allowance, whether the recorded result passed or failed. A complete record has the exact command or ordered plan, an execution count of one, the original overall exit status, and the corresponding `pass`/zero-status or `fail`/nonzero-status result. Independently establish the target contract before consuming evidence, and consume a complete passing record only when its command or plan exactly matches. Do not execute it again. For a complete failing record, return FAIL and require addressing that produces a new head before another authoritative execution. Evidence for any other SHA is stale. If no complete evidence exists for the exact head, execute the established command or ordered plan exactly once and preserve each command's output plus the plan's original exit status; stop the plan at the first failure unless the target repository explicitly requires otherwise. Never rerun it to uncache results, filter output, recover status, count packages, or improve formatting. A pure documentation change may record verification as not required.
 
-Record suite evidence in the returned result and PR comment using these exact fields:
+Record suite evidence as a canonical `verification-record:v1` in both the returned result and PR comment using these exact fields:
 
 ```text
+verification-record: v1
 verification-head: <full-head-sha>
-suite-result: pass | fail | not-required
+suite-result: pass | fail | missing-contract | not-required
 suite-command: <exact-command-or-ordered-JSON-command-array> | none
 suite-executions: 0 | 1
 suite-exit-status: <integer> | n/a
+suite-command-results: <ordered-result-list> | []
 ```
 
-For an ordered plan, follow those fields with a `suite-command-results` list that records each command actually executed, in order, with its unedited output and original exit status. A passing plan must contain evidence for every declared command. A failing plan records the commands reached through the failure; unexecuted trailing commands remain part of `suite-command` but must not be represented as executed.
+For an ordered plan, follow those fields with a `suite-command-results` list that records each command actually executed, in order, with its exact command, `pass`/`fail` result, original exit status, and a stable evidence pointer. A passing plan must contain evidence for every declared command. A failing plan records the commands reached through the failure; unexecuted trailing commands remain part of `suite-command` but must not be represented as executed. Put each command's unedited output under the matching evidence pointer in the returned findings, not in the PR comment. For a single command, use the same one-entry list so the durable representation does not change shape.
+
+The missing-contract/PARTIAL record is canonical: `suite-result: missing-contract`, `suite-command: none`, `suite-executions: 0`, `suite-exit-status: n/a`, and an empty `suite-command-results` list. This state is not mergeable. A documentation-only N/A record uses the same command, execution, status, and empty-results values with `suite-result: not-required`.
 
 After execution, fetch `headRefOid` again. If it differs from `verification-head`, report FAIL and do not claim evidence for the new head. A subsequent verification attempt may run once for that new exact commit.
 
@@ -76,7 +80,7 @@ Read the PR description's "Manual verification" section and PR comments. Look fo
 2. **Output** — complete, unedited output
 3. **Explanation** — what the output demonstrates
 
-For authoritative-suite evidence, additionally require all five exact fields above and an exact `verification-head` match. General manual evidence never substitutes for those fields.
+For authoritative-suite evidence, additionally require the complete canonical record above and an exact `verification-head` match. General manual evidence never substitutes for those fields.
 
 Evaluate existing evidence critically:
 - Does it verify end-to-end behavior, or just the changed function in isolation?
@@ -160,7 +164,7 @@ If a verification step fails:
 
 ### Step 5: Report Findings
 
-Post your verification results to the PR. **Keep the comment concise — verdict + evidence pointers, not the full verbose transcript.** Post the verdict, the system flow verified, a short list of evidence pointers (command + one-line result each), issues found, and the holistic assessment. Do not dump full multi-line command output into the PR comment; capture it in your returned findings instead. A bloated verification comment buries the verdict.
+Post your verification results to the PR. **Keep the comment concise — verdict + the complete durable `verification-record:v1`, not the full verbose transcript.** Include every exact command, result, original status, and evidence pointer needed by a fresh merger. Put the unedited multi-line output under the corresponding pointers only in your returned findings. A bloated verification comment buries the verdict.
 
 ```
 gh pr comment <pr-number> --body "<concise results>"
@@ -173,11 +177,17 @@ Return findings in this structure:
 
 ### Verdict: PASS / FAIL / PARTIAL / N/A
 
+verification-record: v1
 verification-head: <full-head-sha>
-suite-result: pass | fail | not-required
-suite-command: <exact-command> | none
+suite-result: pass | fail | missing-contract | not-required
+suite-command: <exact-command-or-ordered-JSON-command-array> | none
 suite-executions: 0 | 1
 suite-exit-status: <integer> | n/a
+suite-command-results:
+  - command: <exact-command>
+    result: pass | fail
+    exit-status: <integer>
+    evidence-pointer: <matching-heading-or-artifact-reference>
 
 ### System Flow Verified
 <brief description of the end-to-end flow that was exercised>
@@ -234,6 +244,8 @@ suite-exit-status: <integer> | n/a
 Any concerns about interactions, side effects, or downstream impact?>
 ```
 
+For `PARTIAL` because no authoritative contract can be established, use the same template with the canonical missing-contract values and `suite-command-results: []`; explain which target sources were checked under Evidence. For an ordered plan, render `suite-command` as an ordered JSON string array and repeat the result entry for every command actually reached. The returned Evidence sections at the referenced headings contain the complete, unedited outputs.
+
 If verification is truly not applicable (pure documentation/comment changes only), return:
 
 ```
@@ -241,11 +253,13 @@ If verification is truly not applicable (pure documentation/comment changes only
 
 ### Verdict: N/A
 
+verification-record: v1
 verification-head: <full-head-sha>
 suite-result: not-required
 suite-command: none
 suite-executions: 0
 suite-exit-status: n/a
+suite-command-results: []
 
 Pure documentation change — no code, configuration, or build artifacts affected.
 ```
