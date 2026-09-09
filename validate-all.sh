@@ -543,7 +543,8 @@ complete + referee -> refereeing
       ! rg -Fq 'The missing-contract/PARTIAL record is canonical:' "$lifecycle_verify_file" || \
       ! rg -Fq '{"verification-record":"v1","verification-head":"<full-head-sha>","suite-result":"not-required","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"retry-reason":null,"suite-evidence":{}}' "$lifecycle_verify_file" || \
       ! rg -Fq 'retry-reason' "$lifecycle_merge_file" || \
-      ! rg -Fq 'If the path is absent, unreadable, or does not contain a complete `verification-record:v1` plus its referenced `suite-evidence`, stop rather than reconstructing evidence from an inaccessible parent transcript.' "$lifecycle_merge_file" || \
+      ! rg -Fq 'stop rather than reconstructing evidence from an inaccessible parent transcript' "$lifecycle_merge_file" || \
+      ! rg -Fq 'its own dedicated required check' "$lifecycle_merge_file" || \
       ! rg -Fq 'For every result, require its `#/suite-evidence/command-<N>` pointer to resolve inside the handed-off object' "$lifecycle_merge_file" || \
       ! rg -Fq 'Accept `not-required` only after independently inspecting the changed files and confirming that every change is documentation or comments only' "$lifecycle_merge_file" || \
       ! rg -Fq 'Capture the verifier'"'"'s returned handoff-artifact JSON object: the complete durable `verification-record:v1`' "$lifecycle_implement_skill" || \

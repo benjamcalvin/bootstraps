@@ -40,10 +40,15 @@ default mechanics and the target repository's default process policy where
 the two conflict (e.g. a user requesting full delegated review on a routine
 change, or a narrower scope than default policy would otherwise run) — never
 silently substitute a repository or plugin default for an instruction the
-user actually gave. This does not extend to a repository's enforced technical or
-compliance constraints (required checks, branch protection, required
-approvals): those remain binding regardless of user instruction, per Phase 6's
-own precedence rule.
+user actually gave. This does not extend to a repository's enforced technical
+or compliance constraints (required checks, branch protection, required
+approvals): an ordinary task cannot use a user instruction to waive, weaken,
+or falsely report a real, still-enforced gate, per Phase 6's own precedence
+rule. The one exception is a task whose own explicit, authorized scope IS to
+change that policy or configuration itself (e.g. a task to edit branch
+protection, required-check bindings, or this repository's own lifecycle
+contract) — that authorization comes from the task's stated scope, never
+from a same-task attempt to route around its own gate.
 
 If that repository documents a shared development-metrics recorder, mint one
 opaque run id for this task (or reuse an inherited one) and include it in the
@@ -53,15 +58,17 @@ run instead of each minting its own.
 ### Routine inline path
 
 When the target repository's risk policy classifies this task as routine
-(e.g. a typo/mechanical correction or a small, well-bounded isolated fix, per
-its own risk table) and the user has not requested the full delegated
-lifecycle, this orchestrator MAY implement the change directly and inline —
-make the edit yourself, run only the focused check that policy calls for (or
-note none is observable), open the PR, and apply the one proportionate review
-that policy calls for — instead of delegating to `implement-code`. Fold any
-docs relevance into that same single review rather than running Phase 4.5's
-separate docs-compliance gate, which this path skips for a change with no
-observable or documented surface. Absent a documented repository risk policy,
+(e.g. a typo/mechanical correction, a small well-bounded isolated fix, or a
+routine frontend behavior change, per its own risk table) and the user has
+not requested the full delegated lifecycle, this orchestrator MAY implement
+the change directly and inline — make the edit yourself, run only the
+focused check that policy calls for (or note none is observable), open the
+PR, and apply the one proportionate review that policy calls for — instead
+of delegating to `implement-code`. This path always folds any docs relevance
+into that same single review rather than running Phase 4.5's separate
+delegated docs-compliance gate, regardless of whether the change has an
+observable or documented surface — routine work never needs a separate
+documentation specialist. Absent a documented repository risk policy,
 fall back to the full delegated lifecycle below for anything beyond an
 unambiguous one-line mechanical fix — never invent a broader notion of
 "routine" than the repository itself would recognize. Explicit user
