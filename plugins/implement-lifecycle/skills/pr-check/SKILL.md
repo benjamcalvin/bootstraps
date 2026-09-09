@@ -29,6 +29,27 @@ If the current client leaves `$ARGUMENTS` literal, use the user's invoking promp
 
 At runtime, inspect the current branch and fetch available PR metadata and comments. Determine the actual base branch before inspecting commits and diff size. Read explicit user direction and the target repository's governing instructions and contribution documentation before applying standards.
 
+If present, also read the target repository's
+`docs/specs/standards/development-lifecycle.md` and apply its current evidence,
+review-risk, convergence, privacy, and PR-sizing policy. This contract is
+repository-owned; the bundled checks are fallbacks only where repository policy
+is silent.
+
+If that repository documents a shared development-metrics recorder (e.g.
+`scripts/development_metrics.py`), capture a real start timestamp through its
+own mechanism (e.g. its `now` subcommand) at the beginning of this phase, then
+at the end record it through the same recorder (e.g. its `record` subcommand)
+passing that captured start value (e.g. `--started-monotonic`) rather than a
+hand-computed or estimated duration — the recorder itself measures real
+elapsed monotonic time between the two calls; never invent, guess, or
+shell-arithmetic an elapsed duration yourself. Use opaque candidate/task ids,
+phase `pr-check`, phase-kind `execution`, the actual result and exit status
+(preserved exactly, never inferred from a friendly label), and any run id
+passed to this invocation, so this phase's record joins the same run as every
+other delegated phase. Best-effort only: never let a missing recorder or a
+failed metrics call change this phase's real result, and never invent a
+second timing or telemetry format.
+
 ## Instructions
 
 Validate the current PR against target-repository policy first. Explicit user direction and repository instructions take precedence over the bundled checks below for branch names, commits, PR formatting, required references, and blocking/advisory status. Use a bundled check only as a fallback where target policy is silent, and identify that fallback in the result. If no PR exists, check only what can be validated locally and note that no PR exists yet.

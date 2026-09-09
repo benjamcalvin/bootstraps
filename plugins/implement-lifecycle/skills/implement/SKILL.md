@@ -27,11 +27,62 @@ $ARGUMENTS
 
 At runtime, inspect the current branch and recent commits. Fetch any referenced issue and its comments before delegating.
 
+## Target repository contract
+
+When the target repository contains `docs/specs/standards/development-lifecycle.md`,
+read it together with `AGENTS.md`, `CLAUDE.md`, and applicable standards before
+choosing phases or delegating work. Treat that repository document as the
+authoritative project policy; this plugin supplies harness-neutral mechanics
+and must not duplicate or override repository-specific lifecycle rules.
+
+Explicit user instructions given at invocation precede both this plugin's
+default mechanics and the target repository's default process policy where
+the two conflict (e.g. a user requesting full delegated review on a routine
+change, or a narrower scope than default policy would otherwise run) — never
+silently substitute a repository or plugin default for an instruction the
+user actually gave. This does not extend to a repository's enforced technical
+or compliance constraints (required checks, branch protection, required
+approvals): an ordinary task cannot use a user instruction to waive, weaken,
+or falsely report a real, still-enforced gate, per Phase 6's own precedence
+rule. The one exception is a task whose own explicit, authorized scope IS to
+change that policy or configuration itself (e.g. a task to edit branch
+protection, required-check bindings, or this repository's own lifecycle
+contract) — that authorization comes from the task's stated scope, never
+from a same-task attempt to route around its own gate.
+
+If that repository documents a shared development-metrics recorder, mint one
+opaque run id for this task (or reuse an inherited one) and include it in the
+context bundle below so every delegated phase's metrics record joins the same
+run instead of each minting its own.
+
+### Routine inline path
+
+When the target repository's risk policy classifies this task as routine
+(e.g. a typo/mechanical correction, a small well-bounded isolated fix, or a
+routine frontend behavior change, per its own risk table) and the user has
+not requested the full delegated lifecycle, this orchestrator MAY implement
+the change directly and inline — make the edit yourself, run only the
+focused check that policy calls for (or note none is observable), open the
+PR, and apply the one proportionate review that policy calls for — instead
+of delegating to `implement-code`. This path always folds any docs relevance
+into that same single review rather than running Phase 4.5's separate
+delegated docs-compliance gate, regardless of whether the change has an
+observable or documented surface — routine work never needs a separate
+documentation specialist. Absent a documented repository risk policy,
+fall back to the full delegated lifecycle below for anything beyond an
+unambiguous one-line mechanical fix — never invent a broader notion of
+"routine" than the repository itself would recognize. Explicit user
+instructions override this default in either direction: a user asking for
+full review on a routine change gets it; a user explicitly authorizing this
+inline path for a larger change gets that instead of forced delegation. The
+mandatory delegation and no-self-edit rules below govern the full delegated
+lifecycle; they do not apply while this routine inline path is in effect.
+
 ## Instructions
 
 <!-- stop-guard:active -->
 
-You are a **lean orchestrator** — a supervisor who delegates, not an implementer. Every heavy phase runs in an isolated delegated agent; worker skills define the work but do not create that isolation themselves. **You MUST NOT use file-editing tools to modify source code, tests, or documentation.** You may use the shell for git/gh commands and tests, and the current client's read/search capabilities for refereeing, but never edit the codebase under review yourself.
+You are a **lean orchestrator** — a supervisor who delegates, not an implementer, for any task outside the routine inline path above. Every heavy phase in the full delegated lifecycle runs in an isolated delegated agent; worker skills define the work but do not create that isolation themselves. **Outside the routine inline path, you MUST NOT use file-editing tools to modify source code, tests, or documentation.** You may use the shell for git/gh commands and tests, and the current client's read/search capabilities for refereeing, but never edit the codebase under review yourself except as that path explicitly permits.
 
 **Permitted carve-out — orchestration scratch files:** Writing non-source orchestration files for findings handoff is expected and allowed. Resolve a writable scratch location through the harness when it provides one; otherwise ask the operating system to create a temporary file or directory. Record each resolved path and pass it explicitly to the receiving worker. The prohibition targets modifying the codebase under review — source, tests, and docs — not writing orchestration scratch files.
 
@@ -71,7 +122,7 @@ For every delegation, use the adapter for the active harness to create a fresh i
 
 **Pi adapter.** With the user-installed `pi-subagents` prerequisite available, launch a generic `delegate` child with `skill: <skill>`, `context: "fresh"`, and the complete payload and fresh context bundle. Never rely on the delegate default for context freshness. Do not use or distribute custom Pi agent definitions.
 
-**Generic adapter.** A compatible harness must create a fresh isolated child, load the mapped Agent Skill explicitly, pass the complete payload and fresh context bundle, and return the child result. A harness that cannot provide isolated delegation or load the required skill must report the failed phase and must not execute it inline.
+**Generic adapter.** A compatible harness must create a fresh isolated child, load the mapped Agent Skill explicitly, pass the complete payload and fresh context bundle, and return the child result. A harness that cannot provide isolated delegation or load the required skill must report the failed phase and must not execute it inline **as a substitute for that delegation** — this does not apply to the routine inline path above, which is an intentional non-delegated path chosen by policy, not a fallback for a harness's missing capability.
 
 When specialists are selected, every adapter launches the selected reviewers in parallel and waits for all their results before refereeing.
 
@@ -92,7 +143,7 @@ complete + referee -> refereeing
 
 On an incomplete result, first recover the final captured result from the harness transcript when available. If recovery is unavailable or still incomplete, retry once in a new child with the same canonical skill and `context: "fresh"`. If that retry is incomplete, stop the phase and report the failed delegation. Only the `complete` state may enter refereeing.
 
-**Isolate delegated context.** Each delegated agent (implementer, addresser, reviewer, verifier) should be launched with MINIMAL, FRESH context: the PR/issue being worked, the governing contract (issue body, ADR, or spec), the current diff, and any prior accepted/rejected findings — NOT the orchestrator's accumulated cross-PR history. Long-lived or reused sessions (e.g., a docs gate or verifier kept alive across multiple PRs) accumulate unrelated context and degrade review quality; reset or bound them per PR. Assemble a single shared **context bundle** (issue, contract, diff, prior findings, referee decisions) and pass the same bundle to every child for that PR, so each starts from the same ground truth instead of re-deriving it.
+**Isolate delegated context.** Each delegated agent (implementer, addresser, reviewer, verifier) should be launched with MINIMAL, FRESH context: the PR/issue being worked, the governing contract (issue body, ADR, or spec), the current diff, and any prior accepted/rejected findings — NOT the orchestrator's accumulated cross-PR history. Long-lived or reused sessions (e.g., a docs gate or verifier kept alive across multiple PRs) accumulate unrelated context and degrade review quality; reset or bound them per PR. Assemble a single shared **context bundle** (issue, contract, diff, prior findings, referee decisions, and the run id described above when the target repository has a metrics recorder) and pass the same bundle to every child for that PR, so each starts from the same ground truth instead of re-deriving it.
 
 ### Entry Point
 
@@ -151,6 +202,8 @@ EOF
 ```
 
 ### Phase 4: Review/Address Loop {#review-loop}
+
+**One task-level convergence bound covers this entire task** — Phase 4's review/address rounds, Phase 4.5's docs-gate rounds, and Phase 5's verify/address rounds all draw down the SAME round budget; they are not three independent 5-round allowances. Track one running round count across all three phases and carry it forward instead of restarting it at each phase boundary. This bound cannot be reset, hidden, or bypassed by rewriting history: a revise-and-reset or restart-clean recovery (Step E below) may change the branch, scope, or approach, but it never zeroes the count already spent — if the shared bound is already exhausted when a stall or scope guard fires again, escalate to the user rather than starting another revised or clean attempt.
 
 **This is a mandatory loop.** It repeats Steps A → B → C → D → E for each round until one of exactly two exit conditions is met:
 
@@ -328,13 +381,13 @@ The addresser has pushed fixes. Check convergence and the escalation limit, then
 
 1. **Convergence audit after round 2:** After two non-clean rounds, post an audit that maps the remaining findings and review-added changes to the original acceptance criteria. For each distinct sub-problem or code area still under contention, record the finding DENSITY (how many findings have targeted that same sub-problem across rounds). A sub-problem with repeated findings across multiple rounds is a convergence trap — flag it. State whether the loop is converging and whether remaining findings primarily concern the original task or architecture introduced during addressing. If they primarily concern review-introduced architecture, stop before round 3 and request human direction. Recommend bounded simplification or removal of that architecture.
 
-2. **Convergence-recovery decision:** When the escalation exit fires (round 5 reached, convergence stalled, or a scope guard), do **not** default to stopping. Diagnose WHY the loop is not converging and choose one of three recovery paths:
+2. **Convergence-recovery decision:** When the escalation exit fires (the shared bound reached, convergence stalled, or a scope guard), do **not** default to stopping. Diagnose WHY the loop is not converging and choose one of three recovery paths. **None of the three resets the one task-level convergence count from Phase 4's header above** — a revised or clean attempt still draws down the same shared bound, never a fresh one, and discarding drifted work is a scope/branch decision, not a history rewrite that makes the bound disappear. If the shared bound is already exhausted, only the third path (escalate) remains available:
 
-   - **Revise-and-reset — original scope insufficiently specific.** If the reviews kept surfacing ambiguity — underspecified acceptance criteria, conflicting requirements, or findings the original issue never pinned down — the scope was the problem, not the implementation. Take the learnings from this run (what the reviews revealed about the real requirement), reset the branch to a clean head, revise the issue/requirements to be specific and unambiguous, and open a **clean PR** built on the revised issue.
-   - **Restart-clean — gone off track.** If the loop is dominated by review-introduced architecture or scope creep that drifted from the original issue, the run went off track. Start clean — discard the drifted work — and restart with **clearer guidelines** that bind the work back to the original issue scope. As part of this, update the underlying issue with notes that give clearer instructions — even a partial clarification (an added constraint, a boundary, a worked example, or an explicit "out of scope" note) materially increases the odds the next attempt succeeds and does not require a full revision.
-   - **Escalate to the user.** If the stall is a genuinely hard ambiguity that self-revision cannot resolve, or the user should choose between the paths, escalate. This remains a valid option — self-recovery is not mandatory.
+   - **Revise-and-reset — original scope insufficiently specific.** If the reviews kept surfacing ambiguity — underspecified acceptance criteria, conflicting requirements, or findings the original issue never pinned down — the scope was the problem, not the implementation. Take the learnings from this run (what the reviews revealed about the real requirement), reset the branch to a clean head, revise the issue/requirements to be specific and unambiguous, and open a **clean PR** built on the revised issue — only when the shared bound still has room; otherwise escalate instead.
+   - **Restart-clean — gone off track.** If the loop is dominated by review-introduced architecture or scope creep that drifted from the original issue, the run went off track. Start clean — discard the drifted work — and restart with **clearer guidelines** that bind the work back to the original issue scope, only when the shared bound still has room; otherwise escalate instead. As part of this, update the underlying issue with notes that give clearer instructions — even a partial clarification (an added constraint, a boundary, a worked example, or an explicit "out of scope" note) materially increases the odds the next attempt succeeds and does not require a full revision.
+   - **Escalate to the user.** If the stall is a genuinely hard ambiguity that self-revision cannot resolve, the shared bound is already exhausted, or the user should choose between the paths, escalate. This remains a valid option — self-recovery is not mandatory.
 
-   Do **not** extend the SAME loop past round 5 without explicit user authorization; recovery means starting a NEW loop (revised or clean), not continuing the stalled one. If you escalate, post the escalation comment and stop:
+   Do **not** extend the SAME loop, nor start a revised or clean one, past the one shared task-level bound without explicit user authorization; a reset or restart continues counting against that same bound, it does not grant a new one. If you escalate, post the escalation comment and stop:
 
 ```
 gh pr comment <number> --body "$(cat <<'EOF'
@@ -371,7 +424,7 @@ clean + enter-verification -> verification
 
 Only `clean` may transition to verification. `addressed` must transition through another `review-docs` round; convergence escalation exits to `escalated`, not verification.
 
-After the code review/address loop converges, run the docs curation gate. **This gate is mandatory for any PR with a docs-relevant surface** — a change to public-facing behavior (new CLI command, changed default, public API, plugin surface, config option), a change that restructures internals with observable effects, or any change to documentation files. The docs reviewer is a curator, not a diff checker — it proactively identifies where documentation is missing, outdated, or contradicted by the code changes. A PR that adds a new CLI command, changes a default, or restructures internals may need docs updates even though no `.md` files were touched. **The gate may be skipped only for a pure internal/mechanical change with no observable or documented surface** (e.g. a private refactor with no behavior change and no docs files touched).
+After the code review/address loop converges, run the docs curation gate. **This gate is mandatory, as its own delegated round, for any PR built through the full delegated lifecycle that has a docs-relevant surface** — a change to public-facing behavior (new CLI command, changed default, public API, plugin surface, config option), a change that restructures internals with observable effects, or any change to documentation files. The docs reviewer is a curator, not a diff checker — it proactively identifies where documentation is missing, outdated, or contradicted by the code changes. A PR that adds a new CLI command, changes a default, or restructures internals may need docs updates even though no `.md` files were touched. **The gate may be skipped only for a pure internal/mechanical change with no observable or documented surface** (e.g. a private refactor with no behavior change and no docs files touched), **or when the routine inline path above applies**, which folds any docs relevance into that path's single proportionate review instead of a separate delegated gate.
 
 **Do NOT include `review-docs` in the Phase 4 reviewer pool.** It runs only here, after the code review loop is complete — this is the single docs owner for the lifecycle. **Do NOT skip this phase** just because the file list shows no `.md` files; judge docs-relevance by the observable surface, not the file list. When in doubt, run it — it is cheap and it catches real stale-docs gaps.
 
@@ -437,7 +490,7 @@ Payload: <pr-number> docs-<round-number> <resolved-docs-findings-path>
 
 #### Step D: Evaluate Continuation
 
-Re-invoke the docs reviewer to verify fixes. The round counter starts from round 1 (independent of Phase 4 rounds). Loop until clean. Apply the same round-2 convergence audit and convergence-based escalation (round-5 ceiling) as Phase 4.
+Re-invoke the docs reviewer to verify fixes. This gate's own round label (`docs-<N>`) restarts at 1 for readability, but each round still draws down the ONE shared task-level convergence bound from Phase 4's header, not an independent allowance. Loop until clean. Apply the same round-2 convergence audit and convergence-based escalation (shared-bound ceiling) as Phase 4.
 
 ### Phase 5: Manual Verification Gate
 
@@ -470,7 +523,7 @@ Then invoke the addresser with that file path, using a `verify-<round-number>` r
 Payload: <pr-number> verify-<round-number> <resolved-verify-findings-path>
 ```
 
-The round counter starts from round 1 (independent of Phase 4 rounds) and increments each FAIL → address → re-verify cycle. After the addresser pushes fixes, re-invoke `verify` and repeat until **PASS** or **N/A**, then proceed to Phase 6.
+This gate's own round label (`verify-<N>`) restarts at 1 for readability and increments each FAIL → address → re-verify cycle, but each cycle still draws down the ONE shared task-level convergence bound from Phase 4's header, not an independent allowance. After the addresser pushes fixes, re-invoke `verify` and repeat until **PASS** or **N/A**, then proceed to Phase 6.
 
 ### Phase 6: Merge & Finalize
 

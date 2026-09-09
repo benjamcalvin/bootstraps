@@ -529,8 +529,9 @@ complete + referee -> refereeing
     if ! rg -Fq "Apply repository instructions first, then CI configuration, documented development commands, and build or test configuration." "$lifecycle_verify_file" || \
       ! rg -Fq 'When it declares several required commands, preserve their order as one authoritative plan; do not select a subset or reorder them.' "$lifecycle_verify_file" || \
       ! rg -Fq 'If these sources do not establish an authoritative command or plan, report the missing contract explicitly and return PARTIAL without executing a guessed substitute.' "$lifecycle_verify_file" || \
-      ! rg -Fq 'Any complete authoritative evidence record for that identical SHA consumes its one-execution allowance, whether the recorded result passed or failed.' "$lifecycle_verify_file" || \
-      ! rg -Fq 'For a complete failing record, return FAIL and require addressing that produces a new head before another authoritative execution.' "$lifecycle_verify_file" || \
+      ! rg -Fq 'any complete authoritative evidence record for the exact current head consumes its one-execution allowance' "$lifecycle_verify_file" || \
+      ! rg -Fq 'require addressing to produce a new head before another authoritative execution' "$lifecycle_verify_file" || \
+      ! rg -Fq 'a fresh attempt against the exact SAME candidate is permitted, but only when you give' "$lifecycle_verify_file" || \
       ! rg -Fq 'gh pr merge <pr-number> <merge-method-flag> <optional-delete-branch-flag> --match-head-commit "$VERIFIED_SHA"' "$lifecycle_merge_file" || \
       ! rg -Fq 'verification-head: <full-head-sha>' "$lifecycle_verify_file" || \
       ! rg -Fq 'verification-record: v1' "$lifecycle_verify_file" || \
@@ -540,8 +541,12 @@ complete + referee -> refereeing
       ! rg -Fq 'suite-command: <exact-command-or-ordered-JSON-command-array> | none' "$lifecycle_verify_file" || \
       ! rg -Fq 'suite-command-results:' "$lifecycle_verify_file" || \
       ! rg -Fq 'The missing-contract/PARTIAL record is canonical:' "$lifecycle_verify_file" || \
-      ! rg -Fq '{"verification-record":"v1","verification-head":"<full-head-sha>","suite-result":"not-required","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}' "$lifecycle_verify_file" || \
-      ! rg -Fq 'If the path is absent, unreadable, or does not contain a complete `verification-record:v1` plus its referenced `suite-evidence`, stop rather than reconstructing evidence from an inaccessible parent transcript.' "$lifecycle_merge_file" || \
+      ! rg -Fq '{"verification-record":"v1","verification-head":"<full-head-sha>","suite-result":"not-required","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"retry-reason":null,"suite-evidence":{}}' "$lifecycle_verify_file" || \
+      ! rg -Fq 'retry-reason' "$lifecycle_merge_file" || \
+      ! rg -Fq 'stop rather than reconstructing evidence from an inaccessible parent transcript' "$lifecycle_merge_file" || \
+      ! rg -Fq 'a commit that is distinct from the PR head and does not exist before that invocation' "$lifecycle_merge_file" || \
+      ! rg -Fq 'the adapter'"'"'s required check is filed against the candidate'"'"'s own SHA, never the PR head' "$lifecycle_merge_file" || \
+      ! rg -Fq "The adapter's own outcome" "$lifecycle_merge_file" || \
       ! rg -Fq 'For every result, require its `#/suite-evidence/command-<N>` pointer to resolve inside the handed-off object' "$lifecycle_merge_file" || \
       ! rg -Fq 'Accept `not-required` only after independently inspecting the changed files and confirming that every change is documentation or comments only' "$lifecycle_merge_file" || \
       ! rg -Fq 'Capture the verifier'"'"'s returned handoff-artifact JSON object: the complete durable `verification-record:v1`' "$lifecycle_implement_skill" || \
@@ -631,7 +636,7 @@ complete + referee -> refereeing
       ! rg -Fq 'Explicit user direction may select only among choices those constraints permit; it cannot waive or contradict them.' "$lifecycle_merge_file" || \
       ! rg -Fq 'Apply this precedence consistently to required checks, approvals, billing exceptions, merge method, and branch retention.' "$lifecycle_merge_file" || \
       ! rg -Fq 'If the established policy does not require approval, do not invent a requirement from the base branch name.' "$lifecycle_merge_file" || \
-      ! rg -Fq 'Use the corresponding supported GitHub CLI method flag (`--merge`, `--squash`, or `--rebase`).' "$lifecycle_merge_file" || \
+      ! rg -Fq 'the corresponding supported GitHub CLI method flag (`--merge`, `--squash`, or `--rebase`)' "$lifecycle_merge_file" || \
       ! rg -Fq 'omit it when the branch must be retained' "$lifecycle_merge_file"; then
       echo "  ERROR: Merge readiness must defer checks, approvals, billing exceptions, merge method, and branch retention to target policy"
       ERRORS=$((ERRORS + 1))
