@@ -51,7 +51,15 @@ actual result and exit status of the merge/publication attempt (never
 invocation, so this phase's record joins the same run as every other
 delegated phase. Best-effort only: never let a missing recorder or a failed
 metrics call change the real merge outcome, and never invent a second timing
-or telemetry format.
+or telemetry format. If a real phase-start timestamp was not captured, make
+at most one final recorder call without a duration flag so its
+`elapsed_seconds: null` truthfully preserves unknown timing. Never truncate,
+replace, overwrite, or append a duplicate receipt for the same phase attempt
+just to supply a duration later; retain the incomplete record and report the
+recorder problem separately. When a standards-only readiness refusal has no
+authoritative subprocess status, omit `--exit-status` so the record preserves
+`exit_status: null`; never manufacture zero or a failure status from a
+PASS/FAIL label alone.
 
 ## Instructions
 
