@@ -26,6 +26,19 @@ If the current client leaves `$ARGUMENTS` literal, use the delegation prompt ins
 
 At runtime, inspect the current branch, recent commits, repository status, and any referenced issue or specification before making changes.
 
+If the target repository contains `docs/specs/standards/development-lifecycle.md`,
+read it with `AGENTS.md`, `CLAUDE.md`, and the relevant standards before
+planning. Follow its risk classification, focused-evidence, privacy, and
+restart rules; keep this worker skill harness-neutral.
+
+If that repository documents a shared development-metrics recorder (e.g.
+`scripts/development_metrics.py`'s `record` subcommand), record this phase
+once you finish — opaque candidate/task ids, phase `implement`, phase-kind
+`execution`, the actual result and exit status, and the run id from the
+context bundle when the orchestrator supplied one. Best-effort only: never
+let a missing recorder or a failed metrics call change this phase's real
+result, and never invent a second timing or telemetry format.
+
 ## Project Standards
 
 Read project-level instructions if they exist. At minimum, check for `AGENTS.md` and `CLAUDE.md` for critical invariants. Check for standards docs in `docs/` or `docs/specs/standards/` when your task touches relevant areas.

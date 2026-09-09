@@ -631,7 +631,7 @@ complete + referee -> refereeing
       ! rg -Fq 'Explicit user direction may select only among choices those constraints permit; it cannot waive or contradict them.' "$lifecycle_merge_file" || \
       ! rg -Fq 'Apply this precedence consistently to required checks, approvals, billing exceptions, merge method, and branch retention.' "$lifecycle_merge_file" || \
       ! rg -Fq 'If the established policy does not require approval, do not invent a requirement from the base branch name.' "$lifecycle_merge_file" || \
-      ! rg -Fq 'Use the corresponding supported GitHub CLI method flag (`--merge`, `--squash`, or `--rebase`).' "$lifecycle_merge_file" || \
+      ! rg -Fq 'the corresponding supported GitHub CLI method flag (`--merge`, `--squash`, or `--rebase`)' "$lifecycle_merge_file" || \
       ! rg -Fq 'omit it when the branch must be retained' "$lifecycle_merge_file"; then
       echo "  ERROR: Merge readiness must defer checks, approvals, billing exceptions, merge method, and branch retention to target policy"
       ERRORS=$((ERRORS + 1))

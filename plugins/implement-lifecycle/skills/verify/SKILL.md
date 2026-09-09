@@ -29,6 +29,21 @@ If the current client leaves `$ARGUMENTS` literal, use the delegation prompt ins
 
 At runtime, parse the PR number and fetch its metadata, comments, and changed-file summary.
 
+Read the target repository's `docs/specs/standards/development-lifecycle.md`
+when present, alongside `AGENTS.md`, `CLAUDE.md`, and applicable testing
+standards. The repository contract defines the authoritative lane/evidence
+policy; this skill owns execution mechanics only and must not invent a broad
+command when the repository has not established one.
+
+If that repository documents a shared development-metrics recorder (e.g.
+`scripts/development_metrics.py`'s `record` subcommand), record this phase
+once you finish — opaque candidate/task ids, phase `verify`, phase-kind
+`execution`, the lane/suite actually run, worker count, the real result and
+exit status (preserved exactly, never inferred from a friendly label), and
+any run id passed to this invocation. Best-effort only: never let a missing
+recorder or a failed metrics call change this phase's real result, and never
+invent a second timing or telemetry format.
+
 ## Instructions
 
 You are the **verification agent** for the implementation lifecycle. Unit tests verify individual functions work. Code review catches logic and style issues. Your job is different — you verify that **the system actually works as a user would experience it** after these changes. You think holistically: does the feature work end-to-end? Did it break anything upstream or downstream? Does the system still behave correctly as a whole?

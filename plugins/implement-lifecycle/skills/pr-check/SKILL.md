@@ -29,6 +29,20 @@ If the current client leaves `$ARGUMENTS` literal, use the user's invoking promp
 
 At runtime, inspect the current branch and fetch available PR metadata and comments. Determine the actual base branch before inspecting commits and diff size. Read explicit user direction and the target repository's governing instructions and contribution documentation before applying standards.
 
+If present, also read the target repository's
+`docs/specs/standards/development-lifecycle.md` and apply its current evidence,
+review-risk, convergence, privacy, and PR-sizing policy. This contract is
+repository-owned; the bundled checks are fallbacks only where repository policy
+is silent.
+
+If that repository documents a shared development-metrics recorder (e.g.
+`scripts/development_metrics.py`'s `record` subcommand), record this phase
+once you finish — opaque candidate/task ids, phase `pr-check`, phase-kind
+`execution`, the actual result and exit status, and any run id passed to this
+invocation. Best-effort only: never let a missing recorder or a failed
+metrics call change this phase's real result, and never invent a second
+timing or telemetry format.
+
 ## Instructions
 
 Validate the current PR against target-repository policy first. Explicit user direction and repository instructions take precedence over the bundled checks below for branch names, commits, PR formatting, required references, and blocking/advisory status. Use a bundled check only as a fallback where target policy is silent, and identify that fallback in the result. If no PR exists, check only what can be validated locally and note that no PR exists yet.

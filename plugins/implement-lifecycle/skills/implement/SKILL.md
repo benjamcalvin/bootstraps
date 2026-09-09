@@ -27,6 +27,19 @@ $ARGUMENTS
 
 At runtime, inspect the current branch and recent commits. Fetch any referenced issue and its comments before delegating.
 
+## Target repository contract
+
+When the target repository contains `docs/specs/standards/development-lifecycle.md`,
+read it together with `AGENTS.md`, `CLAUDE.md`, and applicable standards before
+choosing phases or delegating work. Treat that repository document as the
+authoritative project policy; this plugin supplies harness-neutral mechanics
+and must not duplicate or override repository-specific lifecycle rules.
+
+If that repository documents a shared development-metrics recorder, mint one
+opaque run id for this task (or reuse an inherited one) and include it in the
+context bundle below so every delegated phase's metrics record joins the same
+run instead of each minting its own.
+
 ## Instructions
 
 <!-- stop-guard:active -->
@@ -92,7 +105,7 @@ complete + referee -> refereeing
 
 On an incomplete result, first recover the final captured result from the harness transcript when available. If recovery is unavailable or still incomplete, retry once in a new child with the same canonical skill and `context: "fresh"`. If that retry is incomplete, stop the phase and report the failed delegation. Only the `complete` state may enter refereeing.
 
-**Isolate delegated context.** Each delegated agent (implementer, addresser, reviewer, verifier) should be launched with MINIMAL, FRESH context: the PR/issue being worked, the governing contract (issue body, ADR, or spec), the current diff, and any prior accepted/rejected findings — NOT the orchestrator's accumulated cross-PR history. Long-lived or reused sessions (e.g., a docs gate or verifier kept alive across multiple PRs) accumulate unrelated context and degrade review quality; reset or bound them per PR. Assemble a single shared **context bundle** (issue, contract, diff, prior findings, referee decisions) and pass the same bundle to every child for that PR, so each starts from the same ground truth instead of re-deriving it.
+**Isolate delegated context.** Each delegated agent (implementer, addresser, reviewer, verifier) should be launched with MINIMAL, FRESH context: the PR/issue being worked, the governing contract (issue body, ADR, or spec), the current diff, and any prior accepted/rejected findings — NOT the orchestrator's accumulated cross-PR history. Long-lived or reused sessions (e.g., a docs gate or verifier kept alive across multiple PRs) accumulate unrelated context and degrade review quality; reset or bound them per PR. Assemble a single shared **context bundle** (issue, contract, diff, prior findings, referee decisions, and the run id described above when the target repository has a metrics recorder) and pass the same bundle to every child for that PR, so each starts from the same ground truth instead of re-deriving it.
 
 ### Entry Point
 

@@ -31,6 +31,21 @@ Treat the active invocation's arguments as `<pr-number> <handoff-artifact-path>`
 
 At runtime, parse the PR number and the explicitly passed temporary handoff-artifact path, read that JSON object, and fetch the PR metadata, comments, and checks. If the path is absent, unreadable, or does not contain a complete `verification-record:v1` plus its referenced `suite-evidence`, stop rather than reconstructing evidence from an inaccessible parent transcript.
 
+Before readiness evaluation, read the target repository's
+`docs/specs/standards/development-lifecycle.md` when present, together with
+`AGENTS.md`, `CLAUDE.md`, and applicable standards. Apply repository-owned
+review, evidence-reuse, convergence, privacy, and restart policy; this plugin
+must not infer those policies from its own source repository.
+
+If that repository documents a shared development-metrics recorder (e.g.
+`scripts/development_metrics.py`'s `record` subcommand), record this phase
+once merge concludes (or is refused) — opaque candidate/task ids, phase
+`merge`, phase-kind `execution`, the actual result and exit status of the
+merge/publication attempt (never `success` for a refused or failed merge),
+and any run id passed to this invocation. Best-effort only: never let a
+missing recorder or a failed metrics call change the real merge outcome, and
+never invent a second timing or telemetry format.
+
 ## Instructions
 
 ### Step 1: Validate Readiness
@@ -61,13 +76,22 @@ Check that the PR is safe to merge. For each check, determine pass/fail:
 
 ### Step 2: Merge
 
-Select the merge method and branch behavior established before readiness. Repository-required or repository-prohibited methods and retention behavior remain binding; user direction selects among permitted methods and may choose branch behavior only when repository policy permits it. An unresolved conflict stops the merge. Use the corresponding supported GitHub CLI method flag (`--merge`, `--squash`, or `--rebase`). Add `--delete-branch` only when the resolved policy calls for deletion; omit it when the branch must be retained. When policy and user direction are both silent, use an enabled repository merge method and retain the branch.
+When the target repository provides its own canonical merge-publication adapter (e.g. a `candidate_publisher`-style script implementing atomic two-parent-candidate construction, isolated trusted verification, and lease-gated publication), invoke that adapter instead of `gh pr merge`. Do not use `gh pr merge` — including `--match-head-commit` — against a repository that has adopted this adapter: a plain merge commit and a same-repo compare-and-swap are not equivalent to the adapter's construct-then-verify-then-publish sequencing, and running both risks a double-merge race. Discover the adapter from repository-owned documentation (e.g. `docs/guides/candidate-verification-ci.md`) rather than assuming a path or invocation shape; this plugin does not hardcode a specific target repository's script location.
+
+Pass the adapter `$VERIFIED_SHA` as its expected-head precondition (e.g. `--expected-head-sha`), so it refuses to publish if the PR head advanced past the commit Step 1 actually validated, rather than silently building and publishing a fresher, unverified commit. Select the merge method, branch-retention, and required-check identity the adapter exposes according to the same precedence as above: repository-required or repository-prohibited settings are binding; user direction selects only among what repository policy permits. An unresolved conflict, a failing or missing required check, or a stale-head refusal stops the merge — report the error and stop rather than falling back to a different merge path.
+
+```
+<repository-declared publisher adapter> --pr <pr-number> --expected-head-sha "$VERIFIED_SHA" \
+    <adapter's own merge-method / branch-retention / required-check flags per repository docs>
+```
+
+If the target repository has not adopted such an adapter, fall back to the prior mechanism: select the merge method and branch behavior established before readiness, using the corresponding supported GitHub CLI method flag (`--merge`, `--squash`, or `--rebase`), adding `--delete-branch` only when the resolved policy calls for deletion (omit it when the branch must be retained), and gate the merge itself on `--match-head-commit "$VERIFIED_SHA"` so a PR head that changed after readiness validation fails the merge rather than merging an unverified commit:
 
 ```
 gh pr merge <pr-number> <merge-method-flag> <optional-delete-branch-flag> --match-head-commit "$VERIFIED_SHA"
 ```
 
-The `--match-head-commit` precondition makes the evidence check and merge atomic: if the PR head changes after readiness validation, the merge fails rather than merging an unverified commit. If the merge fails, report the error and stop.
+If the merge (via either path) fails, report the error and stop.
 
 ### Step 3: Update Linked Issues
 
