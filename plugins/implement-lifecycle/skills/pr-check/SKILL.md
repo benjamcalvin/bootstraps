@@ -36,12 +36,19 @@ repository-owned; the bundled checks are fallbacks only where repository policy
 is silent.
 
 If that repository documents a shared development-metrics recorder (e.g.
-`scripts/development_metrics.py`'s `record` subcommand), record this phase
-once you finish — opaque candidate/task ids, phase `pr-check`, phase-kind
-`execution`, the actual result and exit status, and any run id passed to this
-invocation. Best-effort only: never let a missing recorder or a failed
-metrics call change this phase's real result, and never invent a second
-timing or telemetry format.
+`scripts/development_metrics.py`), capture a real start timestamp through its
+own mechanism (e.g. its `now` subcommand) at the beginning of this phase, then
+at the end record it through the same recorder (e.g. its `record` subcommand)
+passing that captured start value (e.g. `--started-monotonic`) rather than a
+hand-computed or estimated duration — the recorder itself measures real
+elapsed monotonic time between the two calls; never invent, guess, or
+shell-arithmetic an elapsed duration yourself. Use opaque candidate/task ids,
+phase `pr-check`, phase-kind `execution`, the actual result and exit status
+(preserved exactly, never inferred from a friendly label), and any run id
+passed to this invocation, so this phase's record joins the same run as every
+other delegated phase. Best-effort only: never let a missing recorder or a
+failed metrics call change this phase's real result, and never invent a
+second timing or telemetry format.
 
 ## Instructions
 
