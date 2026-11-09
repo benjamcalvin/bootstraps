@@ -42,10 +42,10 @@ Check that the PR is safe to merge. For each check, determine pass/fail:
 1. **State** — PR must be `OPEN`. If already merged or closed, report and stop.
 2. **Merge conflicts** — `mergeable` must not be `CONFLICTING`. If conflicts exist, report and stop.
 3. **CI status** — Enforce the checks required by binding target-repository policy; user direction may request additional checks but may not waive required ones. Report every blocking failure and stop. A billing or account-status failure remains blocking unless repository policy permits that exception, or policy is silent and explicit user direction permits it; an exception is never global. Even when permitted, classify the failure as billing-only only when the run or job carries an explicit billing/payment signal. Never infer billing from timing, and record every applied exception.
-4. **PR standards** — Invoke the canonical `pr-check` skill with a fresh isolated context using the active harness adapter:
-   - **Claude Code:** use the Task/subagent facility, explicitly load the canonical `pr-check` skill, and provide the PR plus freshly read repository-policy context.
-   - **Codex:** spawn a fresh subagent, instruct it to load the canonical `pr-check` skill, and provide the PR plus freshly read repository-policy context.
-   - **Pi:** use `pi-subagents` with `context: "fresh"`, explicitly select the canonical `pr-check` skill, and provide the PR plus freshly read repository-policy context.
+4. **PR standards** — Invoke the canonical `pr-check` skill with a fresh isolated context at the `balanced` model tier using the active harness adapter:
+   - **Claude Code:** use the Task/subagent facility with `model: "sonnet"`, explicitly load the canonical `pr-check` skill, and provide the PR plus freshly read repository-policy context.
+   - **Codex:** spawn a fresh subagent at its balanced model, instruct it to load the canonical `pr-check` skill, and provide the PR plus freshly read repository-policy context.
+   - **Pi:** use `pi-subagents` at its balanced model with `context: "fresh"`, explicitly select the canonical `pr-check` skill, and provide the PR plus freshly read repository-policy context.
    - **Generic:** use the client's isolated delegation mechanism with a fresh context and explicit canonical `pr-check` skill selection; do not emulate a subagent inline.
 
    Capture and evaluate the returned `pr-check` result. If isolated dispatch, fresh context, explicit skill loading, or result capture is unavailable, fail closed and report the readiness step instead of running an improvised substitute. Apply the target repository's blocking standards. Bundled checks are fallbacks only when repository policy is silent. The bundled scope note remains advisory unless target policy makes scope a gate.
