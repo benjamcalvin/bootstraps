@@ -1,6 +1,6 @@
 ---
 name: review-docs
-description: Review a pull request for missing, stale, or inconsistent documentation as a delegated specialist reviewer.
+description: Review a pull request for missing, stale, or inconsistent documentation as a peer reviewer in the round-1 review.
 ---
 
 # Documentation Compliance Review
@@ -86,7 +86,7 @@ Use **Recommended** only for concrete, in-scope gaps fixable without a new abstr
 
 ## Round Context
 
-Check the round number from your prompt. If this is round 2 or later, read the PR comments for the prior round's consolidated docs compliance review and referee decisions. Do NOT repeat addressed or rejected findings. Focus on:
+Check the round number from your prompt. If this is round 2 or later, read the PR comments for the prior round's consolidated review and referee decisions. Do NOT repeat addressed or rejected findings. Focus on:
 - New documentation issues introduced by previous fixes
 - Unresolved accepted findings and the latest fix delta
 - Whether previously-addressed findings were actually fixed correctly

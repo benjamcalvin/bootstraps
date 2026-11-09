@@ -178,8 +178,8 @@ Any risk surface makes the PR Large regardless of size.
 
 Exit when:
 
-1. **Clean exit (Step B):** no accepted findings (including a round whose findings were all rejected), or only accepted Minor findings (one batch pass; no new round) → Phase 4.5. If rejections were close calls, consider escalating for human direction.
-2. **Cap exit:** at the tier cap the addresser fixes the final round's accepted findings and runs focused tests; if it reports any Action Required unresolved → escalation exit; otherwise → Phase 4.5.
+1. **Clean exit (Step B):** no accepted findings (including a round whose findings were all rejected), or only accepted Minor findings (one batch pass; no new round) → Phase 5. If rejections were close calls, consider escalating for human direction.
+2. **Cap exit:** at the tier cap the addresser fixes the final round's accepted findings and runs focused tests; if it reports any Action Required unresolved → escalation exit; otherwise → Phase 5.
 3. **Escalation exit (Step E):** a scope/convergence guard fires, or Large convergence stalls (evaluated after round 2: round 2 accepted no fewer findings than round 1; after round 3, no fewer than round 2), or the cap exit reports unresolved Action Required → run the **convergence-recovery decision** in Step E.
 
 Convergence = each round forwards fewer accepted findings than the prior, with no open production defect and no review-introduced churn. Never exceed the tier cap without explicit user authorization.
@@ -219,13 +219,14 @@ Invoke **`review-general` in every round**. It owns a complete baseline review: 
 
 Specialists are selected mechanically by tier and path trigger, not by discretion:
 
-- **Small/Medium:** `review-general` only.
-- **Large:** `review-general` plus each specialist whose trigger fires:
+- **Any tier:** `review-docs` when docs, specs, READMEs, or user-facing interfaces (CLI flags, public APIs, config keys) change, or the tier is Large.
+- **Small/Medium:** `review-general` only, plus `review-docs` per the trigger above.
+- **Large:** `review-general` plus `review-docs` and each specialist whose trigger fires:
   - `review-security` — auth, secrets, crypto, sandbox, or permission paths change
   - `review-correctness` — migrations, concurrency primitives, or CI/deploy configuration change
   - `review-architecture` — a new top-level module/package or public interface is added
   - `review-testing` — production code changes without corresponding test changes
-- **Follow-up rounds (N ≥ 2):** `review-general` only, plus a specialist only when its own accepted finding is unresolved.
+- **Follow-up rounds (N ≥ 2):** `review-general` only, plus a specialist or `review-docs` only when its own accepted finding is unresolved.
 
 Invoke the selected reviewers in parallel through the client adapter:
 
@@ -277,7 +278,7 @@ Use these calibration cases:
 - Speculative hardening with no demonstrated failure: **Reject**.
 - Second non-clean round dominated by review-introduced complexity: run the convergence audit, stop before round 3, and request human direction. Recommend bounded simplification or removal of the review-introduced architecture.
 
-**If zero findings survive filtering**, still post the consolidated comment from Step C so the reviewers' raw findings and your rejection reasoning stay on the record, ending it with `**Result:** no actionable findings — review loop complete.` Then skip to Phase 4.5. If only Minor findings were accepted, post the comment, have the addresser batch them in one pass, and skip to Phase 4.5 without a new round.
+**If zero findings survive filtering**, still post the consolidated comment from Step C so the reviewers' raw findings and your rejection reasoning stay on the record, ending it with `**Result:** no actionable findings — review loop complete.` Then skip to Phase 5. If only Minor findings were accepted, post the comment, have the addresser batch them in one pass, and skip to Phase 5 without a new round.
 
 #### Step C: Post the Consolidated Review & Write Findings File
 
@@ -342,9 +343,9 @@ The addresser will fix issues, run tests, commit, push, and return a summary.
 
 The addresser has pushed fixes. Apply the tier cap and convergence checks, then continue or exit.
 
-**Do not run a redundant clean-confirmation round.** After a genuinely clean round (zero reviewer findings) with only trivial follow-up changes, proceed to Phase 4.5 without re-invoking reviewers.
+**Do not run a redundant clean-confirmation round.** After a genuinely clean round (zero reviewer findings) with only trivial follow-up changes, proceed to Phase 5 without re-invoking reviewers.
 
-0. **Rejected-only rounds do not advance the loop.** If the referee accepted zero findings in the last round (every finding rejected as unproven / out of scope / already resolved), do NOT invoke the addresser and do NOT count it as a productive round. Post the consolidated comment (Step C already did), then either treat the loop as converged and proceed to Phase 4.5, or, if the rejections were close calls, escalate for human direction. Never send an empty findings file to the addresser.
+0. **Rejected-only rounds do not advance the loop.** If the referee accepted zero findings in the last round (every finding rejected as unproven / out of scope / already resolved), do NOT invoke the addresser and do NOT count it as a productive round. Post the consolidated comment (Step C already did), then either treat the loop as converged and proceed to Phase 5, or, if the rejections were close calls, escalate for human direction. Never send an empty findings file to the addresser.
 
 1. **Convergence audit after round 2 (Large):** After two non-clean rounds, post an audit that maps the remaining findings and review-added changes to the original acceptance criteria. For each distinct sub-problem or code area still under contention, record the finding DENSITY (how many findings have targeted that same sub-problem across rounds). A sub-problem with repeated findings across multiple rounds is a convergence trap — flag it. State whether the loop is converging and whether remaining findings primarily concern the original task or architecture introduced during addressing. If they primarily concern review-introduced architecture, stop before round 3 and request human direction. Recommend bounded simplification or removal of that architecture.
 
@@ -374,91 +375,6 @@ Then stop and inform the user directly.
 
 3. **Continue** only if the tier cap allows another round; otherwise take the cap exit: record the delta range (`<reviewed head>..<new head>`), increment the round counter, and return to Step A. Continue autonomously unless the convergence audit requires human direction or another scope guard fires.
 
-### Phase 4.5: Docs Compliance Gate
-
-The docs-gate contract is this exact state graph:
-
-<!-- lifecycle-docs-gate:v1
-pending + review-docs -> reviewed
-reviewed + zero-actionable -> clean
-reviewed + actionable -> addressing
-addressing + address-complete -> addressed
-addressed + review-docs -> reviewed
-reviewed + convergence-escalation -> escalated
-addressed + convergence-escalation -> escalated
-clean + enter-verification -> verification
--->
-
-Only `clean` may transition to verification. `addressed` must transition through another `review-docs` round; convergence escalation exits to `escalated`, not verification.
-
-After the code review/address loop converges, run the docs curation gate. **This gate is mandatory for any PR with a docs-relevant surface** — a change to public-facing behavior (new CLI command, changed default, public API, plugin surface, config option), a change that restructures internals with observable effects, or any change to documentation files. The docs reviewer is a curator, not a diff checker — it proactively identifies where documentation is missing, outdated, or contradicted by the code changes. A PR that adds a new CLI command, changes a default, or restructures internals may need docs updates even though no `.md` files were touched. **The gate may be skipped only for a pure internal/mechanical change with no observable or documented surface** (e.g. a private refactor with no behavior change and no docs files touched).
-
-**Do NOT include `review-docs` in the Phase 4 reviewer pool.** It runs only here, after the code review loop is complete — this is the single docs owner for the lifecycle. **Do NOT skip this phase** just because the file list shows no `.md` files; judge docs-relevance by the observable surface, not the file list. When in doubt, run it — it is cheap and it catches real stale-docs gaps.
-
-#### Step A: Invoke Docs Reviewer
-
-```
-Payload: Review PR #<pr-number> for documentation compliance, round <round-number>
-```
-
-The docs reviewer fetches PR context, maps code changes to existing documentation, and identifies gaps — not just inaccuracies in changed docs, but missing docs for new behavior and stale docs contradicted by code changes. It returns findings to you and posts nothing itself; you remain the sole publisher.
-
-#### Step B: Referee Evaluation
-
-Apply the same concern-validity, remedy-proportionality, scope, and accept/reject evaluation as Phase 4. Read the relevant docs and code yourself.
-
-| Decision | When to use | Effect |
-|----------|-------------|--------|
-| **Accept** (default) | The concern is concrete and a smallest in-scope docs correction is available | Include only that proportional correction in the addresser action plan |
-| **Reject** | The concern is unproven, already resolved, out of scope, or disproportionate for this PR | Exclude it; record whether the concern itself was valid and optionally open a follow-up issue |
-
-**If zero findings survive filtering**, still post the consolidated comment from Step C so the docs reviewer's raw findings and your reasoning stay on the record, ending it with `**Result:** no actionable findings — proceeding to verification.` Then skip to Phase 5.
-
-#### Step C: Post the Consolidated Review & Invoke Addresser
-
-Publish **one** comment per round carrying the docs reviewer's findings and your referee decisions:
-
-```
-gh pr comment <number> --body "$(cat <<'EOF'
-## Docs Compliance Gate Round <N> — Consolidated Review & Referee Decisions
-
-### Reviewer Findings
-
-<the docs reviewer's returned findings, verbatim under its Action Required / Recommended / Minor headings>
-
-### Referee Decisions
-
-| # | Finding | Reviewer Severity | Concern | Decision | Reasoning / smallest remedy |
-|---|---------|-------------------|---------|----------|-----------------------------|
-| 1 | <brief description> | Action Required / Recommended / Minor | Valid / Unproven | Accept / Reject | <why and, if accepted, the bounded correction> |
-| ... | ... | ... | ... | ... | ... |
-
-**Findings forwarded to addresser:** <count>
-EOF
-)"
-```
-
-Write findings to a temp file and invoke the addresser:
-
-```bash
-cat > <resolved-docs-findings-path> <<'EOF'
-# Docs Compliance Findings — Round <N>
-
-| # | Finding | Severity | Details |
-|---|---------|----------|---------|
-| 1 | <description> | <severity> | <file:line + what to fix> |
-| ... | ... | ... | ... |
-EOF
-```
-
-```
-Payload: <pr-number> docs-<round-number> <resolved-docs-findings-path>
-```
-
-#### Step D: Evaluate Continuation
-
-Re-invoke the docs reviewer to verify fixes. The round counter starts from round 1 (independent of Phase 4 rounds). Loop until clean. Apply the Large-tier cap (3 rounds) and convergence audit from Phase 4.
-
 ### Phase 5: Manual Verification Gate
 
 After the review loop completes, invoke the verification agent to test the PR's changes with real-world execution before merging:
@@ -484,7 +400,7 @@ cat > <resolved-verify-findings-path> <<'EOF'
 EOF
 ```
 
-Then invoke the addresser with that file path, using a `verify-<round-number>` round token (analogous to Phase 4.5's `docs-<N>`):
+Then invoke the addresser with that file path, using a `verify-<round-number>` round token:
 
 ```
 Payload: <pr-number> verify-<round-number> <resolved-verify-findings-path>
