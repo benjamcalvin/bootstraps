@@ -418,7 +418,22 @@ Payload: <pr-number> <resolved-verification-record-path>
 
 This validates the PR, applies the target repository's merge and branch-retention policy, and posts updates on linked issues.
 
-Report the result to the user.
+Print the run ledger and report the result to the user.
+
+## Run ledger
+
+Record a UTC timestamp (`date -u +%FT%TZ`) at each phase start and end. On every terminal path (merge, any escalation or stop, including the Phase 4 cap and stall exits, the Phase 5 third-FAIL cap, and a PARTIAL stop), print this ledger and append it to the final PR comment or merge summary:
+
+```
+## Run Ledger
+- Tier: <Small|Medium|Large> — <reason>
+- Children: <role>: <count> (<balanced|frontier>), ...
+- Rounds: review <n>, verification <n>
+- Fix commits: <count of addresser commits>
+- Wall-clock: plan/implement <m>, review <m>, verify <m>, merge <m>
+- Follow-up items: <out-of-delta findings, or none>
+- Outcome: <merged|escalated|partial> — <phase>
+```
 
 ## Escalation
 
@@ -432,4 +447,4 @@ Stop and flag the human directly (not as a PR comment) when encountering:
 - Changes touch auth, crypto, or PII handling beyond existing patterns
 - Tests fail in ways unrelated to your changes
 
-Provide: what you tried, evidence for/against options, your recommended path.
+Provide: what you tried, evidence for/against options, your recommended path, and the run ledger.

@@ -798,6 +798,19 @@ complete + referee -> refereeing
     if [ "$lifecycle_loop_ok" = true ]; then
       echo "  OK: Phase 4 keeps tier thresholds, per-tier round caps, delta-only follow-ups, and Minor-only exit"
     fi
+    ledger_section=$(sed -n '/^## Run ledger$/,/^## Escalation$/p' "$lifecycle_implement_skill")
+    ledger_ok=true
+    if [ -z "$ledger_section" ]; then ledger_ok=false; fi
+    for ledger_field in 'date -u +%FT%TZ' 'every terminal path' '- Tier:' '- Children:' '- Rounds: review' '- Fix commits:' '- Wall-clock:' '- Follow-up items:' '- Outcome:'; do
+      if ! printf '%s' "$ledger_section" | rg -Fq -- "$ledger_field"; then
+        echo "  ERROR: implement run ledger must include: $ledger_field"
+        ERRORS=$((ERRORS + 1))
+        ledger_ok=false
+      fi
+    done
+    if [ "$ledger_ok" = true ]; then
+      echo "  OK: implement prints a run ledger with tier, children, rounds, fix commits, wall-clock, and follow-ups"
+    fi
     lifecycle_prcheck_file="$plugin_dir/skills/pr-check/SKILL.md"
     if ! rg -Fq 'Claude Code, Codex, Pi, or generic adapter' "$lifecycle_implement_skill" || \
       ! rg -Fq 'Evaluate the canonical `pr-check` checklist inline' "$lifecycle_merge_file" || \
