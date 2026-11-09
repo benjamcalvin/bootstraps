@@ -90,7 +90,7 @@ fresh-retry + empty-or-incomplete-result -> stop
 complete + referee -> refereeing
 -->
 
-On an incomplete result, first recover the final captured result from the harness transcript when available. If recovery is unavailable or still incomplete, retry once in a new child with the same canonical skill and `context: "fresh"`. If that retry is incomplete, stop the phase and report the failed delegation. Only the `complete` state may enter refereeing.
+On an incomplete result, first recover the final captured result from the harness transcript when available. If recovery is unavailable or still incomplete, retry once in a new child with the same canonical skill and `context: "fresh"`. If that retry is incomplete, stop the phase, report the failed delegation, and print the run ledger. Only the `complete` state may enter refereeing.
 
 **Isolate delegated context.** Launch each delegated agent (implementer, addresser, reviewer, verifier) with MINIMAL, FRESH context, not the orchestrator's accumulated history. Assemble one **context bundle** per PR and pass it to every child: issue, governing contract, prior accepted/rejected findings and referee decisions, and for round N ≥ 2 the delta range `<head reviewed in round N-1>..<current head>`. Children start from the bundle instead of re-fetching the full PR comment history. Reset or bound long-lived sessions per PR.
 
@@ -111,9 +111,9 @@ Any text after the leading token is **instructions that control what you do**. T
 | Instructions | Effect |
 |-------------|--------|
 | *(none)* | Default lifecycle: issue/freeform → Phases 1–6; PR number → Phases 4–6 |
-| "just review" / "review only" | Classify the tier, run Step A's mechanical selection, post the consolidated review (Step C). Stop. |
-| "address the review feedback" | Run the addresser only against existing review findings. |
-| "review and address" | Run review/address loop but don't merge. |
+| "just review" / "review only" | Classify the tier, run Step A's mechanical selection, post the consolidated review (Step C). Print the run ledger. Stop. |
+| "address the review feedback" | Run the addresser only against existing review findings. Print the run ledger. |
+| "review and address" | Run review/address loop but don't merge. Print the run ledger. |
 | "skip planning" / "just implement" | Pass "skip planning" to implement-code so it skips codebase exploration and plan formulation. |
 | Any other specific direction | Use judgment — execute the phases that match the intent, skip the rest. |
 
@@ -371,7 +371,7 @@ EOF
 )"
 ```
 
-Then stop and inform the user directly.
+Then print the run ledger, stop, and inform the user directly.
 
 3. **Continue** only if the tier cap allows another round; otherwise take the cap exit: record the delta range (`<reviewed head>..<new head>`), increment the round counter, and return to Step A. Continue autonomously unless the convergence audit requires human direction or another scope guard fires.
 
@@ -383,7 +383,7 @@ After the review loop completes, invoke the verification agent with the tier; a 
 Payload: <pr-number> tier=<Small|Medium|Large> [failed-scenarios=<names>]
 ```
 
-`tier=` is the tier recorded at classification; never re-classify it. The verifier scales scenarios to the tier, records exact-head suite evidence (executed or matching CI), and compares suite failures against the merge-base. If **PASS** or **N/A**, proceed to Phase 6. If the verdict is **FAIL**, delegate the fixes — do **not** fix the code yourself. If it is **PARTIAL** (no authoritative verification contract, or only pre-existing failures), stop and report the missing contract or the listed pre-existing failures; do not address, merge, or invent a substitute.
+`tier=` is the tier recorded at classification; never re-classify it. The verifier scales scenarios to the tier, records exact-head suite evidence (executed or matching CI), and compares suite failures against the merge-base. If **PASS** or **N/A**, proceed to Phase 6. If the verdict is **FAIL**, delegate the fixes — do **not** fix the code yourself. If it is **PARTIAL** (no authoritative verification contract, or only pre-existing failures), stop, print the run ledger, and report the missing contract or the listed pre-existing failures; do not address, merge, or invent a substitute.
 
 Capture the verifier's returned handoff-artifact JSON object: the complete durable `verification-record:v1` (exact command or ordered JSON plan, execution count, overall status, and ordered per-command result/status/evidence-pointer entries) plus its `suite-evidence` object. Confirm every `#/suite-evidence/command-<N>` pointer resolves inside that object to the matching exact command and complete unedited output. Write the whole object byte-for-byte to a harness-provided temporary file, or a uniquely created file under the operating system's temporary directory when the harness provides none, and pass the resolved path explicitly to `merge-pr`. The verifier publishes only the matching concise canonical record in its PR comment; `suite-evidence` remains in the temporary handoff and is never posted as persistent output. If the returned object is absent, malformed, or has a dangling or mismatched pointer, stop rather than reconstructing it from the parent transcript.
 
@@ -406,7 +406,7 @@ Then invoke the addresser with that file path, using a `verify-<round-number>` r
 Payload: <pr-number> verify-<round-number> <resolved-verify-findings-path>
 ```
 
-The round counter starts from round 1 (independent of Phase 4 rounds) and increments each FAIL → address → re-verify cycle. After the addresser pushes fixes, re-invoke `verify` with the failed scenarios, or without `failed-scenarios` when only the suite failed (suite evidence only). Allow at most 2 FAIL → address → re-verify cycles; on a third FAIL, do not address again: post an escalation comment listing the unresolved failures, then stop and inform the user.
+The round counter starts from round 1 (independent of Phase 4 rounds) and increments each FAIL → address → re-verify cycle. After the addresser pushes fixes, re-invoke `verify` with the failed scenarios, or without `failed-scenarios` when only the suite failed (suite evidence only). Allow at most 2 FAIL → address → re-verify cycles; on a third FAIL, do not address again: post an escalation comment listing the unresolved failures, then print the run ledger, stop, and inform the user.
 
 ### Phase 6: Merge & Finalize
 
@@ -422,7 +422,7 @@ Print the run ledger and report the result to the user.
 
 ## Run ledger
 
-Record a UTC timestamp (`date -u +%FT%TZ`) at each phase start and end. On every terminal path (merge, any escalation or stop, including the Phase 4 cap and stall exits, the Phase 5 third-FAIL cap, and a PARTIAL stop), print this ledger and append it to the final PR comment or merge summary:
+Record a UTC timestamp (`date -u +%FT%TZ`) at each phase start and end. On every terminal path (merge, any escalation or stop, including the Phase 4 cap and stall exits, the Phase 5 third-FAIL cap, and a PARTIAL stop), print it to the user; when a PR exists and the path posts a PR comment or merge summary, append it there too. Tally as you go: children spawned per role and model tier, addresser commits (from each addresser's Commits list, including verify fixes), and out-of-delta follow-up items recorded by the referee (or `none`).
 
 ```
 ## Run Ledger
@@ -432,7 +432,7 @@ Record a UTC timestamp (`date -u +%FT%TZ`) at each phase start and end. On every
 - Fix commits: <count of addresser commits>
 - Wall-clock: plan/implement <m>, review <m>, verify <m>, merge <m>
 - Follow-up items: <out-of-delta findings, or none>
-- Outcome: <merged|escalated|partial> — <phase>
+- Outcome: <merged|escalated|partial|stopped|reviewed|addressed> — <phase>
 ```
 
 ## Escalation

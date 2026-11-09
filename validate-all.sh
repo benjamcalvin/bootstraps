@@ -800,7 +800,11 @@ complete + referee -> refereeing
     fi
     ledger_section=$(sed -n '/^## Run ledger$/,/^## Escalation$/p' "$lifecycle_implement_skill")
     ledger_ok=true
-    if [ -z "$ledger_section" ]; then ledger_ok=false; fi
+    if [ -z "$ledger_section" ] || ! rg -q '^## Escalation$' "$lifecycle_implement_skill"; then
+      echo "  ERROR: implement must have '## Run ledger' followed by '## Escalation' headings"
+      ERRORS=$((ERRORS + 1))
+      ledger_ok=false
+    fi
     for ledger_field in 'date -u +%FT%TZ' 'every terminal path' '- Tier:' '- Children:' '- Rounds: review' '- Fix commits:' '- Wall-clock:' '- Follow-up items:' '- Outcome:'; do
       if ! printf '%s' "$ledger_section" | rg -Fq -- "$ledger_field"; then
         echo "  ERROR: implement run ledger must include: $ledger_field"
