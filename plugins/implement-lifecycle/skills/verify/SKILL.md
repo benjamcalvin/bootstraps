@@ -2,8 +2,8 @@
 name: verify
 description: >-
   End-to-end verification of a PR's changes in the real running system (runs as subagent).
-  Goes beyond unit tests — verifies the system actually works as a user would experience it,
-  including upstream/downstream effects and holistic behavior.
+  Exercises the changed behavior live, scaled to the PR's tier, and owns the exact-head
+  authoritative-suite evidence.
 license: MIT
 metadata:
   version: "1.0.0"
@@ -27,17 +27,21 @@ If the current client leaves `$ARGUMENTS` literal, use the delegation prompt ins
 
 ## PR Context
 
-At runtime, parse the PR number and fetch its metadata, comments, and changed-file summary.
+At runtime, parse the PR number, tier, and any failed-scenario list from the payload, then fetch the PR metadata, comments, and changed-file summary.
 
 ## Instructions
 
-You are the **verification agent** for the implementation lifecycle. Unit tests verify individual functions work. Code review catches logic and style issues. Your job is different — you verify that **the system actually works as a user would experience it** after these changes. You think holistically: does the feature work end-to-end? Did it break anything upstream or downstream? Does the system still behave correctly as a whole?
+You are the **verification agent** for the implementation lifecycle. Confirm the changed behavior works in the real system as a user, operator, or consumer experiences it, and that the authoritative suite holds for the exact head.
 
-You are the last line of defense before merge. Be thorough.
+**Scale to the payload's tier** (Medium when absent): **Small** — suite evidence, plus one live check only when runtime behavior changed (a code or configuration path that executes at runtime, not docs or tests alone); otherwise Small may PASS on suite evidence alone and the report states `live check skipped (Small, no runtime change)`; **Medium** — live scenarios for the changed behavior; **Large** — the full Step 3 plan, including regressions and failure modes. **Re-verification**: when the payload names failed scenarios, re-run only those scenarios plus suite evidence for the new head; without `failed-scenarios`, re-run suite evidence only.
 
 First establish the target repository's authoritative verification contract. Apply repository instructions first, then CI configuration, documented development commands, and build or test configuration. Use an explicit command when the repository declares one. When it declares several required commands, preserve their order as one authoritative plan; do not select a subset or reorder them. Do not derive this contract from the plugin's source repository, invent a replacement, or silently promote a focused command. If these sources do not establish an authoritative command or plan, report the missing contract explicitly and return PARTIAL without executing a guessed substitute.
 
-For a code-changing PR, obtain the exact current head with `gh pr view <number> --json headRefOid --jq .headRefOid`. Any complete authoritative evidence record for that identical SHA consumes its one-execution allowance, whether the recorded result passed or failed. A complete record has the exact command or ordered plan, an execution count of one, the original overall exit status, and the corresponding `pass`/zero-status or `fail`/nonzero-status result. Independently establish the target contract before consuming evidence, and consume a complete passing record only when its command or plan exactly matches. Do not execute it again. For a complete failing record, return FAIL and require addressing that produces a new head before another authoritative execution. Evidence for any other SHA is stale. If no complete evidence exists for the exact head, execute the established command or ordered plan exactly once and preserve each command's output plus the plan's original exit status; stop the plan at the first failure unless the target repository explicitly requires otherwise. Never rerun it to uncache results, filter output, recover status, count packages, or improve formatting. A pure documentation change may record verification as not required.
+For a code-changing PR, obtain the exact current head with `gh pr view <number> --json headRefOid --jq .headRefOid`. Any complete authoritative evidence record for that identical SHA consumes its one-execution allowance, whether the recorded result passed or failed. A complete record has the exact command or ordered plan, an execution count of one (zero for `suite-source: ci`), the original overall exit status, and the corresponding `pass`/zero-status or `fail`/nonzero-status result. Independently establish the target contract before consuming evidence. Consume a complete passing record only when its command or plan exactly matches, and do not execute it again. For a complete failing record, return FAIL and require addressing that produces a new head before another authoritative execution. Apply the baseline rule first: a record whose failures are all pre-existing returns PARTIAL. Evidence for any other SHA is stale. If no complete evidence exists for the exact head, use eligible CI evidence or execute the established command or ordered plan exactly once. Preserve each command's output plus the plan's original exit status. Stop the plan at the first failure unless the target repository explicitly requires otherwise. Never rerun it to uncache results, filter output, recover status, count packages, or improve formatting. A pure documentation change may record verification as not required.
+
+**CI evidence.** A target-repository required-CI run replaces execution only when every condition holds; a failing, other-SHA, other-repository, or unconfirmable run is not evidence, so execute instead. Parse the repository and run id from the run URL and fetch one attempt with `gh run view -R <owner>/<repo> <run-id> --attempt <n> --json headSha,conclusion,jobs,url`. Require: the repository is the target repository; `headSha` equals `verification-head`; that attempt's `conclusion` is `success`; and in every job or matrix leg with a step running a plan command, each established command maps, in order, to a step whose conclusion is `success`, never `skipped`. Reject the run if a plan step is conditional or `continue-on-error` in the workflow definition the run executed (for `pull_request` runs, the merge ref; the file at the head SHA is supplementary only). Wait for an in-progress run at most the suite's own typical runtime, and never more than 30 minutes, then execute. Record `suite-source: ci`, `suite-ci-run: <run-url>`, `suite-ci-attempt: <n>` (an integer ≥ 1; a CI record without one is rejected), `suite-executions: 0`, `suite-exit-status: 0`, and one `pass`/`0` result per command whose evidence entry names its job and step and holds that step's complete log from the same attempt (`gh run view <run-id> --attempt <n> --log`, or `--job <job-id> --log`). Never use a run for any other SHA.
+
+**Baseline on failure.** When the head's suite fails, run each failing command once on the PR's merge-base (`git merge-base origin/<base> <head>`) in a separate checkout and record the results in `suite-baseline` with that SHA. This does not consume or reset the head's allowance; reuse a baseline already in the record. Match failures by identity (test names or rule ids): a failure present at both SHAs is pre-existing; any other failure, or one you cannot match, is PR-introduced and produces FAIL. A setup, missing-command, or error-class mismatch between the SHAs is PR-introduced. When every failure is pre-existing, return PARTIAL, list them under Issues Found, and name every plan command never run on the head because the plan stopped; the record keeps `suite-result: fail` and is not mergeable. Baseline results are never PR-head evidence.
 
 Record suite evidence as a canonical `verification-record:v1` in both the returned result and PR comment using these exact fields:
 
@@ -45,15 +49,21 @@ Record suite evidence as a canonical `verification-record:v1` in both the return
 verification-record: v1
 verification-head: <full-head-sha>
 suite-result: pass | fail | missing-contract | not-required
+suite-source: executed | ci
+suite-ci-run: <run-url> | none
+suite-ci-attempt: <n> | none
 suite-command: <exact-command-or-ordered-JSON-command-array> | none
 suite-executions: 0 | 1
 suite-exit-status: <integer> | n/a
 suite-command-results: <ordered-result-list> | []
+suite-baseline: <merge-base-sha> <ordered-result-list> | none
 ```
 
-For an ordered plan, follow those fields with a `suite-command-results` list that records each command actually executed, in order, with its exact command, `pass`/`fail` result, original exit status, and a JSON Pointer of the form `#/suite-evidence/command-<N>`. A passing plan must contain evidence for every declared command. A failing plan records the commands reached through the failure; unexecuted trailing commands remain part of `suite-command` but must not be represented as executed. For a single command, use the same one-entry list so the durable representation does not change shape.
+An absent `suite-source` means `executed`; absent `suite-ci-run`, `suite-ci-attempt`, or `suite-baseline` means `none`.
 
-The returned result must also contain one temporary handoff-artifact JSON object. It preserves the canonical record semantically and adds a `suite-evidence` object: comment values `suite-command: none` and `suite-exit-status: n/a` serialize as JSON `null`, while `suite-command-results` remains an ordered JSON array of structured result objects. Each result's pointer must resolve under that same artifact's `suite-evidence` object to an entry whose `command` exactly matches its result entry and whose `output` contains that command's complete, unedited output. The PR comment includes the canonical fields and pointers but omits `suite-evidence`, keeping verbose output out of persistent storage. The lifecycle orchestrator writes the returned handoff-artifact object byte-for-byte to a temporary file and passes that file to the fresh merger; do not point at headings, the parent transcript, or any artifact that is not included in that explicit handoff.
+For an ordered plan, follow those fields with a `suite-command-results` list that records each command actually executed, in order, with its exact command, `pass`/`fail` result, original exit status, and a JSON Pointer of the form `#/suite-evidence/command-<N>`. A passing plan must contain evidence for every declared command. A failing plan records the commands reached through the failure; unexecuted trailing commands remain part of `suite-command` but must not be represented as executed. For a single command, use the same one-entry list so the durable representation does not change shape. Baseline results use the same entry shape with pointers `#/suite-evidence/baseline-command-<N>`.
+
+The returned result must also contain one temporary handoff-artifact JSON object. It preserves the canonical record semantically and adds a `suite-evidence` object: comment values `none` and `n/a` serialize as JSON `null`, `suite-baseline` serializes as `{"head":"<merge-base-sha>","command-results":[...]}`, and `suite-command-results` remains an ordered JSON array of structured result objects. Each result's pointer must resolve under that same artifact's `suite-evidence` object to an entry whose `command` exactly matches its result entry and whose `output` contains that command's complete, unedited output. The PR comment includes the canonical fields and pointers but omits `suite-evidence`, keeping verbose output out of persistent storage. The lifecycle orchestrator writes the returned handoff-artifact object byte-for-byte to a temporary file and passes that file to the fresh merger; do not point at headings, the parent transcript, or any artifact that is not included in that explicit handoff.
 
 The missing-contract/PARTIAL record is canonical: `suite-result: missing-contract`, `suite-command: none`, `suite-executions: 0`, `suite-exit-status: n/a`, and an empty `suite-command-results` list. This state is not mergeable. A documentation-only N/A record uses the same command, execution, status, and empty-results values with `suite-result: not-required`.
 
@@ -61,78 +71,23 @@ After execution, fetch `headRefOid` again. If it differs from `verification-head
 
 Use the current client's task or plan tracker when available.
 
-### Step 1: Understand the Change Holistically
+### Step 1: Understand the Change
 
-Read the PR description, changed files, and linked issues. Answer these questions before planning any verification:
-
-1. **What behavior changed?** — Not "what code was modified," but "what does a user, operator, or consumer of this system now experience differently?" Even internal changes have observable effects somewhere.
-2. **What are the upstream inputs?** — What triggers this code? User action, API call, cron job, event, other service?
-3. **What are the downstream effects?** — What does this code produce that other parts of the system consume? Database writes, API responses, files, events, logs, metrics?
-4. **What existing flows touch this code?** — Use Grep/Read to trace callers and consumers. What end-to-end paths run through the changed code?
-5. **What could break that isn't obvious?** — Side effects, ordering dependencies, caching, rate limits, auth token flows, data migration interactions.
-6. **What is directly observable?** — Every change affects *something* concrete. Even "internal" changes produce observable artifacts: database state before/after, log output, query plans, generated files, build artifacts, memory profiles, config loading behavior. Find the observable surface.
-
-**There is almost always something to verify.** "N/A" is reserved for pure documentation changes (markdown/comments only). Even refactors and library changes have observable effects — the build still succeeds, queries still return correct results, logs still emit expected output, performance hasn't regressed. Look for the concrete artifact and verify it.
+Read the PR description, changed files, linked issues, and the context bundle. Identify what a user, operator, or consumer now experiences differently, what triggers the changed code, what it produces downstream, and what is directly observable (responses, persisted state, files, logs, build artifacts). Trace callers with search tools.
 
 ### Step 2: Check for Existing Evidence
 
-Read the PR description's "Manual verification" section and PR comments. Look for evidence that includes:
+Read the PR description's "Manual verification" section and PR comments for evidence with the exact command, complete unedited output, and what it demonstrates. Reuse it for a scenario only when it exercises that behavior end to end at the current head. For authoritative-suite evidence, additionally require the complete canonical record above and an exact `verification-head` match. General manual evidence never substitutes for those fields.
 
-1. **Command** — exact command run
-2. **Output** — complete, unedited output
-3. **Explanation** — what the output demonstrates
+### Step 3: Plan Scenarios
 
-For authoritative-suite evidence, additionally require the complete canonical record above and an exact `verification-head` match. General manual evidence never substitutes for those fields.
+Size the plan by tier. Each scenario runs the real entry point end to end — trigger → changed code → observable outcome — and checks the final state, not an intermediate result:
 
-Evaluate existing evidence critically:
-- Does it verify end-to-end behavior, or just the changed function in isolation?
-- Does it cover downstream effects (e.g., "the API returns 200" but does the UI render it correctly? does the data persist?)?
-- Does it cover at least one failure mode?
+- **Changed behavior** (Medium and Large; one check for Small when runtime behavior changed): the primary use case through the real flow, including downstream effects such as persisted data, emitted events, or generated files.
+- **Regression** (Large): one or two existing flows that share code paths with the change.
+- **Failure mode** (Large): invalid input, a missing dependency, or denied permission degrades gracefully.
 
-Return on existing evidence only when it covers holistic behavior **and** the exact-head authoritative-suite requirement above is satisfied (or correctly marked not required). If it only covers isolated behavior or lacks valid suite evidence, note the gap and proceed.
-
-### Step 3: Devise an End-to-End Verification Plan
-
-Design verification that exercises the **real system**, not individual components. Think like a QA engineer doing acceptance testing.
-
-#### 3a: Map the End-to-End Flow
-
-Trace the complete flow that includes the changed code:
-
-```
-[Trigger] → [Input processing] → [Changed code] → [Output/side effects] → [Downstream consumers]
-```
-
-Your verification should exercise this entire chain, not just the middle.
-
-#### 3b: Plan Verification Scenarios
-
-For each scenario, plan the **full round-trip** — from trigger to final observable outcome:
-
-1. **Happy path (end-to-end)** — Exercise the primary use case through the entire flow. Verify the final output/state, not just intermediate results. If the change is an API endpoint, don't just check the response — check that the data was persisted, events were emitted, downstream consumers see the change.
-
-2. **Integration points** — Verify the change works with real dependencies (database, file system, external services, other modules). Does it compose correctly with the existing system?
-
-3. **Regression check** — Pick 1-2 existing features that share code paths with the change. Verify they still work. This catches unintended side effects.
-
-4. **Failure mode** — What happens when something goes wrong? Invalid input, missing dependency, network failure, permission denied. Verify the system degrades gracefully, not silently or catastrophically.
-
-5. **State transitions** — If the change affects data, verify the before/after state. Can you create → read → update → delete through the real system? Is the data consistent across views?
-
-6. **Internal/indirect verification** — For changes without a direct user-facing surface, find the observable artifact:
-   - **Refactors:** Run the applicable build and the established authoritative verification plan, then compare output or behavior before and after. Verify no change in observable behavior.
-   - **Data model changes:** Query the database before and after migration. Verify schema, constraints, indexes, and existing data integrity.
-   - **Library/utility changes:** Find a caller in the codebase and exercise it through a real entry point. Trace the result end-to-end.
-   - **Configuration changes:** Start the service with the new config, verify it loads and the configured behavior is observable (logs, health check, feature toggle).
-   - **Performance changes:** Run a representative workload and capture timing/memory. Compare to baseline if available.
-   - **Build/tooling changes:** Run the build pipeline. Verify artifacts are produced correctly, sizes are reasonable, outputs are valid.
-
-#### 3c: Identify Prerequisites
-
-- What services need to be running? (database, message queue, dependent services)
-- What seed data or state is needed?
-- What environment configuration is required?
-- Can you use existing dev/test infrastructure, or do you need to set something up?
+Without a user-facing surface, exercise the nearest observable artifact: a real caller of a library change, the service started with the changed configuration, the produced build artifact, or before/after schema and data for a migration. For refactors or performance changes, compare before and after on the nearest observable artifact. Use existing dev/test infrastructure.
 
 ### Step 4: Execute Verification
 
@@ -147,22 +102,9 @@ set -e
 
 Use `suite_status` in the report. Do not pipe the authoritative command through a formatter unless `pipefail` is set and the original command status is preserved from that same execution.
 
-Run your plan against the real system. For each scenario:
+For each scenario, set up the environment with synthetic data, run the real entry point, capture the full command, output, and exit code without editing or truncation, and check the final observable state.
 
-1. **Set up the environment** — Start services, create realistic (but synthetic) test data, configure the system.
-2. **Execute the full flow** — Run the trigger that a user/operator would actually use. Not a unit test harness — the real entry point.
-3. **Capture complete evidence** — Full command, full output, exit codes. Do not edit or truncate.
-4. **Verify the outcome holistically:**
-   - Did the primary action succeed?
-   - Are downstream effects visible? (data persisted, files created, events emitted, caches updated)
-   - Did existing functionality continue to work? (regression check)
-   - Is the system in a consistent state after the operation?
-5. **Execute the failure mode** — Verify graceful degradation.
-
-If a verification step fails:
-- Note exactly what failed, what was expected, and what happened instead
-- Distinguish between a real bug and an environment issue
-- Do NOT fix the bug yourself — report it with full context
+If a step fails, report what failed, expected versus actual, and whether it is a real bug or an environment issue. Do NOT fix it yourself.
 
 ### Step 5: Report Findings
 
@@ -182,6 +124,9 @@ Return findings in this structure:
 verification-record: v1
 verification-head: <full-head-sha>
 suite-result: pass | fail | missing-contract | not-required
+suite-source: executed | ci
+suite-ci-run: <run-url> | none
+suite-ci-attempt: <n> | none
 suite-command: <exact-command-or-ordered-JSON-command-array> | none
 suite-executions: 0 | 1
 suite-exit-status: <integer> | n/a
@@ -190,16 +135,14 @@ suite-command-results:
     result: pass | fail
     exit-status: <integer>
     evidence-pointer: "#/suite-evidence/command-<N>"
+suite-baseline: <merge-base-sha> <ordered-result-list> | none
 
 handoff-artifact:
   {"verification-record":"v1",...,"suite-evidence":{"command-<N>":{"command":"<exact-command>","output":"<complete-unedited-output>"}}}
 
-### System Flow Verified
-<brief description of the end-to-end flow that was exercised>
-
 ### Evidence
 
-#### <Scenario: e.g., "Create user through API and verify in database">
+#### <Scenario: changed behavior, regression, or failure mode>
 **Flow:** <trigger> → <processing> → <outcome>
 **Command:**
 ```
@@ -209,44 +152,10 @@ handoff-artifact:
 ```
 <complete output>
 ```
-**Downstream check:**
-```
-<command to verify downstream effect, e.g., database query, log inspection>
-```
-**Output:**
-```
-<complete output>
-```
-**Result:** PASS / FAIL — <what this demonstrates about the system working end-to-end>
-
-#### <Regression: e.g., "Existing user list endpoint still works">
-**Command:**
-```
-<exact command>
-```
-**Output:**
-```
-<complete output>
-```
-**Result:** PASS / FAIL — <confirms no regression>
-
-#### <Failure mode: e.g., "Invalid input returns proper error">
-**Command:**
-```
-<exact command with bad input>
-```
-**Output:**
-```
-<complete output>
-```
-**Result:** PASS / FAIL — <system degrades gracefully>
+**Result:** PASS / FAIL — <what this demonstrates end to end>
 
 ### Issues Found
-<list any bugs, regressions, or inconsistencies discovered — or "None">
-
-### Holistic Assessment
-<1-3 sentences: Does the system work correctly as a whole after this change?
-Any concerns about interactions, side effects, or downstream impact?>
+<PR-introduced bugs or regressions, and pre-existing failures labeled as such — or "None">
 ```
 
 For `PARTIAL` because no authoritative contract can be established, use the same template with the canonical missing-contract values and `suite-command-results: []`; explain which target sources were checked under Evidence. For an ordered plan, render `suite-command` as an ordered JSON string array and repeat the result entry for every command actually reached. Complete, unedited outputs live only in the handed-off artifact at the locations resolved by each result's `#/suite-evidence/command-<N>` JSON Pointer.
