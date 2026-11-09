@@ -145,7 +145,7 @@ $issue-management:refine-issue #42
 |--------|-------------|-------|----|-------------|
 | **bootstrap-docs** | Yes | Yes | No | Set up a comprehensive, AI-readable documentation strategy in any project. Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates. |
 | **bootstrap-worktrees** | Yes | No | No | Set up project-agnostic worktree isolation with per-worktree ports, Docker Compose projects, and config files. Discovers services and generates create/remove scripts plus Claude Code hooks. |
-| **implement-lifecycle** | Yes | Yes | Yes | Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop, docs gate, verify, merge. Pi delegation requires `pi-subagents`. |
+| **implement-lifecycle** | Yes | Yes | Yes | Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop (docs reviewed in round 1), verify, merge. Pi delegation requires `pi-subagents`. |
 | **implement-cli** | Yes | No | No | **WIP — not recommended for general use.** CLI-based variant of the implementation lifecycle using the Python Agent SDK to orchestrate review/address subprocesses with native async parallelism. |
 | **implement-team** | Yes | No | No | **Deprecated — use implement-lifecycle instead.** Implementation lifecycle re-architected around Claude Code agent-teams — long-lived implementer and reviewer teammates with shared task list and mailbox messaging. |
 | **issue-management** | Yes | Yes | No | Draft, clean up, and refine GitHub issues — optimized for AI agent consumption. |
@@ -154,13 +154,13 @@ $issue-management:refine-issue #42
 
 ### implement-lifecycle
 
-Provides a shared lifecycle orchestrator, two utility skills, three delegated worker roles, a baseline general reviewer, four optional targeted specialists, and a separate docs gate across Claude Code, Codex, Pi, and other compatible harnesses:
+Provides a shared lifecycle orchestrator, two utility skills, three delegated worker roles, a baseline general reviewer, four optional targeted specialists, and a conditional docs reviewer across Claude Code, Codex, Pi, and other compatible harnesses:
 
 **Skills:**
 
 | Skill | Description |
 |-------|-------------|
-| `/implement` / `$implement-lifecycle:implement` | Lean orchestrator — 6-phase lifecycle (plan → implement → PR → review loop → docs gate → verify → merge). Accepts `#issue`, PR number, or freeform task. Supports trailing instructions like "just review" or "skip planning". |
+| `/implement` / `$implement-lifecycle:implement` | Lean orchestrator — lifecycle of plan → implement → PR → review loop → verify → merge. Accepts `#issue`, PR number, or freeform task. Supports trailing instructions like "just review" or "skip planning". |
 | `/merge-pr <pr-number> <handoff-artifact-path>` / `$implement-lifecycle:merge-pr <pr-number> <handoff-artifact-path>` | Lifecycle-internal merge step. Validates readiness and updates linked issues using the temporary verification artifact produced by `verify`; it fails closed without that artifact. |
 | `/pr-check` / `$implement-lifecycle:pr-check` | Pre-flight PR validation — branch naming, title, description, commits, references, plus an advisory scope note. |
 
@@ -181,13 +181,13 @@ Provides a shared lifecycle orchestrator, two utility skills, three delegated wo
 | `review-security` | Optional targeted specialist for AuthZ, injection risks, and PII handling. |
 | `review-architecture` | Optional targeted specialist for module boundaries, coupling, and forward-looking design. |
 | `review-testing` | Optional targeted specialist for test coverage, assertion quality, edge cases, and test anti-patterns. |
-| `review-docs` | Separate Phase 4.5 docs-compliance gate for missing docs, stale docs, and frontmatter/cross-link correctness. |
+| `review-docs` | Round-1 reviewer, triggered when docs or user-facing interfaces change (or the tier is Large), for missing docs, stale docs, and frontmatter/cross-link correctness. |
 
 Heavy phases always run in fresh generic isolated delegated children. The canonical phase-to-skill mapping is shared by every harness: Claude Code selects `implement-lifecycle:<skill>`, Codex selects `$implement-lifecycle:<skill>`, and Pi's user-installed `pi-subagents` launches a generic `delegate` child with `skill: <skill>` and `context: "fresh"`. Compatible harnesses must explicitly load the mapped Agent Skill, pass the complete payload and context bundle, return the child result, and never fall back to inline execution when isolation or skill loading is unavailable. Selected reviewers run in parallel; empty or structurally incomplete reviewer results are recovered or retried before refereeing.
 
-Every lifecycle skill declares a machine-checkable, command-neutral suite capability. `verify` is the sole `full-suite-owner`; it discovers the target repository's authoritative verification command or ordered command plan from repository instructions, CI, development documentation, and build/test configuration. The orchestrator, implementers, addressers, reviewers, docs gate, PR checker, and merger are `focused-only` and may run focused checks without executing or consuming that plan. Verification evidence records the exact command or ordered plan once for the exact PR head, and merge uses that verified SHA as an atomic precondition.
+Every lifecycle skill declares a machine-checkable, command-neutral suite capability. `verify` is the sole `full-suite-owner`; it discovers the target repository's authoritative verification command or ordered command plan from repository instructions, CI, development documentation, and build/test configuration. The orchestrator, implementers, addressers, reviewers, PR checker, and merger are `focused-only` and may run focused checks without executing or consuming that plan. Verification evidence records the exact command or ordered plan once for the exact PR head, and merge uses that verified SHA as an atomic precondition.
 
-Enforced target-repository constraints are binding; explicit user direction selects only among permitted choices, and unresolved conflicts stop the merge. Bundled conventions are fallbacks only when both sources are silent about toolchains, branch names, commits, PR formatting, required checks, approvals, merge method, or branch retention. Findings handoffs use harness-provided or system-created temporary paths passed explicitly between workers, and verification passes a temporary, self-contained evidence artifact to the fresh merger. The docs gate follows an explicit review → address → re-review graph, so addressed documentation cannot skip directly to verification.
+Enforced target-repository constraints are binding; explicit user direction selects only among permitted choices, and unresolved conflicts stop the merge. Bundled conventions are fallbacks only when both sources are silent about toolchains, branch names, commits, PR formatting, required checks, approvals, merge method, or branch retention. Findings handoffs use harness-provided or system-created temporary paths passed explicitly between workers, and verification passes a temporary, self-contained evidence artifact to the fresh merger.
 
 The skill-local `agents/openai.yaml` files are optional OpenAI skill metadata that supplies presentation and invocation policy. They are not subagent definitions, are retained for Codex compatibility, and do not change the harness-neutral worker behavior. No custom Pi agent templates are distributed.
 
