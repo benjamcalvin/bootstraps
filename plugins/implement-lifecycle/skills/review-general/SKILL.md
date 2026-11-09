@@ -57,7 +57,9 @@ Use **Recommended** only for concrete, in-scope problems fixable without a new a
 
 ## Later Rounds
 
-For round 2 or later, read prior consolidated reviews and referee decisions. Do not repeat addressed or rejected findings. Focus on unresolved accepted findings, the latest fix delta, and regressions introduced by those fixes. Do not re-review untouched surfaces merely to reproduce round 1.
+For round 2 or later, start from the context bundle (prior referee decisions) rather than re-reading all prior consolidated reviews. Do not repeat addressed or rejected findings. Focus on unresolved accepted findings, the latest fix delta, and regressions introduced by those fixes. Do not re-review untouched surfaces merely to reproduce round 1.
+
+**Delta mode.** When the payload carries a commit range, review only that range: did the fixes resolve the accepted findings, and did they introduce regressions? List out-of-range observations in the Summary, not as findings, so the referee can record them as follow-ups. If the previous reviewed head is no longer an ancestor (force-push/rebase), review the merge-base diff limited to files the addresser touched.
 
 ## Avoid
 

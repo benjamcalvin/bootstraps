@@ -651,6 +651,33 @@ complete + referee -> refereeing
       echo "  OK: Merge policy fixtures cover approvals, billing, non-squash methods, and retained branches"
     fi
 
+    lifecycle_loop_ok=true
+    for loop_text in \
+      '| Small | ≤ 400 changed lines and no risk surface |' \
+      '| Large | > 1,500 changed lines, or any risk surface |' \
+      '| Medium | Neither Small nor Large |' \
+      'the addresser fixes the final round'"'"'s accepted findings and runs focused tests' \
+      '| Small | 1 |' '| Medium | 2 |' '| Large | 3 |' \
+      'nothing may lower it' \
+      'only accepted Minor findings' \
+      'Reject findings about code outside the round'"'"'s delta' \
+      'Follow-up reviewers judge only that range' \
+      'specialists are selected mechanically by tier and path trigger' \
+      'do not poll, sleep, or schedule wake-ups'; do
+      if ! rg -Fiq -- "$loop_text" "$lifecycle_implement_skill"; then
+        echo "  ERROR: implement Phase 4 must keep tier/loop invariant: $loop_text"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_loop_ok=false
+      fi
+    done
+    if rg -qi 'round 5|round-5|mandatory loop' "$lifecycle_implement_skill"; then
+      echo "  ERROR: implement Phase 4 must not reference the retired round-5 ceiling or mandatory loop"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_loop_ok=false
+    fi
+    if [ "$lifecycle_loop_ok" = true ]; then
+      echo "  OK: Phase 4 keeps tier thresholds, per-tier round caps, delta-only follow-ups, and Minor-only exit"
+    fi
     lifecycle_prcheck_file="$plugin_dir/skills/pr-check/SKILL.md"
     if ! rg -Fq 'Claude Code, Codex, Pi, or generic adapter' "$lifecycle_implement_skill" || \
       ! rg -Fq 'Evaluate the canonical `pr-check` checklist inline' "$lifecycle_merge_file" || \

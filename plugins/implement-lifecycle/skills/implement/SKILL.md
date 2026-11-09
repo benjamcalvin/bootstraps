@@ -53,7 +53,7 @@ The lifecycle maps each heavy phase to one canonical worker skill:
 
 | Phase | Canonical skill | Model tier |
 |-------|-----------------|------------|
-| Implement | `implement-code` | `balanced`; `frontier` when the orchestrator judges the change large or risky |
+| Implement | `implement-code` | `balanced`; `frontier` when pre-classified large or risky (Tier classification) |
 | Address | `implement-address` | `balanced` |
 | Review general | `review-general` | `balanced` |
 | Review correctness | `review-correctness` | `balanced` |
@@ -63,7 +63,7 @@ The lifecycle maps each heavy phase to one canonical worker skill:
 | Review docs | `review-docs` | `balanced` |
 | Verify | `verify` | `balanced` |
 
-For every delegation, use the adapter for the active harness to create a fresh isolated child, explicitly select the mapped canonical skill, pass the complete payload and context bundle, and return the child's result to the orchestrator. Each delegation requests its role's tier; adapters map tiers to concrete models. Never silently inherit the orchestrator's model for a `balanced` role. The referee stays with the orchestrator and is not delegated.
+For every delegation, use the adapter for the active harness to create a fresh isolated child, explicitly select the mapped canonical skill, pass the complete payload and context bundle, and return the child's result to the orchestrator. Each delegation requests its role's tier; adapters map tiers to concrete models. Never silently inherit the orchestrator's model for a `balanced` role. The referee stays with the orchestrator and is not delegated. Wait for child completion results; do not poll, sleep, or schedule wake-ups to check on children.
 
 **Claude Code adapter.** Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:<skill> plugin skill`, followed by the complete payload and fresh context bundle. Pass the Agent tool's `model` parameter explicitly: `"sonnet"` for `balanced`; omit it (inherit) for `frontier`.
 
@@ -92,7 +92,7 @@ complete + referee -> refereeing
 
 On an incomplete result, first recover the final captured result from the harness transcript when available. If recovery is unavailable or still incomplete, retry once in a new child with the same canonical skill and `context: "fresh"`. If that retry is incomplete, stop the phase and report the failed delegation. Only the `complete` state may enter refereeing.
 
-**Isolate delegated context.** Each delegated agent (implementer, addresser, reviewer, verifier) should be launched with MINIMAL, FRESH context: the PR/issue being worked, the governing contract (issue body, ADR, or spec), the current diff, and any prior accepted/rejected findings — NOT the orchestrator's accumulated cross-PR history. Long-lived or reused sessions (e.g., a docs gate or verifier kept alive across multiple PRs) accumulate unrelated context and degrade review quality; reset or bound them per PR. Assemble a single shared **context bundle** (issue, contract, diff, prior findings, referee decisions) and pass the same bundle to every child for that PR, so each starts from the same ground truth instead of re-deriving it.
+**Isolate delegated context.** Launch each delegated agent (implementer, addresser, reviewer, verifier) with MINIMAL, FRESH context, not the orchestrator's accumulated history. Assemble one **context bundle** per PR and pass it to every child: issue, governing contract, prior accepted/rejected findings and referee decisions, and for round N ≥ 2 the delta range `<head reviewed in round N-1>..<current head>`. Children start from the bundle instead of re-fetching the full PR comment history. Reset or bound long-lived sessions per PR.
 
 ### Entry Point
 
@@ -111,7 +111,7 @@ Any text after the leading token is **instructions that control what you do**. T
 | Instructions | Effect |
 |-------------|--------|
 | *(none)* | Default lifecycle: issue/freeform → Phases 1–6; PR number → Phases 4–6 |
-| "just review" / "review only" | Run the general reviewer plus any warranted specialists, then post the consolidated review yourself (Phase 4 Step C). Stop. |
+| "just review" / "review only" | Classify the tier, run Step A's mechanical selection, post the consolidated review (Step C). Stop. |
 | "address the review feedback" | Run the addresser only against existing review findings. |
 | "review and address" | Run review/address loop but don't merge. |
 | "skip planning" / "just implement" | Pass "skip planning" to implement-code so it skips codebase exploration and plan formulation. |
@@ -150,14 +150,39 @@ EOF
 )"
 ```
 
+### Tier classification
+
+**Pre-classification (before the implementer).** Judge from the issue/task whether the work is likely large or touches a risk surface; that selects only the implementer's model tier.
+
+**Authoritative classification (once the PR exists).** Start from the measured result only; the implementer's report may raise it. Count changed lines (additions + deletions, excluding lockfiles and generated files) and inspect changed paths:
+
+| Tier | Trigger |
+|------|---------|
+| Small | ≤ 400 changed lines and no risk surface |
+| Large | > 1,500 changed lines, or any risk surface |
+| Medium | Neither Small nor Large |
+
+Any risk surface makes the PR Large regardless of size.
+
+**Risk surface:** the target repository's declared list when present; otherwise authentication/authorization, secrets/credentials/crypto, data migrations/schema, CI/deploy configuration, sandbox/permission boundaries. Repository policy may override the thresholds. The implementer's report may escalate the tier; nothing may lower it. Record tier and reason in the round-1 consolidated comment.
+
 ### Phase 4: Review/Address Loop {#review-loop}
 
-**This is a mandatory loop.** It repeats Steps A → B → C → D → E for each round until one of exactly two exit conditions is met:
+**This is a bounded loop.** It repeats Steps A → B → C → D → E per round, capped by tier:
 
-1. **Clean exit (Step B):** Zero findings survive referee filtering — including a round whose findings were all rejected — → skip to Phase 4.5. If the rejections were close calls (the underlying concern was valid but the remedy was out of scope), consider escalating for human direction instead of silently proceeding.
-2. **Escalation exit (Step E):** A scope/convergence guard fires, OR convergence stalls (two consecutive rounds forward no fewer accepted findings than the prior round), OR round 5 is reached → stop the loop and run the **convergence-recovery decision** in Step E. Recovery is not a single path: revise-and-reset, restart-clean, or escalate to the user.
+| Tier | Max review rounds | Follow-up rounds |
+|------|-------------------|------------------|
+| Small | 1 | None: the addresser fixes and runs focused tests; no re-review |
+| Medium | 2 | Round 2 only if round 1 accepted ≥ 1 Action Required or Recommended finding; Minor-only exits |
+| Large | 3 | Delta-only; the convergence audit after round 2 still applies |
 
-There is no other way to exit this loop. Each round: General review plus any targeted specialist reviews → Referee (you) → Addresser → next round. **The loop continues while it is converging; it escalates when convergence stalls.** Convergence = each round forwards **strictly fewer** accepted findings than the prior round, with no open production defect and no review-introduced churn. Stalled = two consecutive rounds forward no fewer accepted findings than the prior round. Escalation is driven by stalled convergence or a scope guard, not by a fixed round count. Do not continue past 5 rounds without explicit user authorization even when converging, but you are NOT required to hit 5 — on a stall, first consider recovering the run (revise-and-reset or restart-clean, below) before escalating to a human.
+Exit when:
+
+1. **Clean exit (Step B):** no accepted findings (including a round whose findings were all rejected), or only accepted Minor findings (one batch pass; no new round) → Phase 4.5. If rejections were close calls, consider escalating for human direction.
+2. **Cap exit:** at the tier cap the addresser fixes the final round's accepted findings and runs focused tests; if it reports any Action Required unresolved → escalation exit; otherwise → Phase 4.5.
+3. **Escalation exit (Step E):** a scope/convergence guard fires, or Large convergence stalls (evaluated after round 2: round 2 accepted no fewer findings than round 1; after round 3, no fewer than round 2), or the cap exit reports unresolved Action Required → run the **convergence-recovery decision** in Step E.
+
+Convergence = each round forwards fewer accepted findings than the prior, with no open production defect and no review-introduced churn. Never exceed the tier cap without explicit user authorization.
 
 #### Before Round 1
 
@@ -190,35 +215,27 @@ Do **NOT** fetch the full diff — it fills the context window. Read specific fi
 
 #### Step A: Invoke Reviewers
 
-Invoke **`review-general` in every round**. It owns a complete, proportionate baseline review: correctness, issue and PR requirements, project conventions and standards, established local patterns, scope, maintainability, integration fit, and basic test adequacy.
+Invoke **`review-general` in every round**. It owns a complete baseline review: correctness, requirements, conventions, local patterns, scope, maintainability, integration fit, and basic test adequacy.
 
-Then decide whether the PR has a concrete high-risk area that needs deeper specialist attention. Specialists are optional and supplement the general review; they do not repeat it:
+Specialists are selected mechanically by tier and path trigger, not by discretion:
 
-- `review-correctness` — Logic bugs, edge cases, error handling, race conditions
-- `review-security` — Trust boundaries, authZ, sensitive data, security requirements, injection risks
-- `review-architecture` — Pattern consistency, module boundaries, coupling, forward-looking design
-- `review-testing` — Test coverage, assertion quality, edge cases, test anti-patterns
+- **Small/Medium:** `review-general` only.
+- **Large:** `review-general` plus each specialist whose trigger fires:
+  - `review-security` — auth, secrets, crypto, sandbox, or permission paths change
+  - `review-correctness` — migrations, concurrency primitives, or CI/deploy configuration change
+  - `review-architecture` — a new top-level module/package or public interface is added
+  - `review-testing` — production code changes without corresponding test changes
+- **Follow-up rounds (N ≥ 2):** `review-general` only, plus a specialist only when its own accepted finding is unresolved.
 
-Use judgment from the PR summary, changed-file list, and issue/spec context:
-- **Routine, well-bounded PRs:** run only `review-general`.
-- Add **`review-correctness`** only for unusually subtle algorithms, concurrency, state transitions, resource lifecycles, or error-path-heavy logic.
-- Add **`review-security`** for auth/authz, untrusted input, secrets, external integrations, sensitive data, or permission boundaries.
-- Add **`review-architecture`** for consequential new abstractions, dependency shifts, public APIs, structural refactors, or changes spanning architectural boundaries.
-- Add **`review-testing`** when test strategy itself is risky: complex fixtures, weak or missing regression coverage, multiple test layers, nondeterminism, or substantial test-harness changes.
-- Prefer zero specialists for routine work and one specialist for a focused risk. Use multiple specialists only when the PR genuinely contains multiple independent high-risk surfaces, and record why each was selected.
-- Do not select a specialist merely because files in its domain changed. The general reviewer already covers ordinary correctness, patterns, requirements, and test adequacy.
-
-Invoke the general reviewer and any selected specialists in parallel through the client adapter:
+Invoke the selected reviewers in parallel through the client adapter:
 
 ```
-Payload: Review PR #<pr-number>, round <round-number>
+Payload: Review PR #<pr-number>, round <round-number>[, delta <prev-reviewed-head>..<current-head>]
 ```
 
-Each reviewer fetches PR context and returns its findings to you. Reviewers do **not** post to GitHub — you publish their findings in the consolidated comment in Step C, so keep each reviewer's returned text until then. In round 2 and later, tell reviewers to focus on unresolved accepted findings, the latest fix delta, and regressions introduced by accepted fixes. They must not reopen rejected findings or speculatively harden unrelated surfaces.
+Each reviewer fetches PR context and returns its findings to you; reviewers do **not** post to GitHub. Keep each returned text for Step C. In round N ≥ 2 the payload carries the delta range and prior referee decisions (context bundle). Follow-up reviewers judge only that range: did the fixes resolve the accepted findings, and did they introduce regressions? They must not reopen rejected findings or review code outside the delta.
 
 **Reviewers should execute the PR's own focused acceptance commands when feasible** — focused tests, linters, or commands the PR claims to satisfy — rather than only reasoning about them. They must follow their `focused-only` capability. Reasoning alone misses mechanical acceptance failures (self-referential scans, off-by-one anchors, unbuilt code). If a reviewer cannot execute (no environment), it must state that limitation explicitly rather than assert correctness it did not verify.
-
-**Reassess specialists each round.** Always keep `review-general`. Re-invoke a specialist only when the latest fix delta or an unresolved accepted finding still touches its high-risk area. Drop specialists whose concern is resolved and whose area was not changed; do not spend another review merely to preserve the prior round's roster.
 
 #### Step B: Referee Evaluation
 
@@ -243,7 +260,8 @@ For each finding, decide:
 - **Security findings:** Treat a concrete, applicable security failure as high priority; reject theoretical attacks whose preconditions the changed code cannot meet.
 - **Convention findings:** Accept if the code violates a documented standard. Reject if purely stylistic preference with no backing standard.
 - **Recommended findings:** Accept only when concrete, in scope, and achievable without a new abstraction.
-- **Minor findings:** Record them, but they cannot independently keep the loop open or trigger an address round.
+- **Minor findings:** They never open a round. Accepted Minors go to the addresser with other accepted findings, or alone in one batch pass when they are the only accepted findings (no new round).
+- **Out of delta (round N ≥ 2):** Reject findings about code outside the round's delta as "out of delta" and record them as follow-up items for the final report; they never open a round.
 - **Vague "consider" / "might" language:** Reject unless it is backed by a reproducible failure or violated criterion.
 
 Produce a **filtered action plan** containing only accepted findings.
@@ -259,7 +277,7 @@ Use these calibration cases:
 - Speculative hardening with no demonstrated failure: **Reject**.
 - Second non-clean round dominated by review-introduced complexity: run the convergence audit, stop before round 3, and request human direction. Recommend bounded simplification or removal of the review-introduced architecture.
 
-**If zero findings survive filtering**, still post the consolidated comment from Step C so the reviewers' raw findings and your rejection reasoning stay on the record, ending it with `**Result:** no actionable findings — review loop complete.` Then skip to Phase 4.5.
+**If zero findings survive filtering**, still post the consolidated comment from Step C so the reviewers' raw findings and your rejection reasoning stay on the record, ending it with `**Result:** no actionable findings — review loop complete.` Then skip to Phase 4.5. If only Minor findings were accepted, post the comment, have the addresser batch them in one pass, and skip to Phase 4.5 without a new round.
 
 #### Step C: Post the Consolidated Review & Write Findings File
 
@@ -271,7 +289,9 @@ gh pr comment <number> --body "$(cat <<'EOF'
 
 **Reviewers run:** general<comma-separated targeted specialists, if any>
 
-**Specialist rationale:** <why each specialist was needed, or "none — general review was sufficient">
+**Tier:** <Small/Medium/Large + reason; round 1 only>
+
+**Specialist rationale:** <the trigger for each specialist, or "none — tier/triggers did not call for one">
 
 ### Reviewer Findings
 
@@ -320,27 +340,27 @@ The addresser will fix issues, run tests, commit, push, and return a summary.
 
 #### Step E: Next Round
 
-The addresser has pushed fixes. Check convergence and the escalation limit, then continue.
+The addresser has pushed fixes. Apply the tier cap and convergence checks, then continue or exit.
 
-**Do not run a redundant clean-confirmation round.** If the previous round was genuinely clean — exit condition 1: reviewers submitted zero findings (not merely zero ACCEPTED findings, which is the rejected-only case handled below) — and the only changes since were trivial/mechanical (no new logic), do NOT re-invoke reviewers just to confirm cleanliness — that is a wasted round. Proceed to Phase 4.5. Only re-invoke a reviewer when a substantive change was made after the clean round.
+**Do not run a redundant clean-confirmation round.** After a genuinely clean round (zero reviewer findings) with only trivial follow-up changes, proceed to Phase 4.5 without re-invoking reviewers.
 
 0. **Rejected-only rounds do not advance the loop.** If the referee accepted zero findings in the last round (every finding rejected as unproven / out of scope / already resolved), do NOT invoke the addresser and do NOT count it as a productive round. Post the consolidated comment (Step C already did), then either treat the loop as converged and proceed to Phase 4.5, or, if the rejections were close calls, escalate for human direction. Never send an empty findings file to the addresser.
 
-1. **Convergence audit after round 2:** After two non-clean rounds, post an audit that maps the remaining findings and review-added changes to the original acceptance criteria. For each distinct sub-problem or code area still under contention, record the finding DENSITY (how many findings have targeted that same sub-problem across rounds). A sub-problem with repeated findings across multiple rounds is a convergence trap — flag it. State whether the loop is converging and whether remaining findings primarily concern the original task or architecture introduced during addressing. If they primarily concern review-introduced architecture, stop before round 3 and request human direction. Recommend bounded simplification or removal of that architecture.
+1. **Convergence audit after round 2 (Large):** After two non-clean rounds, post an audit that maps the remaining findings and review-added changes to the original acceptance criteria. For each distinct sub-problem or code area still under contention, record the finding DENSITY (how many findings have targeted that same sub-problem across rounds). A sub-problem with repeated findings across multiple rounds is a convergence trap — flag it. State whether the loop is converging and whether remaining findings primarily concern the original task or architecture introduced during addressing. If they primarily concern review-introduced architecture, stop before round 3 and request human direction. Recommend bounded simplification or removal of that architecture.
 
-2. **Convergence-recovery decision:** When the escalation exit fires (round 5 reached, convergence stalled, or a scope guard), do **not** default to stopping. Diagnose WHY the loop is not converging and choose one of three recovery paths:
+2. **Convergence-recovery decision:** When the escalation exit fires (tier cap reached unresolved, convergence stalled, or a scope guard), do **not** default to stopping. Diagnose WHY the loop is not converging and choose one of three recovery paths:
 
    - **Revise-and-reset — original scope insufficiently specific.** If the reviews kept surfacing ambiguity — underspecified acceptance criteria, conflicting requirements, or findings the original issue never pinned down — the scope was the problem, not the implementation. Take the learnings from this run (what the reviews revealed about the real requirement), reset the branch to a clean head, revise the issue/requirements to be specific and unambiguous, and open a **clean PR** built on the revised issue.
    - **Restart-clean — gone off track.** If the loop is dominated by review-introduced architecture or scope creep that drifted from the original issue, the run went off track. Start clean — discard the drifted work — and restart with **clearer guidelines** that bind the work back to the original issue scope. As part of this, update the underlying issue with notes that give clearer instructions — even a partial clarification (an added constraint, a boundary, a worked example, or an explicit "out of scope" note) materially increases the odds the next attempt succeeds and does not require a full revision.
    - **Escalate to the user.** If the stall is a genuinely hard ambiguity that self-revision cannot resolve, or the user should choose between the paths, escalate. This remains a valid option — self-recovery is not mandatory.
 
-   Do **not** extend the SAME loop past round 5 without explicit user authorization; recovery means starting a NEW loop (revised or clean), not continuing the stalled one. If you escalate, post the escalation comment and stop:
+   Do **not** extend the SAME loop past the tier cap without explicit user authorization; recovery means starting a NEW loop (revised or clean), not continuing the stalled one. If you escalate, post the escalation comment and stop:
 
 ```
 gh pr comment <number> --body "$(cat <<'EOF'
-## Escalation — Review Loop Limit
+## Escalation — Review Loop Stopped
 
-<N> review rounds completed without convergence. Escalating on stalled convergence (or the round-5 ceiling).
+Review loop stopped (tier cap or stalled convergence) after <N> round(s).
 
 ### Unresolved items
 <list each unresolved item with context on what was attempted>
@@ -352,7 +372,7 @@ EOF
 
 Then stop and inform the user directly.
 
-3. **Continue:** Re-fetch the changed-files summary and the latest address commit's delta, increment the round counter, and return to Step A. Continue autonomously unless the convergence audit requires human direction or another scope guard fires.
+3. **Continue** only if the tier cap allows another round; otherwise take the cap exit: record the delta range (`<reviewed head>..<new head>`), increment the round counter, and return to Step A. Continue autonomously unless the convergence audit requires human direction or another scope guard fires.
 
 ### Phase 4.5: Docs Compliance Gate
 
@@ -437,7 +457,7 @@ Payload: <pr-number> docs-<round-number> <resolved-docs-findings-path>
 
 #### Step D: Evaluate Continuation
 
-Re-invoke the docs reviewer to verify fixes. The round counter starts from round 1 (independent of Phase 4 rounds). Loop until clean. Apply the same round-2 convergence audit and convergence-based escalation (round-5 ceiling) as Phase 4.
+Re-invoke the docs reviewer to verify fixes. The round counter starts from round 1 (independent of Phase 4 rounds). Loop until clean. Apply the Large-tier cap (3 rounds) and convergence audit from Phase 4.
 
 ### Phase 5: Manual Verification Gate
 

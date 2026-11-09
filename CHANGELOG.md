@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `implement-lifecycle` 3.10.0 defines its phase-to-skill mapping once and applies it through Claude Code, Codex, Pi, and generic isolated-delegation adapters
 - `implement-lifecycle` 3.11.0 pins a model tier (`balanced`/`frontier`) per lifecycle role; the Claude Code adapter passes the Agent `model` explicitly instead of inheriting
 - `implement-lifecycle` 3.12.0 makes bundled `pr-check` fallbacks advisory (WARN) unless repository policy declares the rule, and `merge-pr` evaluates the checklist inline instead of spawning a child
+- `implement-lifecycle` 3.13.0 classifies PRs as small/medium/large, caps Phase 4 review rounds per tier, limits follow-up rounds to the fix delta, exits on Minor-only findings, and selects specialists by tier and path triggers
 
 ## implement-team [0.5.0] - 2026-07-26
 
