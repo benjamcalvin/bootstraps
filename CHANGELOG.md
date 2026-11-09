@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `implement-lifecycle` 3.14.0 removes the standalone Phase 4.5 docs gate; `review-docs` now runs as a triggered round-1 reviewer through the same referee and fix pass
 - `implement-lifecycle` 3.15.0 scales verification by tier, accepts exact-head required-CI evidence (`suite-source: ci`), baselines suite failures on the merge-base so pre-existing-only failures return PARTIAL (the run stops for a human; not mergeable) instead of FAIL, re-verifies only failed scenarios, and caps verification at 2 fix cycles
 - `implement-lifecycle` 3.16.0 prints a per-run ledger (tier, children by role and model tier, rounds, fix commits, wall-clock per phase, follow-up items) on every completed or escalated run
+- `implement-lifecycle` 3.17.0 trims its skill instructions from ~125 KB to under an 80 KB byte budget (`implement` under 20 KB), moves rare-path material (reviewer-result recovery, convergence recovery, CI-evidence acceptance) into skill-local `references/`, and enforces the budget and reference existence in `validate-all.sh`
 
 ## implement-team [0.5.0] - 2026-07-26
 

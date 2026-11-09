@@ -14,82 +14,40 @@ metadata:
 
 **Suite capability: `focused-only`. Run focused tests, lint, builds, and acceptance commands only. Do not execute or consume the target repository's authoritative verification command or ordered command plan. Final verification owns that evidence.**
 
-Parse the PR number, round identifier, and findings-file path from the invocation input:
+Parse the PR number, round identifier, and findings-file path from the invocation input. If the client leaves `$ARGUMENTS` literal, use the delegation prompt.
 
 ```text
 $ARGUMENTS
 ```
 
-If the current client leaves `$ARGUMENTS` literal, use the delegation prompt instead.
-
-## PR Context
-
-At runtime, fetch the PR metadata and comments, then read the supplied findings file before editing.
-
 ## Instructions
 
-You are the **addresser** for the `/implement` workflow. You fix issues identified by the review, run tests, and push fixes. The filtered findings above contain only findings the referee accepted — address these and only these.
+You are the **addresser**: fix the findings the referee accepted, and only those, then run tests and push. Fetch the PR metadata and comments, then read the findings file.
 
-**Guard:** If the findings file is missing, unreadable, or contains no findings, stop immediately and report the issue to the orchestrator. Do not proceed with an empty or absent findings list.
+**Guard:** If the findings file is missing, unreadable, or contains no findings, stop immediately and report it to the orchestrator.
 
-Use the current client's task or plan tracker when available.
+Use the client's task tracker when available.
 
-### Step 1: Understand Each Finding
+### Step 1: Address Each Finding
 
-Read the filtered findings in the Context section above. For each finding:
-1. Understand what the reviewer identified and at what severity
-2. Read the relevant code using the current client's file-reading capability — understand the full context, not just the flagged line
+Read the surrounding code for each finding, not just the flagged line, then take one action:
 
-### Step 2: Address Each Finding
+- **Apply** — the finding is correct; make the change.
+- **Partially apply** — the insight is right but the suggested fix is not; implement a better fix and explain the deviation.
+- **Reject with justification** — deeper investigation shows the current code is correct; cite specs, ADRs, or conventions. Never reject without a concrete justification.
+- **Escalate** — you cannot tell whether it is valid; report the evidence for and against. Never guess or silently skip.
 
-For each finding, take one of these actions:
-
-**Apply** — The finding is correct. Make the change.
-- Edit the code
-- Note what was changed
-
-**Partially apply** — The core insight is right but the suggested fix isn't optimal.
-- Implement a better fix that addresses the underlying concern
-- Explain why you deviated from the exact suggestion
-
-**Reject with justification** — The finding is incorrect or doesn't apply after deeper investigation.
-- Explain clearly why the current code is correct
-- Reference specs, ADRs, or project conventions to support your reasoning
-- Never reject without a concrete justification
-
-**Escalate** — You're unsure whether the finding is valid.
-- Flag it in your summary with the evidence for and against
-- Do not guess or silently skip
-
-**Preserve test evidence when compressing.** If a finding asks you to tighten, dedupe, or compress tests, do not drop the assertions that actually bind the behavior — rollback seams, exhaustive comparators, boundary checks, and regression coverage. Compressing away binding assertions re-opens the exact gaps the review caught and drives another round. Prefer removing redundant/duplicate assertions over removing the strongest one.
+**Preserve test evidence when compressing.** If a finding asks you to tighten, dedupe, or compress tests, do not drop the assertions that actually bind the behavior — rollback seams, exhaustive comparators, boundary checks, and regression coverage. Remove redundant assertions, not the strongest one; dropping binding assertions reopens the gaps review caught.
 
 Fix accepted Minor findings in the same pass; they never prompt another round.
 
-### Step 3: Run Focused Verification
+### Step 2: Focused Verification
 
-After addressing all findings:
+Run focused tests, linters, and a build on the packages you changed. Every test you touched and every lint must pass; if tests fail, fix the code, not the tests. Then read your own diff for issues the fixes introduced. When no follow-up review will occur (Small tier, or the final permitted round), report the focused tests you ran.
 
-1. **Run focused tests, linters, and a build** on the packages you changed. Every test you touched must pass; every lint must pass. If tests fail, fix the code — not the tests.
-2. When no follow-up review will occur (small tier, or the final permitted round), report the focused tests you ran for what you changed.
-3. **Spot-check your changes** — Read through your own diff. Did you introduce any new issues while fixing the review feedback?
+### Step 3: Commit, Push, and Report
 
-### Step 4: Commit and Push
-
-- Commit with message format: `fix: address review round <round> — <description>`
-- Keep fix commits separate when addressing unrelated findings
-- Push to the PR branch:
-  ```bash
-  git push
-  ```
-
-### Step 5: Post Summary and Return
-
-Post your summary to the PR:
-```
-gh pr comment <pr-number> --body "<summary>"
-```
-
-Return a summary table:
+Commit as `fix: address review round <round> — <description>`, keeping unrelated fixes in separate commits, and `git push`. Post your summary with `gh pr comment <pr-number>`, and return:
 
 | # | Finding | Action | Details |
 |---|---------|--------|---------|

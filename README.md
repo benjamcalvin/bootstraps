@@ -191,6 +191,8 @@ Enforced target-repository constraints are binding; explicit user direction sele
 
 The skill-local `agents/openai.yaml` files are optional OpenAI skill metadata that supplies presentation and invocation policy. They are not subagent definitions, are retained for Codex compatibility, and do not change the harness-neutral worker behavior. No custom Pi agent templates are distributed.
 
+Skill instructions are held to a byte budget (80 KB across all lifecycle skills, 20 KB for `implement`) enforced by `validate-all.sh`, because every child re-reads them. Material needed only on a named rare path (reviewer-result recovery, convergence recovery, CI-evidence acceptance) lives in skill-local `references/` files that the skill reads only on that path.
+
 Reviewers return their findings to the orchestrator and post nothing themselves. The orchestrator is the sole publisher to the PR timeline: it publishes one consolidated comment per round carrying every reviewer's findings plus its referee decisions.
 
 Codex CLI 0.145.0 note: full lifecycle delegation works in a standard Codex session; headless `codex exec --ephemeral` sessions fail to initialize spawned subagents.

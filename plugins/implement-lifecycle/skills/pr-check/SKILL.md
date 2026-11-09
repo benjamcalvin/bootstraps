@@ -23,63 +23,32 @@ Pre-flight validation for PRs.
 $ARGUMENTS
 ```
 
-If the current client leaves `$ARGUMENTS` literal, use the user's invoking prompt. If no PR number is supplied, inspect the PR associated with the current branch when available.
-
-## Context
-
-At runtime, inspect the current branch and fetch available PR metadata and comments. Determine the actual base branch before inspecting commits and diff size. Read explicit user direction and the target repository's governing instructions and contribution documentation before applying standards.
+If the client leaves `$ARGUMENTS` literal, use the invoking prompt. Without a PR number, inspect the current branch's PR when available; if no PR exists, check only what can be validated locally and say so.
 
 ## Instructions
 
-Validate the current PR against target-repository policy first. Explicit user direction and repository instructions take precedence over the bundled checks below for branch names, commits, PR formatting, required references, and blocking/advisory status. Use a bundled check only as a fallback where target policy is silent, and identify that fallback in the result. A fallback check never blocks. If no PR exists, check only what can be validated locally and note that no PR exists yet.
+Inspect the branch, PR metadata, and comments; determine the actual base branch before inspecting commits and diff size. Read explicit user direction and the target repository's governing instructions and contribution docs first: they take precedence over the bundled checks below for branch names, commits, PR formatting, required references, and blocking/advisory status. Use a bundled check only where target policy is silent, and label it as a fallback. A fallback check never blocks.
 
-For each check, output one of:
-- **PASS** — Meets the standard
-- **WARN** — Minor deviation, or any bundled-fallback miss; note what's off
-- **FAIL** — Does not meet a repository-declared blocking rule; explain what needs to change
+Result per check:
+- **PASS** — meets the standard
+- **WARN** — minor deviation, or any bundled-fallback miss
+- **FAIL** — violates a repository-declared blocking rule; say what must change
 
-If the repository declares a rule, apply its declared status; otherwise a miss is WARN.
+A repository-declared rule carries its declared status; otherwise a miss is WARN.
 
-### Checks
+### Checks (bundled fallbacks)
 
-**1. Branch Naming (bundled fallback)**
-Branch must match `<type>/<short-description>` where type is one of: `feat`, `fix`, `refactor`, `docs`, `test`, `chore`. Must be lowercase, hyphen-separated.
-
-**2. PR Title (bundled fallback)**
-Must match `<type>: <imperative summary>`. Type prefix should match branch type. Under 72 characters. No period at the end. Imperative mood ("Add", "Fix"), not past tense ("Added", "Fixed").
-
-**3. PR Description — TL;DR (bundled fallback)**
-Must open with 2-4 plain-language sentences explaining what the change does and why (a `## TL;DR` or `## Summary` section, before any mechanism). A miss is a description that opens with implementation bullets instead of prose a non-reader of the code could follow.
-
-**4. PR Description — Test Evidence (bundled fallback)**
-Must include how the change was verified: test output, manual steps, or "covered by existing tests."
-
-**5. Commit Messages (bundled fallback)**
-Each commit message should follow `<type>: <summary>` format. No "WIP", "fixup", or "wip" commits.
-
-**6. References (bundled fallback)**
-If the change relates to a GitHub issue, it should reference it with an appropriate keyword:
-- `Closes #N` / `Fixes #N` — only when this single PR fully completes the issue
-- `Part of #N` — when the PR is one of several addressing the issue
-
-WARN if no references found (not all PRs need them, but flag for awareness). WARN if `Closes #N` is used but the PR appears to be a sub-task of a larger issue (e.g., the issue has multiple acceptance criteria and the PR only addresses some).
-
-**7. Altitude Layering (bundled fallback)**
-The description must descend through altitude layers rather than mixing them:
-- The TL;DR contains **no** file paths, function names, or line numbers — behavior in plain language only
-- Design reasoning (when present) is in component terms; code identifiers appear only in implementation-level sections (Implementation Notes, Test evidence, Review focus)
-- No sentence carries a claim, its mechanism, and a citation at once; citations sit at the end of their bullet, not mid-clause
-- No review chronology woven into the description ("round 1 added...", "after feedback we...")
-
-Isolated violations are minor; a TL;DR saturated with code identifiers, or layers absent entirely, is a severe miss.
+1. **Branch naming** — `<type>/<short-description>`, type one of `feat`, `fix`, `refactor`, `docs`, `test`, `chore`; lowercase, hyphen-separated.
+2. **PR title** — `<type>: <imperative summary>`, type matching the branch, under 72 characters, no trailing period, imperative mood ("Add", not "Added").
+3. **TL;DR** — the description opens with 2–4 plain-language sentences (a `## TL;DR` or `## Summary` section) on what changes and why, before any mechanism; opening with implementation bullets is a miss.
+4. **Test evidence** — how the change was verified: test output, manual steps, or "covered by existing tests."
+5. **Commit messages** — `<type>: <summary>`; no "WIP", "fixup", or "wip" commits.
+6. **References** — a related issue is referenced with `Closes #N` / `Fixes #N` only when this PR fully completes it, else `Part of #N`. WARN when no reference exists, or when `Closes #N` is used for what looks like a sub-task (the issue has criteria this PR does not address).
+7. **Altitude layering** — the description descends through layers: the TL;DR has **no** file paths, function names, or line numbers; design reasoning is in component terms, with code identifiers only in implementation-level sections (Implementation Notes, Test evidence, Review focus); no sentence carries a claim, its mechanism, and a citation at once, and citations end their bullet; no review chronology ("round 1 added..."). Isolated slips are minor; a TL;DR saturated with identifiers, or missing layers, is a severe miss.
 
 ### Scope Note (advisory — not scored)
 
-Assess whether the PR is **one logical change a reviewer can hold in their head in one sitting**, or a small batch of same-kind housekeeping changes. This is a judgment about cohesion, not size: a single ADR, a new module's scaffold, and a mechanical rename are each one logical change however many lines they span, while a small PR that fixes a bug *and* refactors an unrelated module is two.
-
-Report a one-line observation. Say the PR is cohesive, or name the seam it should be split along. Do not assign PASS/WARN/FAIL, do not count lines against a threshold, and do not treat this note as a merge blocker — it exists to inform the author and reviewers, not to gate.
-
-**Size-to-cap advisory (early split signal).** If the PR is over-scoped — far larger than the change it claims to be, or spanning multiple unrelated changes a reviewer cannot hold in one sitting — flag it and recommend splitting the out-of-scope work into child issues BEFORE implementation proceeds. This is a qualitative scope judgment, not a line-count threshold (see the scope note above). A PR that balloons past reviewable size mid-lifecycle forces scope-splitting refine passes and extra review rounds — far cheaper to split up front. This is advisory, not a blocker.
+Judge whether the PR is **one logical change a reviewer can hold in their head in one sitting**, or a small batch of same-kind housekeeping. This is cohesion, not size: one ADR, a module scaffold, or a mechanical rename is one change at any size; a small PR that fixes a bug *and* refactors an unrelated module is two. Give a one-line observation: cohesive, or the seam to split along. When the PR is over-scoped, recommend splitting the out-of-scope work into child issues before implementation proceeds; splitting early is far cheaper than mid-lifecycle. Never score it, count lines against a threshold, or treat it as a blocker.
 
 ### Output Format
 
@@ -101,4 +70,4 @@ Report a one-line observation. Say the PR is cohesive, or name the seam it shoul
 **Scope (advisory):** <one line — cohesive, or the seam it should be split along>
 ```
 
-If there are failures, add a brief "Suggested Fixes" section listing what to change.
+If there are failures, add a brief "Suggested Fixes" section.
