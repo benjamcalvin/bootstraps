@@ -387,11 +387,16 @@ for plugin_dir in plugins/*/; do
       local expected_plan_json="$2"
       local change_scope="$3"
       local serialized_record="$4"
-      jq -e --arg expected_sha "$expected_sha" --argjson expected_plan "$expected_plan_json" --arg change_scope "$change_scope" '
+      local observed_ci_run_json="${5:-null}"
+      jq -e --arg expected_sha "$expected_sha" --argjson expected_plan "$expected_plan_json" --arg change_scope "$change_scope" --argjson ci_run "$observed_ci_run_json" '
         . as $record |
+        ($record["suite-source"] // "executed") as $source |
         $record["verification-record"] == "v1" and
         $record["verification-head"] == $expected_sha and
+        ($record["suite-baseline"] // null) == null and
         if $change_scope == "documentation-only" then
+          $source == "executed" and
+          ($record["suite-ci-run"] // null) == null and
           $record["suite-result"] == "not-required" and
           $record["suite-command"] == null and
           $record["suite-executions"] == 0 and
@@ -405,7 +410,18 @@ for plugin_dir in plugins/*/; do
           (if ($expected_plan | type) == "array" then $expected_plan else [$expected_plan] end) as $expected_commands |
           $record["suite-result"] == "pass" and
           $record["suite-command"] == $expected_plan and
-          $record["suite-executions"] == 1 and
+          (if $source == "executed" then
+            $record["suite-executions"] == 1 and
+            ($record["suite-ci-run"] // null) == null
+          elif $source == "ci" then
+            $record["suite-executions"] == 0 and
+            ($ci_run | type) == "object" and
+            ($record["suite-ci-run"] | type == "string" and length > 0) and
+            $ci_run["url"] == $record["suite-ci-run"] and
+            $ci_run["headSha"] == $expected_sha and
+            $ci_run["conclusion"] == "success" and
+            $ci_run["commands"] == $expected_commands
+          else false end) and
           $record["suite-exit-status"] == 0 and
           ($record["suite-command-results"] | type == "array") and
           ($record["suite-command-results"] | length) == ($expected_commands | length) and
@@ -462,6 +478,37 @@ for plugin_dir in plugins/*/; do
       fi
       if [ "$lifecycle_actual_outcome" != "$lifecycle_expected_outcome" ]; then
         echo "  ERROR: Serialized verification fixture $lifecycle_fixture_name expected $lifecycle_expected_outcome, got $lifecycle_actual_outcome"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_suite_contract_invalid=true
+      fi
+    done
+    lifecycle_ci_baseline_fixtures=(
+      'ci-exact|["npm run lint","npm test"]|executable|{"url":"https://github.com/example/repo/actions/runs/1","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","commands":["npm run lint","npm test"]}|accept|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/1","suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
+      'ci-run-other-sha|["npm run lint","npm test"]|executable|{"url":"https://github.com/example/repo/actions/runs/1","headSha":"ffffffffffffffffffffffffffffffffffffffff","conclusion":"success","commands":["npm run lint","npm test"]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/1","suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
+      'ci-run-failed|["npm run lint","npm test"]|executable|{"url":"https://github.com/example/repo/actions/runs/1","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"failure","commands":["npm run lint","npm test"]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/1","suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
+      'ci-run-different-commands|["npm run lint","npm test"]|executable|{"url":"https://github.com/example/repo/actions/runs/1","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","commands":["npm test"]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/1","suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
+      'ci-run-url-mismatch|["npm run lint","npm test"]|executable|{"url":"https://github.com/example/repo/actions/runs/2","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","commands":["npm run lint","npm test"]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/1","suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
+      'ci-run-unconfirmed|["npm run lint","npm test"]|executable|null|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/1","suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
+      'ci-with-execution|["npm run lint","npm test"]|executable|{"url":"https://github.com/example/repo/actions/runs/1","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","commands":["npm run lint","npm test"]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/1","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
+      'ci-missing-run-url|["npm run lint","npm test"]|executable|{"url":null,"headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","commands":["npm run lint","npm test"]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
+      'ci-record-other-sha|["npm run lint","npm test"]|executable|{"url":"https://github.com/example/repo/actions/runs/1","headSha":"ffffffffffffffffffffffffffffffffffffffff","conclusion":"success","commands":["npm run lint","npm test"]}|reject|{"verification-record":"v1","verification-head":"ffffffffffffffffffffffffffffffffffffffff","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/1","suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
+      'executed-explicit|["npm run lint","npm test"]|executable|null|accept|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"executed","suite-ci-run":null,"suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}},"suite-baseline":null}'
+      'executed-zero-executions|["npm run lint","npm test"]|executable|null|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"executed","suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
+      'executed-with-ci-run|["npm run lint","npm test"]|executable|{"url":"https://github.com/example/repo/actions/runs/1","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","commands":["npm run lint","npm test"]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"executed","suite-ci-run":"https://github.com/example/repo/actions/runs/1","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
+      'unknown-source|["npm run lint","npm test"]|executable|{"url":"https://github.com/example/repo/actions/runs/1","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","commands":["npm run lint","npm test"]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"cache","suite-ci-run":"https://github.com/example/repo/actions/runs/1","suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
+      'docs-only-ci-source|"npm test"|documentation-only|{"url":"https://github.com/example/repo/actions/runs/1","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","commands":["npm run lint","npm test"]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"not-required","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/1","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}'
+      'baseline-on-pass|["npm run lint","npm test"]|executable|null|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}},"suite-baseline":{"head":"89abcdef0123456789abcdef0123456789abcdef","command-results":[]}}'
+      'preexisting-only-failure|["npm run lint","npm test"]|executable|null|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"fail","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":1,"suite-command-results":[{"command":"npm run lint","result":"fail","exit-status":1,"evidence-pointer":"#/suite-evidence/command-1"}],"suite-baseline":{"head":"89abcdef0123456789abcdef0123456789abcdef","command-results":[{"command":"npm run lint","result":"fail","exit-status":1,"evidence-pointer":"#/suite-evidence/baseline-command-1"}]},"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"baseline-command-1":{"command":"npm run lint","output":"same lint failure"}}}'
+      'baseline-as-head-evidence|["npm run lint","npm test"]|executable|null|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-baseline":{"head":"0123456789abcdef0123456789abcdef01234567","command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/baseline-command-1"}]},"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"},"baseline-command-1":{"command":"npm run lint","output":"pass"}}}'
+    )
+    for lifecycle_fixture in "${lifecycle_ci_baseline_fixtures[@]}"; do
+      IFS='|' read -r lifecycle_fixture_name lifecycle_fixture_plan lifecycle_change_scope lifecycle_observed_ci_run lifecycle_expected_outcome lifecycle_serialized_record <<< "$lifecycle_fixture"
+      lifecycle_actual_outcome='reject'
+      if lifecycle_evidence_is_mergeable "$lifecycle_expected_sha" "$lifecycle_fixture_plan" "$lifecycle_change_scope" "$lifecycle_serialized_record" "$lifecycle_observed_ci_run"; then
+        lifecycle_actual_outcome='accept'
+      fi
+      if [ "$lifecycle_actual_outcome" != "$lifecycle_expected_outcome" ]; then
+        echo "  ERROR: CI/baseline verification fixture $lifecycle_fixture_name expected $lifecycle_expected_outcome, got $lifecycle_actual_outcome"
         ERRORS=$((ERRORS + 1))
         lifecycle_suite_contract_invalid=true
       fi
@@ -549,11 +596,42 @@ complete + referee -> refereeing
       ! rg -Fq 'For every result, require its `#/suite-evidence/command-<N>` pointer to resolve inside the handed-off object' "$lifecycle_merge_file" || \
       ! rg -Fq 'Accept `not-required` only after independently inspecting the changed files and confirming that every change is documentation or comments only' "$lifecycle_merge_file" || \
       ! rg -Fq 'Capture the verifier'"'"'s returned handoff-artifact JSON object: the complete durable `verification-record:v1`' "$lifecycle_implement_skill" || \
-      ! rg -Fq 'Payload: <pr-number> <resolved-verification-record-path>' "$lifecycle_implement_skill"; then
+      ! rg -Fq 'Payload: <pr-number> <resolved-verification-record-path>' "$lifecycle_implement_skill" || \
+      ! rg -Fq 'suite-source: executed | ci' "$lifecycle_verify_file" || \
+      ! rg -Fq 'that `headSha` equals `verification-head` and `conclusion` is `success`, and from the workflow definition at that SHA that its steps run exactly the established commands in order' "$lifecycle_verify_file" || \
+      ! rg -Fq 'Never use a run for any other SHA.' "$lifecycle_verify_file" || \
+      ! rg -Fq '`suite-source: executed` with exactly one plan execution or `suite-source: ci` with zero executions' "$lifecycle_merge_file" || \
+      ! rg -Fq 'its `headSha` equals `verification-head`, its `conclusion` is `success`, and its workflow definition at that SHA runs exactly the established command or plan in order; reject a run for any other SHA.' "$lifecycle_merge_file"; then
       echo "  ERROR: Verification evidence and merge must remain bound to the exact PR head"
       ERRORS=$((ERRORS + 1))
     else
       echo "  OK: Verification evidence is exact-head and merge uses an atomic head guard"
+    fi
+
+    lifecycle_verify_scope_ok=true
+    for lifecycle_scope_check in \
+      "$lifecycle_implement_skill|Allow at most 2 FAIL → address → re-verify cycles; on a third FAIL, do not address again" \
+      "$lifecycle_implement_skill|Payload: <pr-number> tier=<Small|Medium|Large> [failed-scenarios=<names>]" \
+      "$lifecycle_verify_file|**Small** — suite evidence, plus one live check only when runtime behavior changed" \
+      "$lifecycle_verify_file|re-run only those scenarios plus suite evidence for the new head" \
+      "$lifecycle_verify_file|When the head's suite fails, run each failing command once on the PR's merge-base" \
+      "$lifecycle_verify_file|a failure present at both SHAs is pre-existing; any other failure, or one you cannot match, is PR-introduced and produces FAIL." \
+      "$lifecycle_verify_file|the record keeps \`suite-result: fail\` and is not mergeable. Baseline results are never PR-head evidence." \
+      "$lifecycle_merge_file|Never treat \`suite-baseline\` results as PR-head evidence"; do
+      if ! rg -Fq -- "${lifecycle_scope_check#*|}" "${lifecycle_scope_check%%|*}"; then
+        echo "  ERROR: Verification scope invariant missing from $(basename "$(dirname "${lifecycle_scope_check%%|*}")"): ${lifecycle_scope_check#*|}"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_verify_scope_ok=false
+      fi
+    done
+    if rg -Fq 'repeat until **PASS** or **N/A**' "$lifecycle_implement_skill" || \
+      rg -qi 'last line of defense|almost always something to verify' "$lifecycle_verify_file"; then
+      echo "  ERROR: Verification must stay tier-scaled and capped (no uncapped re-verify loop or blanket thoroughness mandate)"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_verify_scope_ok=false
+    fi
+    if [ "$lifecycle_verify_scope_ok" = true ]; then
+      echo "  OK: Verification is tier-scaled, capped at 2 cycles, and baselines failures on the merge-base"
     fi
 
     lifecycle_policy_decision() {

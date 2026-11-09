@@ -377,13 +377,13 @@ Then stop and inform the user directly.
 
 ### Phase 5: Manual Verification Gate
 
-After the review loop completes, invoke the verification agent to test the PR's changes with real-world execution before merging:
+After the review loop completes, invoke the verification agent with the tier; a re-verification also names the scenarios that failed:
 
 ```
-Payload: <pr-number>
+Payload: <pr-number> tier=<Small|Medium|Large> [failed-scenarios=<names>]
 ```
 
-The verification agent will classify the change type, devise a verification plan, execute it, and report structured evidence. If **PASS** or **N/A**, proceed to Phase 6. If the verdict is **FAIL**, delegate the fixes — do **not** fix the code yourself. If it is **PARTIAL** because the target repository has no authoritative verification contract, stop and report that missing contract; do not merge or invent a substitute.
+The verifier scales scenarios to the tier, records exact-head suite evidence (executed or matching CI), and compares suite failures against the merge-base. If **PASS** or **N/A**, proceed to Phase 6. If the verdict is **FAIL**, delegate the fixes — do **not** fix the code yourself. If it is **PARTIAL** (no authoritative verification contract, or only pre-existing failures), stop and report the missing contract or the listed pre-existing failures; do not address, merge, or invent a substitute.
 
 Capture the verifier's returned handoff-artifact JSON object: the complete durable `verification-record:v1` (exact command or ordered JSON plan, execution count, overall status, and ordered per-command result/status/evidence-pointer entries) plus its `suite-evidence` object. Confirm every `#/suite-evidence/command-<N>` pointer resolves inside that object to the matching exact command and complete unedited output. Write the whole object byte-for-byte to a harness-provided temporary file, or a uniquely created file under the operating system's temporary directory when the harness provides none, and pass the resolved path explicitly to `merge-pr`. The verifier publishes only the matching concise canonical record in its PR comment; `suite-evidence` remains in the temporary handoff and is never posted as persistent output. If the returned object is absent, malformed, or has a dangling or mismatched pointer, stop rather than reconstructing it from the parent transcript.
 
@@ -406,7 +406,7 @@ Then invoke the addresser with that file path, using a `verify-<round-number>` r
 Payload: <pr-number> verify-<round-number> <resolved-verify-findings-path>
 ```
 
-The round counter starts from round 1 (independent of Phase 4 rounds) and increments each FAIL → address → re-verify cycle. After the addresser pushes fixes, re-invoke `verify` and repeat until **PASS** or **N/A**, then proceed to Phase 6.
+The round counter starts from round 1 (independent of Phase 4 rounds) and increments each FAIL → address → re-verify cycle. After the addresser pushes fixes, re-invoke `verify` with the failed scenarios. Allow at most 2 FAIL → address → re-verify cycles; on a third FAIL, do not address again: post an escalation comment listing the unresolved failures, then stop and inform the user.
 
 ### Phase 6: Merge & Finalize
 
