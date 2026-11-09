@@ -111,7 +111,7 @@ Any text after the leading token is **instructions that control what you do**. T
 | Instructions | Effect |
 |-------------|--------|
 | *(none)* | Default lifecycle: issue/freeform → Phases 1–6; PR number → Phases 4–6 |
-| "just review" / "review only" | Run the general reviewer plus any warranted specialists, then post the consolidated review yourself (Phase 4 Step C). Stop. |
+| "just review" / "review only" | Classify the tier, run Step A's mechanical selection, post the consolidated review (Step C). Stop. |
 | "address the review feedback" | Run the addresser only against existing review findings. |
 | "review and address" | Run review/address loop but don't merge. |
 | "skip planning" / "just implement" | Pass "skip planning" to implement-code so it skips codebase exploration and plan formulation. |
@@ -152,15 +152,17 @@ EOF
 
 ### Tier classification
 
-**Pre-classification (before the implementer).** Judge from the issue/task whether the work is likely large or touches a risk surface; that selects the implementer's `frontier` or `balanced` tier.
+**Pre-classification (before the implementer).** Judge from the issue/task whether the work is likely large or touches a risk surface; that selects only the implementer's model tier.
 
-**Authoritative classification (once the PR exists).** Count changed lines (additions + deletions, excluding lockfiles and generated files) and inspect changed paths:
+**Authoritative classification (once the PR exists).** Start from the measured result only; the implementer's report may raise it. Count changed lines (additions + deletions, excluding lockfiles and generated files) and inspect changed paths:
 
 | Tier | Trigger |
 |------|---------|
 | Small | ≤ 400 changed lines and no risk surface |
-| Medium | Otherwise |
 | Large | > 1,500 changed lines, or any risk surface |
+| Medium | Neither Small nor Large |
+
+Any risk surface makes the PR Large regardless of size.
 
 **Risk surface:** the target repository's declared list when present; otherwise authentication/authorization, secrets/credentials/crypto, data migrations/schema, CI/deploy configuration, sandbox/permission boundaries. Repository policy may override the thresholds. The implementer's report may escalate the tier; nothing may lower it. Record tier and reason in the round-1 consolidated comment.
 
@@ -171,15 +173,16 @@ EOF
 | Tier | Max review rounds | Follow-up rounds |
 |------|-------------------|------------------|
 | Small | 1 | None: the addresser fixes and runs focused tests; no re-review |
-| Medium | 2 | Round 2 only if round 1 accepted ≥ 1 Action Required or Recommended finding |
+| Medium | 2 | Round 2 only if round 1 accepted ≥ 1 Action Required or Recommended finding; Minor-only exits |
 | Large | 3 | Delta-only; the convergence audit after round 2 still applies |
 
 Exit when:
 
-1. **Clean exit (Step B):** no accepted findings (including a round whose findings were all rejected), or only accepted Minor findings (the addresser batches them in one pass; no new round) → Phase 4.5. If rejections were close calls, consider escalating for human direction.
-2. **Escalation exit (Step E):** a scope/convergence guard fires, Large convergence stalls (two consecutive rounds forward no fewer accepted findings than the prior), or the tier cap is reached with an accepted Action Required finding the addresser could not resolve → run the **convergence-recovery decision** in Step E.
+1. **Clean exit (Step B):** no accepted findings (including a round whose findings were all rejected), or only accepted Minor findings (one batch pass; no new round) → Phase 4.5. If rejections were close calls, consider escalating for human direction.
+2. **Cap exit:** at the tier cap the addresser fixes the final round's accepted findings and runs focused tests; if it reports any Action Required unresolved → escalation exit; otherwise → Phase 4.5.
+3. **Escalation exit (Step E):** a scope/convergence guard fires, or Large convergence stalls (evaluated after round 2: round 2 accepted no fewer findings than round 1; after round 3, no fewer than round 2), or the cap exit reports unresolved Action Required → run the **convergence-recovery decision** in Step E.
 
-At the cap there is no further review round; the addresser still fixes that round's accepted findings. Convergence = each round forwards strictly fewer accepted findings than the prior, with no open production defect and no review-introduced churn. Never exceed the tier cap without explicit user authorization.
+Convergence = each round forwards fewer accepted findings than the prior, with no open production defect and no review-introduced churn. Never exceed the tier cap without explicit user authorization.
 
 #### Before Round 1
 
@@ -257,7 +260,7 @@ For each finding, decide:
 - **Security findings:** Treat a concrete, applicable security failure as high priority; reject theoretical attacks whose preconditions the changed code cannot meet.
 - **Convention findings:** Accept if the code violates a documented standard. Reject if purely stylistic preference with no backing standard.
 - **Recommended findings:** Accept only when concrete, in scope, and achievable without a new abstraction.
-- **Minor findings:** Record them; they never keep the loop open or open a round. Forward accepted Minors to the addresser only when a round is already addressing other findings.
+- **Minor findings:** They never open a round. Accepted Minors go to the addresser with other accepted findings, or alone in one batch pass when they are the only accepted findings (no new round).
 - **Out of delta (round N ≥ 2):** Reject findings about code outside the round's delta as "out of delta" and record them as follow-up items for the final report; they never open a round.
 - **Vague "consider" / "might" language:** Reject unless it is backed by a reproducible failure or violated criterion.
 
@@ -355,9 +358,9 @@ The addresser has pushed fixes. Apply the tier cap and convergence checks, then 
 
 ```
 gh pr comment <number> --body "$(cat <<'EOF'
-## Escalation — Review Loop Limit
+## Escalation — Review Loop Stopped
 
-<N> review rounds completed without convergence. Escalating on stalled convergence or the tier cap.
+Review loop stopped (tier cap or stalled convergence) after <N> round(s).
 
 ### Unresolved items
 <list each unresolved item with context on what was attempted>
@@ -369,7 +372,7 @@ EOF
 
 Then stop and inform the user directly.
 
-3. **Continue** only if the tier allows another round: record the delta range (`<reviewed head>..<new head>`), increment the round counter, and return to Step A. Continue autonomously unless the convergence audit requires human direction or another scope guard fires.
+3. **Continue** only if the tier cap allows another round; otherwise take the cap exit: record the delta range (`<reviewed head>..<new head>`), increment the round counter, and return to Step A. Continue autonomously unless the convergence audit requires human direction or another scope guard fires.
 
 ### Phase 4.5: Docs Compliance Gate
 

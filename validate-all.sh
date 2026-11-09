@@ -655,6 +655,8 @@ complete + referee -> refereeing
     for loop_text in \
       '| Small | ≤ 400 changed lines and no risk surface |' \
       '| Large | > 1,500 changed lines, or any risk surface |' \
+      '| Medium | Neither Small nor Large |' \
+      'the addresser fixes the final round'"'"'s accepted findings and runs focused tests' \
       '| Small | 1 |' '| Medium | 2 |' '| Large | 3 |' \
       'nothing may lower it' \
       'only accepted Minor findings' \
