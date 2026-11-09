@@ -219,14 +219,14 @@ Invoke **`review-general` in every round**. It owns a complete baseline review: 
 
 Specialists are selected mechanically by tier and path trigger, not by discretion:
 
-- **Any tier:** `review-docs` when docs, specs, READMEs, or user-facing interfaces (CLI flags, public APIs, config keys) change, or the tier is Large.
+- **Any tier:** `review-docs` when docs, specs, READMEs, or user-facing interfaces (CLI flags, public APIs, config keys) change, when the change alters architecture, conventions, or behavior described in AGENTS.md, ADRs, or other project docs, or when the tier is Large.
 - **Small/Medium:** `review-general` only, plus `review-docs` per the trigger above.
 - **Large:** `review-general` plus `review-docs` and each specialist whose trigger fires:
   - `review-security` — auth, secrets, crypto, sandbox, or permission paths change
   - `review-correctness` — migrations, concurrency primitives, or CI/deploy configuration change
   - `review-architecture` — a new top-level module/package or public interface is added
   - `review-testing` — production code changes without corresponding test changes
-- **Follow-up rounds (N ≥ 2):** `review-general` only, plus a specialist or `review-docs` only when its own accepted finding is unresolved.
+- **Follow-up rounds (N ≥ 2):** `review-general` only, plus a specialist or `review-docs` only when its own accepted finding is unresolved; re-include `review-docs` also when the fix delta changes documented behavior.
 
 Invoke the selected reviewers in parallel through the client adapter:
 
@@ -288,11 +288,11 @@ Publish **one** comment per round covering every reviewer plus your referee deci
 gh pr comment <number> --body "$(cat <<'EOF'
 ## Review Round <N> — Consolidated Review & Referee Decisions
 
-**Reviewers run:** general<comma-separated targeted specialists, if any>
+**Reviewers run:** general<comma-separated specialists and `review-docs`, if any>
 
 **Tier:** <Small/Medium/Large + reason; round 1 only>
 
-**Specialist rationale:** <the trigger for each specialist, or "none — tier/triggers did not call for one">
+**Specialist rationale:** <the trigger for each specialist and for `review-docs`, or "none — tier/triggers did not call for one">
 
 ### Reviewer Findings
 

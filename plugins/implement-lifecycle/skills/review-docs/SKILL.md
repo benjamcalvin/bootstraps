@@ -1,6 +1,6 @@
 ---
 name: review-docs
-description: Review a pull request for missing, stale, or inconsistent documentation as a peer reviewer in the round-1 review.
+description: Review a pull request for missing, stale, or inconsistent documentation as a peer reviewer in the review loop.
 ---
 
 # Documentation Compliance Review
@@ -82,7 +82,7 @@ Every finding must name a concrete reader-facing error or omission and the accep
 
 Use **Recommended** only for concrete, in-scope gaps fixable without a new abstraction. Minor observations must not be framed as reasons to continue the review loop.
 
-**Reconcile docs the PR touches — don't leave anchors for the next PR.** When a PR changes docs that still say "missing", "absent", "not yet implemented", or "TODO" about behavior this PR implements or removes, flag it so the PR reconciles its own docs rather than leaving a stale anchor for the next PR's docs gate to catch. Each PR should leave the docs it touches accurate at its own merge.
+**Reconcile docs the PR touches — don't leave anchors for the next PR.** When a PR changes docs that still say "missing", "absent", "not yet implemented", or "TODO" about behavior this PR implements or removes, flag it so the PR reconciles its own docs rather than leaving a stale anchor for a later PR's docs review to catch. Each PR should leave the docs it touches accurate at its own merge.
 
 ## Round Context
 
@@ -103,7 +103,7 @@ Do not expand later rounds into speculative documentation work unrelated to the 
 
 ## Output
 
-**Do not post to GitHub.** Run no `gh pr review`, `gh pr comment`, or `gh issue comment`. The orchestrator is the sole publisher: it consolidates the docs findings with its referee decisions into a single PR comment per round. Posting yourself fragments that trail into one comment per reviewer.
+**Do not post to GitHub.** Run no `gh pr review`, `gh pr comment`, or `gh issue comment`. The orchestrator is the sole publisher: it consolidates your findings with its referee decisions into a single PR comment per round. Posting yourself fragments that trail into one comment per reviewer.
 
 Return findings to the orchestrator as your final message, in exactly this structure:
 

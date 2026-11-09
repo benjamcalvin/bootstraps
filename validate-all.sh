@@ -481,7 +481,7 @@ for plugin_dir in plugins/*/; do
     if rg -q 'Phase 4\.5|Docs Compliance Gate|lifecycle-docs-gate' "$lifecycle_implement_skill"; then
       echo "  ERROR: implement must not retain the standalone docs gate (Phase 4.5)"
       ERRORS=$((ERRORS + 1))
-    elif ! rg -Fq -- '`review-docs` when docs, specs, READMEs, or user-facing interfaces' "$lifecycle_implement_skill"; then
+    elif ! sed -n '/^#### Step A/,/^#### Step B/p' "$lifecycle_implement_skill" | rg -Fq -- '`review-docs` when docs, specs, READMEs, or user-facing interfaces (CLI flags, public APIs, config keys) change, when the change alters architecture, conventions, or behavior described in AGENTS.md, ADRs, or other project docs'; then
       echo "  ERROR: Step A must list review-docs with its docs-change trigger"
       ERRORS=$((ERRORS + 1))
     else
