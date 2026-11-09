@@ -655,10 +655,10 @@ complete + referee -> refereeing
     if ! rg -Fq 'Claude Code, Codex, Pi, or generic adapter' "$lifecycle_implement_skill" || \
       ! rg -Fq 'Evaluate the canonical `pr-check` checklist inline' "$lifecycle_merge_file" || \
       ! rg -Fq 'do not spawn a child for it' "$lifecycle_merge_file" || \
-      ! rg -Fq 'Block only on failures of repository-declared rules' "$lifecycle_merge_file" || \
+      ! rg -Fq 'Block only on failures of those rules' "$lifecycle_merge_file" || \
       ! rg -Fq 'non-blocking, and are reported as WARN' "$lifecycle_merge_file" || \
       ! rg -Fq 'A fallback check never blocks' "$lifecycle_prcheck_file" || \
-      rg -q 'spawn a fresh subagent|pi-subagents' "$lifecycle_merge_file"; then
+      rg -q 'spawn a fresh subagent|pi-subagents|Task/subagent|isolated delegation' "$lifecycle_merge_file"; then
       echo "  ERROR: merge-pr must evaluate pr-check inline (no child) and treat fallback-only failures as non-blocking WARNs"
       ERRORS=$((ERRORS + 1))
     else
