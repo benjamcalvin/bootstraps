@@ -651,16 +651,18 @@ complete + referee -> refereeing
       echo "  OK: Merge policy fixtures cover approvals, billing, non-squash methods, and retained branches"
     fi
 
+    lifecycle_prcheck_file="$plugin_dir/skills/pr-check/SKILL.md"
     if ! rg -Fq 'Claude Code, Codex, Pi, or generic adapter' "$lifecycle_implement_skill" || \
-      ! rg -Fq '**Claude Code:** use the Task/subagent facility with `model: "sonnet"`, explicitly load the canonical `pr-check` skill' "$lifecycle_merge_file" || \
-      ! rg -Fq '**Codex:** spawn a fresh subagent at its balanced model, instruct it to load the canonical `pr-check` skill' "$lifecycle_merge_file" || \
-      ! rg -Fq '**Pi:** use `pi-subagents` at its balanced model with `context: "fresh"`, explicitly select the canonical `pr-check` skill' "$lifecycle_merge_file" || \
-      ! rg -Fq '**Generic:** use the client'"'"'s isolated delegation mechanism with a fresh context and explicit canonical `pr-check` skill selection' "$lifecycle_merge_file" || \
-      ! rg -Fq 'If isolated dispatch, fresh context, explicit skill loading, or result capture is unavailable, fail closed' "$lifecycle_merge_file"; then
-      echo "  ERROR: Phase 6 and nested pr-check must use the shared harness-neutral adapter contract"
+      ! rg -Fq 'Evaluate the canonical `pr-check` checklist inline' "$lifecycle_merge_file" || \
+      ! rg -Fq 'do not spawn a child for it' "$lifecycle_merge_file" || \
+      ! rg -Fq 'Block only on failures of those rules' "$lifecycle_merge_file" || \
+      ! rg -Fq 'non-blocking, and are reported as WARN' "$lifecycle_merge_file" || \
+      ! rg -Fq 'A fallback check never blocks' "$lifecycle_prcheck_file" || \
+      rg -q 'spawn a fresh subagent|pi-subagents|Task/subagent|isolated delegation' "$lifecycle_merge_file"; then
+      echo "  ERROR: merge-pr must evaluate pr-check inline (no child) and treat fallback-only failures as non-blocking WARNs"
       ERRORS=$((ERRORS + 1))
     else
-      echo "  OK: Phase 6 and nested pr-check support Claude Code, Codex, Pi, and generic adapters"
+      echo "  OK: merge-pr evaluates pr-check inline; fallback-only failures are non-blocking"
     fi
   fi
 
