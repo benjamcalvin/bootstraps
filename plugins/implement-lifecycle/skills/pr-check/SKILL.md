@@ -31,12 +31,12 @@ At runtime, inspect the current branch and fetch available PR metadata and comme
 
 ## Instructions
 
-Validate the current PR against target-repository policy first. Explicit user direction and repository instructions take precedence over the bundled checks below for branch names, commits, PR formatting, required references, and blocking/advisory status. Use a bundled check only as a fallback where target policy is silent, and identify that fallback in the result. If no PR exists, check only what can be validated locally and note that no PR exists yet.
+Validate the current PR against target-repository policy first. Explicit user direction and repository instructions take precedence over the bundled checks below for branch names, commits, PR formatting, required references, and blocking/advisory status. Use a bundled check only as a fallback where target policy is silent, and identify that fallback in the result. A fallback check never blocks: where it would FAIL, report **WARN** instead. Only rules the repository declares keep their declared blocking status (FAIL). If no PR exists, check only what can be validated locally and note that no PR exists yet.
 
 For each check, output one of:
 - **PASS** — Meets the standard
-- **WARN** — Minor deviation, note what's off
-- **FAIL** — Does not meet the standard, explain what needs to change
+- **WARN** — Minor deviation, or any bundled-fallback miss; note what's off
+- **FAIL** — Does not meet a repository-declared rule; explain what needs to change
 
 ### Checks
 
@@ -47,7 +47,7 @@ Branch must match `<type>/<short-description>` where type is one of: `feat`, `fi
 Must match `<type>: <imperative summary>`. Type prefix should match branch type. Under 72 characters. No period at the end. Imperative mood ("Add", "Fix"), not past tense ("Added", "Fixed").
 
 **3. PR Description — TL;DR (bundled fallback)**
-Must open with 2-4 plain-language sentences explaining what the change does and why (a `## TL;DR` or `## Summary` section, before any mechanism). FAIL if the description opens with implementation bullets instead of prose a non-reader of the code could follow.
+Must open with 2-4 plain-language sentences explaining what the change does and why (a `## TL;DR` or `## Summary` section, before any mechanism). Severe miss (FAIL only if repository-declared) when the description opens with implementation bullets instead of prose a non-reader of the code could follow.
 
 **4. PR Description — Test Evidence (bundled fallback)**
 Must include how the change was verified: test output, manual steps, or "covered by existing tests."
@@ -69,7 +69,7 @@ The description must descend through altitude layers rather than mixing them:
 - No sentence carries a claim, its mechanism, and a citation at once; citations sit at the end of their bullet, not mid-clause
 - No review chronology woven into the description ("round 1 added...", "after feedback we...")
 
-WARN on isolated violations; FAIL if the TL;DR is saturated with code identifiers or the layers are absent entirely.
+WARN on isolated violations. Severe misses (TL;DR saturated with code identifiers, or layers absent entirely) are FAIL only if repository-declared; otherwise WARN.
 
 ### Scope Note (advisory — not scored)
 
@@ -94,7 +94,7 @@ Report a one-line observation. Say the PR is cohesive, or name the seam it shoul
 | 6 | References | PASS/WARN/FAIL | ... |
 | 7 | Altitude layering | PASS/WARN/FAIL | ... |
 
-**Result: X/7 passing, Y warnings, Z failures**
+**Result: X/7 passing, Y warnings, Z failures** (failures only for repository-declared rules)
 
 **Scope (advisory):** <one line — cohesive, or the seam it should be split along>
 ```
