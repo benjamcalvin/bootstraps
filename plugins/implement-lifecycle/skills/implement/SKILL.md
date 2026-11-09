@@ -51,27 +51,27 @@ Use the current client's task or plan tracker throughout when available.
 
 The lifecycle maps each heavy phase to one canonical worker skill:
 
-| Phase | Canonical skill |
-|-------|-----------------|
-| Implement | `implement-code` |
-| Address | `implement-address` |
-| Review general | `review-general` |
-| Review correctness | `review-correctness` |
-| Review security | `review-security` |
-| Review architecture | `review-architecture` |
-| Review testing | `review-testing` |
-| Review docs | `review-docs` |
-| Verify | `verify` |
+| Phase | Canonical skill | Model tier |
+|-------|-----------------|------------|
+| Implement | `implement-code` | `balanced`; `frontier` when the change is large or touches a risk surface such as auth, secrets, migrations, CI/deploy, or sandbox/permission boundaries |
+| Address | `implement-address` | `balanced` |
+| Review general | `review-general` | `balanced` |
+| Review correctness | `review-correctness` | `balanced` |
+| Review security | `review-security` | `balanced` |
+| Review architecture | `review-architecture` | `balanced` |
+| Review testing | `review-testing` | `balanced` |
+| Review docs | `review-docs` | `balanced` |
+| Verify | `verify` | `balanced` |
 
-For every delegation, use the adapter for the active harness to create a fresh isolated child, explicitly select the mapped canonical skill, pass the complete payload and context bundle, and return the child's result to the orchestrator. Choose the closest balanced model available in that harness for each delegation; use stronger or lighter models only when the task warrants it. Do not assign one model choice to the whole lifecycle.
+For every delegation, use the adapter for the active harness to create a fresh isolated child, explicitly select the mapped canonical skill, pass the complete payload and context bundle, and return the child's result to the orchestrator. Each delegation requests its role's tier; adapters map tiers to concrete models. Never silently inherit the orchestrator's model for a `balanced` role. The referee stays with the orchestrator and is not delegated.
 
-**Claude Code adapter.** Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:<skill> plugin skill`, followed by the complete payload and fresh context bundle.
+**Claude Code adapter.** Spawn a generic isolated subagent whose prompt begins `Use the implement-lifecycle:<skill> plugin skill`, followed by the complete payload and fresh context bundle. Pass the Agent tool's `model` parameter explicitly: `"sonnet"` for `balanced`; omit it (inherit) for `frontier`.
 
-**Codex adapter.** Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:<skill>`, followed by the complete payload and fresh context bundle.
+**Codex adapter.** Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:<skill>`, followed by the complete payload and fresh context bundle. Map `balanced` to the harness's balanced/default coding model and `frontier` to its strongest model.
 
-**Pi adapter.** With the user-installed `pi-subagents` prerequisite available, launch a generic `delegate` child with `skill: <skill>`, `context: "fresh"`, and the complete payload and fresh context bundle. Never rely on the delegate default for context freshness. Do not use or distribute custom Pi agent definitions.
+**Pi adapter.** With the user-installed `pi-subagents` prerequisite available, launch a generic `delegate` child with `skill: <skill>`, `context: "fresh"`, and the complete payload and fresh context bundle. Never rely on the delegate default for context freshness. Map `balanced` to the delegate's balanced model and `frontier` to its strongest. Do not use or distribute custom Pi agent definitions.
 
-**Generic adapter.** A compatible harness must create a fresh isolated child, load the mapped Agent Skill explicitly, pass the complete payload and fresh context bundle, and return the child result. A harness that cannot provide isolated delegation or load the required skill must report the failed phase and must not execute it inline.
+**Generic adapter.** A compatible harness must create a fresh isolated child, load the mapped Agent Skill explicitly, pass the complete payload and fresh context bundle, and return the child result. A harness that cannot provide isolated delegation or load the required skill must report the failed phase and must not execute it inline. Map `balanced` and `frontier` to the closest available balanced and strongest models.
 
 When specialists are selected, every adapter launches the selected reviewers in parallel and waits for all their results before refereeing.
 

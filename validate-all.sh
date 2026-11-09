@@ -218,7 +218,7 @@ for plugin_dir in plugins/*/; do
     fi
 
     lifecycle_implement_skill="$plugin_dir/skills/implement/SKILL.md"
-    lifecycle_mapping=$(awk '/^\| Phase \| Canonical skill \|$/,/^$/' "$lifecycle_implement_skill")
+    lifecycle_mapping=$(awk '/^\| Phase \| Canonical skill \| Model tier \|$/,/^$/' "$lifecycle_implement_skill")
     lifecycle_mapping_invalid=false
     for lifecycle_worker in implement-code implement-address review-general review-correctness review-security review-architecture review-testing review-docs verify; do
       mapping_count=$(printf '%s\n' "$lifecycle_mapping" | rg -Fc "\`$lifecycle_worker\`")
@@ -231,6 +231,12 @@ for plugin_dir in plugins/*/; do
     mapping_rows=$(printf '%s\n' "$lifecycle_mapping" | rg -c '^\| (Implement|Address|Review (general|correctness|security|architecture|testing|docs)|Verify) \|')
     if [ "$mapping_rows" -ne 9 ]; then
       echo "  ERROR: Canonical lifecycle mapping must contain exactly nine worker rows (found $mapping_rows)"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_mapping_invalid=true
+    fi
+    claude_adapter=$(rg '^\*\*Claude Code adapter\.\*\*' "$lifecycle_implement_skill")
+    if ! printf '%s' "$claude_adapter" | rg -Fq '`model`' || ! printf '%s' "$claude_adapter" | rg -Fq 'sonnet'; then
+      echo "  ERROR: Claude Code adapter must map model tiers explicitly (mention \`model\` and sonnet)"
       ERRORS=$((ERRORS + 1))
       lifecycle_mapping_invalid=true
     fi
