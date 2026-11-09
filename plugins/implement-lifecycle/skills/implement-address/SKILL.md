@@ -63,12 +63,15 @@ For each finding, take one of these actions:
 
 **Preserve test evidence when compressing.** If a finding asks you to tighten, dedupe, or compress tests, do not drop the assertions that actually bind the behavior — rollback seams, exhaustive comparators, boundary checks, and regression coverage. Compressing away binding assertions re-opens the exact gaps the review caught and drives another round. Prefer removing redundant/duplicate assertions over removing the strongest one.
 
+Fix accepted Minor findings in the same pass; they never prompt another round.
+
 ### Step 3: Run Focused Verification
 
 After addressing all findings:
 
 1. **Run focused tests, linters, and a build** on the packages you changed. Every test you touched must pass; every lint must pass. If tests fail, fix the code — not the tests.
-2. **Spot-check your changes** — Read through your own diff. Did you introduce any new issues while fixing the review feedback?
+2. When no follow-up review will occur (small tier, or the final permitted round), report the focused tests you ran for what you changed.
+3. **Spot-check your changes** — Read through your own diff. Did you introduce any new issues while fixing the review feedback?
 
 ### Step 4: Commit and Push
 

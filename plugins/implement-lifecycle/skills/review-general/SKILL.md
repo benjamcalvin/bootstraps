@@ -59,6 +59,8 @@ Use **Recommended** only for concrete, in-scope problems fixable without a new a
 
 For round 2 or later, read prior consolidated reviews and referee decisions. Do not repeat addressed or rejected findings. Focus on unresolved accepted findings, the latest fix delta, and regressions introduced by those fixes. Do not re-review untouched surfaces merely to reproduce round 1.
 
+**Delta mode.** When the payload carries a commit range, review only that range: did the fixes resolve the accepted findings, and did they introduce regressions? Do not report findings about code outside the range.
+
 ## Avoid
 
 - Vague risks without a concrete scenario or violated contract
