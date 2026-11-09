@@ -235,8 +235,14 @@ for plugin_dir in plugins/*/; do
       lifecycle_mapping_invalid=true
     fi
     claude_adapter=$(rg '^\*\*Claude Code adapter\.\*\*' "$lifecycle_implement_skill")
-    if ! printf '%s' "$claude_adapter" | rg -Fq '`model`' || ! printf '%s' "$claude_adapter" | rg -Fq 'sonnet'; then
-      echo "  ERROR: Claude Code adapter must map model tiers explicitly (mention \`model\` and sonnet)"
+    if ! printf '%s' "$claude_adapter" | rg -Fq '`model`' || ! printf '%s' "$claude_adapter" | rg -Fq '`"sonnet"` for `balanced`' || ! printf '%s' "$claude_adapter" | rg -q 'omit it \(inherit\) for `frontier`'; then
+      echo "  ERROR: Claude Code adapter must map tiers explicitly (\`model\`, \"sonnet\" for balanced, omit/inherit for frontier)"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_mapping_invalid=true
+    fi
+    untiered_rows=$(printf '%s\n' "$lifecycle_mapping" | rg '^\| (Implement|Address|Review|Verify)' | rg -vc '\| `(balanced|frontier)`[^|]*\|$' || true)
+    if [ "$untiered_rows" -ne 0 ]; then
+      echo "  ERROR: Every canonical lifecycle mapping row must carry a balanced or frontier tier (found $untiered_rows without)"
       ERRORS=$((ERRORS + 1))
       lifecycle_mapping_invalid=true
     fi
@@ -646,9 +652,9 @@ complete + referee -> refereeing
     fi
 
     if ! rg -Fq 'Claude Code, Codex, Pi, or generic adapter' "$lifecycle_implement_skill" || \
-      ! rg -Fq '**Claude Code:** use the Task/subagent facility, explicitly load the canonical `pr-check` skill' "$lifecycle_merge_file" || \
-      ! rg -Fq '**Codex:** spawn a fresh subagent, instruct it to load the canonical `pr-check` skill' "$lifecycle_merge_file" || \
-      ! rg -Fq '**Pi:** use `pi-subagents` with `context: "fresh"`, explicitly select the canonical `pr-check` skill' "$lifecycle_merge_file" || \
+      ! rg -Fq '**Claude Code:** use the Task/subagent facility with `model: "sonnet"`, explicitly load the canonical `pr-check` skill' "$lifecycle_merge_file" || \
+      ! rg -Fq '**Codex:** spawn a fresh subagent at its balanced model, instruct it to load the canonical `pr-check` skill' "$lifecycle_merge_file" || \
+      ! rg -Fq '**Pi:** use `pi-subagents` at its balanced model with `context: "fresh"`, explicitly select the canonical `pr-check` skill' "$lifecycle_merge_file" || \
       ! rg -Fq '**Generic:** use the client'"'"'s isolated delegation mechanism with a fresh context and explicit canonical `pr-check` skill selection' "$lifecycle_merge_file" || \
       ! rg -Fq 'If isolated dispatch, fresh context, explicit skill loading, or result capture is unavailable, fail closed' "$lifecycle_merge_file"; then
       echo "  ERROR: Phase 6 and nested pr-check must use the shared harness-neutral adapter contract"

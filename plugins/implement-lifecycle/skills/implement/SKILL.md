@@ -53,7 +53,7 @@ The lifecycle maps each heavy phase to one canonical worker skill:
 
 | Phase | Canonical skill | Model tier |
 |-------|-----------------|------------|
-| Implement | `implement-code` | `balanced`; `frontier` when the change is large or touches a risk surface such as auth, secrets, migrations, CI/deploy, or sandbox/permission boundaries |
+| Implement | `implement-code` | `balanced`; `frontier` when the orchestrator judges the change large or risky |
 | Address | `implement-address` | `balanced` |
 | Review general | `review-general` | `balanced` |
 | Review correctness | `review-correctness` | `balanced` |
