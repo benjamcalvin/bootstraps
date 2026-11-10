@@ -14,6 +14,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `bootstrap-docs` 1.8.0 redefines specs as the shared conceptual model: both spec templates open with a Glossary and carry Invariants, Rationale, and a `Covers:` field, the product spec is the model as users see it and the technical spec the model as builders see it, and "schema, indexes" is gone from the spec definitions
+- `implement-lifecycle` 3.20.0 has `review-docs` report spec glossary terms that no longer appear in the covered code, and drops its separate two-way link check
 - Documented the repository's Claude Code/Codex compatibility matrix and installation flows
 - `implement-lifecycle` 3.9.2 now delegates every heavy phase through generic isolated subagents that explicitly invoke the canonical worker skills, removing the distributed Claude Code worker templates
 - `implement-lifecycle` 3.10.0 defines its phase-to-skill mapping once and applies it through Claude Code, Codex, Pi, and generic isolated-delegation adapters

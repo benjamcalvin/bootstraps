@@ -39,7 +39,7 @@ This strategy defines how we organize and maintain documentation in {PROJECT_NAM
 |---|---|---|
 {CLASSIFICATION_ROWS}| Release notes, version history | Changelog | Putting change history in specs or ADRs |
 
-**Rule of thumb:** "Why do we build this?" → vision. "What should it be?" → spec. "Why did we decide?" → ADR. "How do I do X?" → guide. "When/how to build it?" → plan. "What changed?" → changelog.
+**Rule of thumb:** "Why do we build this?" → vision. "What is the shared model of the system — its concepts, vocabulary, boundaries, and invariants?" → spec. "Why did we decide?" → ADR. "How do I do X?" → guide. "When/how to build it?" → plan. "What changed?" → changelog.
 
 ## Frontmatter Requirements
 
@@ -191,7 +191,7 @@ Create an `AGENTS.md` + `CLAUDE.md` pair when:
 
 **Living document principle:**
 - Update when thinking changes, not when tasks complete
-- Specs describe target state; they evolve with design, not with implementation
+- Specs are the shared conceptual model: product specs as users see it, technical specs as builders see it, one vocabulary; they omit implementation the code already shows and change in the same PR as any change to a concept, term, or invariant
 - Plans are ephemeral; archive or delete when complete
 
 **Common violations to avoid:**

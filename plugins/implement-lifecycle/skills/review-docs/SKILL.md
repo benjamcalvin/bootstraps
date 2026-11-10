@@ -22,8 +22,8 @@ Parse the PR number, round, and any delta range from the prompt, and start from 
 Split changed files into code and documentation.
 
 - **Code → docs.** Search the docs for references to changed modules, functions, APIs, or configuration. Flag code that contradicts existing docs (renamed flag, changed default, removed feature); new public-facing entities (endpoint, CLI command, config option, plugin) with no docs; and internal changes to architecture, patterns, conventions, or design described in `AGENTS.md`, ADRs, design docs, or developer guides, which must stay accurate too. For purely mechanical changes with no docs impact, state: **"No documentation updates needed — changes are purely mechanical with no docs impact."**
-- **Frontmatter.** Changed docs carry the fields and taxonomy values other project docs use.
-- **Cross-links.** Links the PR adds resolve and, where the project links bidirectionally, are reciprocated; never demand links where no convention exists.
+- **Frontmatter and links.** Changed docs carry the fields other project docs use; links the PR adds resolve. Demand neither where no convention exists.
+- **Specs.** For a changed spec, or code under a spec's `Covers:` paths, report Glossary terms that no longer appear in the covered code, concepts, terms, or invariants the code changed but the spec did not, and changed decisions lacking a one-line rationale. Non-blocking unless project policy says otherwise.
 - **Classification.** Each changed doc sits in the right directory and its type (guide, reference, ADR, spec) matches its content.
 - **ADR triggers.** Flag a possible ADR only for genuinely architectural changes: a new third-party dependency, a new architectural pattern, data storage or schema changes, or encryption/security model changes; not routine additions following existing patterns.
 - **Reconcile docs the PR touches — don't leave anchors for the next PR.** When docs the PR changes still say "missing", "absent", "not yet implemented", or "TODO" about behavior this PR implements or removes, flag it so each PR leaves its docs accurate at merge.

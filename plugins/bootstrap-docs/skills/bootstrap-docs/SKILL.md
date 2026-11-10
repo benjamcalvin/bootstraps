@@ -10,7 +10,7 @@ agent: general-purpose
 allowed-tools: Read, Glob, Bash(cat *), Bash(find *)
 license: MIT
 metadata:
-  version: "1.7.0"
+  version: "1.8.0"
   tags: ["docs", "documentation", "strategy", "scaffolding"]
   author: benjamcalvin
   standards-sub-types: ["testing", "code", "pr"]
@@ -71,7 +71,7 @@ On a fresh repo, the documentation strategy must be created **before** module se
    > "Your documentation strategy has been created at `{docs_location}/AGENTS.md`. It defines these documentation categories:
    >
    > - **vision/** — WHY: project vision, philosophy, strategy
-   > - **specs/** — WHAT: design documents (product, technical, standards)
+   > - **specs/** — WHAT: the shared conceptual model (concepts, vocabulary, boundaries, invariants) plus standards
    > - **adr/** — WHY (decisions): immutable architecture decision records
    > - **guides/** — HOW: step-by-step operational instructions
    > - **research/** — WHAT (learned): compiled LLM research for future reference
@@ -190,8 +190,8 @@ Read the template, then customize it:
 6. Build `{CLASSIFICATION_ROWS}` — include only rows for non-declined modules
 7. Build `{FRONTMATTER_ROWS}` — include only rows for non-declined document types:
    - ADR: `**Decision:** Accepted | Superseded | Deprecated` and `**Superseded By:** ADR-NNN`
-   - Product Spec: `**Owner:** name`
-   - Technical Spec: `**Owner:** name`
+   - Product Spec: `**Owner:** name` and `**Covers:** code paths`
+   - Technical Spec: `**Owner:** name` and `**Covers:** code paths`
    - Guide: `**Audience:** contributor | operator | consumer`
    - Plan: `**Target Date:** YYYY-MM-DD`
    - Research: `**Topic:** area of research`
@@ -231,16 +231,16 @@ For each module with status `pending` or `enabled` (not `declined`), create the 
 - Principles: ADRs are append-only (never modify accepted ADRs; create new ones to supersede). Naming: `NNN-short-title.md`. Sequential numbering, never reuse. Every ADR needs frontmatter: Status, Last Updated, Decision. Target: 200–600 lines (max 800).
 
 **specs/AGENTS.md:**
-- Purpose: "Specifications — design documents describing what the system is and should be (target state)."
-- Principles: Specs describe the vision/authoritative design. "Living" means update when the design changes, not when tasks complete. Never add task lists or roadmaps to specs.
+- Purpose: "Specifications — the shared conceptual model of the system: its concepts, vocabulary, boundaries, and invariants (target state)."
+- Principles: A spec aligns humans and agents on one model and omits implementation the code already shows. Each spec opens with a Glossary, lists invariants (each pinned by a test named after it), gives one line of rationale per changed decision, and names the code it describes in `Covers:`. Change a spec in the same PR as any change to a concept, term, or invariant. Never add task lists or roadmaps to specs.
 
 **specs/product/AGENTS.md:**
-- Purpose: "Product specifications — what the system does from a consumer perspective."
-- Principles: Define the what and why from the user's perspective. API contracts, data model semantics, feature definitions belong here. Every product spec needs: Status, Last Updated, Owner.
+- Purpose: "Product specifications — the shared model as users see it."
+- Principles: Glossary, concepts and how they relate, behaviors, boundaries, invariants, and rationale in the users' terms. Feature definitions and consumer-facing contracts belong here. Every product spec needs: Status, Last Updated, Owner, Covers.
 
 **specs/technical/AGENTS.md:**
-- Purpose: "Technical specifications — how the system is built from an engineering perspective."
-- Principles: Architecture, database schema, security implementation, infrastructure. Data model specs here describe structure (schema, indexes). Every technical spec needs: Status, Last Updated, Owner.
+- Purpose: "Technical specifications — the shared model as builders see it."
+- Principles: Glossary, components and boundaries, data model, and invariants, in the same vocabulary as the product spec. Describe entities and relationships, not schema or indexes the code shows; for target state not yet built, describe the concepts and contracts the code will have. Every technical spec needs: Status, Last Updated, Owner, Covers.
 
 **specs/standards/AGENTS.md:**
 - Purpose: "Standards — rules and conventions for how we work."
@@ -353,8 +353,8 @@ Report to the user:
    >
    > 1. **Documentation Strategy** — If strategy status is `enabled`: "✅ Complete. Establishes the rules for how all docs are organized, classified, and maintained." If `pending`: "Establish the rules for how all docs are organized, classified, and maintained. Ensure it's linked from your root `AGENTS.md`/`CLAUDE.md` so agents discover it automatically."
    > 2. **Vision** — Articulate the product vision, philosophy, and success metrics
-   > 3. **Product Specs** — Detail features, user stories, and requirements from the consumer perspective
-   > 4. **Tech Specs** — Design the technical architecture and implementation approach
+   > 3. **Product Specs** — The shared model as users see it (glossary, concepts, behaviors, invariants)
+   > 4. **Tech Specs** — The shared model as builders see it (components, boundaries, data model, invariants)
    > 5. **Standards** — Establish coding standards and engineering practices for the team
    >
    > Skip any step whose module you declined. For execution tracking (tasks, milestones, delivery), use git issues and PRs — run `/implement` to plan and track work against your specs.

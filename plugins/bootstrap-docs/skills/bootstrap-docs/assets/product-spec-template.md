@@ -3,60 +3,49 @@
 **Status:** Draft
 **Last Updated:** {DATE}
 **Owner:** {OWNER}
+**Covers:** {paths of the code this spec describes}
 
-## Overview
+The shared model of this feature as users see it. One paragraph: what it is for and who it serves.
 
-What this feature/component does from the consumer's perspective. One paragraph, no implementation details.
+## Glossary
 
-## Goals
+One vocabulary for users, agents, and code; the technical spec uses these same terms. Use these terms exactly, in docs and in code.
 
-- What this aims to achieve for users
-- Another goal
+| Term | Meaning |
+|------|---------|
+| {Term} | What it means to a user |
 
-## Non-Goals
+## Concepts
 
-- What is explicitly out of scope
-- Another non-goal
+The things users work with and how they relate. Draw a diagram where the concepts have a shape.
 
-## User-Facing Behavior
+| Concept | Description | Relationships |
+|---------|-------------|---------------|
+| {Concept} | What it represents | Related to X via Y |
 
-### {Feature Area 1}
+## Behaviors
 
-Describe what the user sees and can do. Focus on contracts, semantics, and behavior — not how it's built.
+What users see and can do, stated as contracts and semantics, not as how it is built.
 
-### {Feature Area 2}
+### {Behavior Area}
 
-Another feature area.
+Describe the observable behavior, including edge cases that change what a user sees.
 
-## Data Model
+## Boundaries
 
-Describe entities and relationships from a semantic perspective — what they represent, not how they're stored.
+- What this feature is responsible for, and what belongs to something else
+- Goals and non-goals
 
-| Entity | Description | Key Relationships |
-|--------|-------------|-------------------|
-| {Entity} | What it represents | Related to X via Y |
+## Invariants
 
-## API Contracts
+What must always hold. Each invariant has a test named after it.
 
-If applicable, describe the consumer-facing API surface.
+- {Invariant} — test: `{test name}`
 
-### {Endpoint / Query / Command}
+## Rationale
 
-- **Input:** What the consumer provides
-- **Output:** What they receive
-- **Behavior:** Key semantics, edge cases
+One line per changed decision: "{decision} — chosen over {X} because {Y}".
 
 ## Open Questions
 
 - [ ] Question that needs resolution before this spec is complete
-
-## Related Documents
-
-### Design Context
-- [ADR: Relevant Decision](../adr/NNN-title.md) — Why this approach was chosen
-
-### Specifications
-- [Technical Spec](../specs/technical/component.md) — Implementation design for this feature
-
-### Operational
-- [Setup Guide](../guides/setup.md) — How to use this feature
