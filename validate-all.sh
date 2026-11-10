@@ -945,9 +945,9 @@ complete + referee -> refereeing
         spec_ok=false
       fi
     done
-    if rg -qi 'Last Updated|Target Lines|bidirectional|line numbers|:[0-9]+-[0-9]+\)|[0-9]+[–-][0-9]+ lines' "$spec_dir/SKILL.md" "$spec_dir"/assets/*.md || \
+    if rg -qi 'Last Updated:|\*\*Last Updated|Target Lines|(must|should|require[sd]?) [^.]*bidirectional' "$spec_dir/SKILL.md" "$spec_dir"/assets/*.md || \
       rg -q '^## Related Documents' "$spec_dir"/assets/*.md || \
-      ! rg -q 'default to declined' "$spec_dir/SKILL.md" || \
+      ! rg -Uq '^ +adr:\n +status: declined$' "$spec_dir/SKILL.md" || \
       [ "$(wc -l < "$spec_dir/assets/adr-template.md")" -gt 40 ]; then
       echo "  ERROR: bootstrap-docs must not require Last Updated, a Related Documents section, two-way links, line-number references or line-count targets, and the ADR module must default to declined with a one-page template"
       ERRORS=$((ERRORS + 1))

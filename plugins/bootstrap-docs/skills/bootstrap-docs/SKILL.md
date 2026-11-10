@@ -82,7 +82,7 @@ On a fresh repo, the documentation strategy must be created **before** module se
    Ask which modules to enable (default: all except `plans` and `adr`, which are opt-in and default to declined). Modules: `adr`, `specs` (with sub-options: `product`, `technical`, `standards`), `plans`, `guides`, `vision`, `research`.
    If standards enabled, ask which standard types to include (default: all): `testing`, `code`, `pr`.
 
-6. Update `.bootstraps-preferences` with the user's module selections. Modules the user selects start as `pending`. `adr` is `declined` unless the user explicitly selects it. Modules the user declines are `declined`.
+6. Update `.bootstraps-preferences` with the user's module selections. Modules the user selects start as `pending`. Modules the user declines are `declined`.
 
    The full preferences file now looks like:
    ```yaml

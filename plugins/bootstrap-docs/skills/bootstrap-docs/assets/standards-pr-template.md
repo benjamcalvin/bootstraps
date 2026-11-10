@@ -89,7 +89,7 @@ Use the correct keyword based on whether this PR **fully completes** the issue o
 ### Other References
 
 - Reference related PRs with `Depends on #N` or `See also #N`
-- Link to specs or ADRs when the PR implements a design document
+- Link to specs or ADRs when the PR implements a spec
 
 ## PR Scope
 

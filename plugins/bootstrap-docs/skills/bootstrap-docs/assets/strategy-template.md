@@ -10,7 +10,7 @@ This strategy defines how we organize and maintain documentation in {PROJECT_NAM
 
 ## Core Principles
 
-1. **Living documents over proposals** — Design docs evolve during implementation rather than being written once and frozen. Update when thinking changes, not when tasks complete.
+1. **Living documents over proposals** — Specs evolve during implementation rather than being written once and frozen. Update when thinking changes, not when tasks complete.
 2. **Modular over monolithic** — Split documents by concern, not by phase or role
 3. **Linked where useful** — Link to related docs when the link helps a reader; none are required
 4. **Concise over comprehensive** — Each document has a clear scope; prefer multiple focused docs
