@@ -373,7 +373,7 @@ class Checker:
             if self.path_resolves(doc_dir, rel.rstrip("/"), len(segments) == 1):
                 continue
             local = os.path.normpath(os.path.join(doc_dir, rel.rstrip("/"))).replace(os.sep, "/")
-            unresolved.append((number, span, [c for c in dict.fromkeys((local, rel.rstrip("/"))) if not c.startswith("../")]))
+            unresolved.append((number, span, [c + ("/" if rel.endswith("/") else "") for c in dict.fromkeys((local, rel.rstrip("/"))) if not c.startswith("../")]))
         ignored = self.ignored_paths({c for _, _, candidates in unresolved for c in candidates})
         for number, span, candidates in unresolved:
             if not ignored.intersection(candidates):

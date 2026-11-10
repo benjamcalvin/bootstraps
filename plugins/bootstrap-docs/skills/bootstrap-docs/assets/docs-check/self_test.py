@@ -136,7 +136,7 @@ def main():
         (edge / "my file.py").write_text("x = 1\n# previously a thing\n")
         (edge / "latin.txt").write_bytes(b"caf\xe9 more\n")
         (edge / "tags.py").write_text("y = 1  #123\n#42 done\n#!not a tracker\n")
-        (edge / "README.md").write_text("Output goes to `build/out.txt` and `build/`.\n")
+        (edge / "README.md").write_text("Output goes to `build/out.txt` and `build/` and `src/build/`.\n")
         git(edge, "add", "-A")
         git(edge, "commit", "-q", "--no-verify", "-m", "change")
         expect_run("edge cases", docs_check(edge), 1, [
