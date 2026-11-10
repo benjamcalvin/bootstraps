@@ -1,7 +1,6 @@
 # {TITLE}
 
 **Status:** Draft
-**Last Updated:** {DATE}
 **Owner:** {OWNER}
 **Covers:** {paths of the code this spec describes}
 

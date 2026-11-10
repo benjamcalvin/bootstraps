@@ -1,7 +1,6 @@
 # {TITLE}
 
 **Status:** Draft
-**Last Updated:** {DATE}
 **Topic:** {TOPIC_AREA}
 
 ## Summary
@@ -36,7 +35,3 @@ Additional findings organized by sub-topic.
 ## Applicability
 
 How these findings relate to the project. Any constraints on when this research becomes stale (e.g., "valid as of library v3.x" or "re-evaluate when migrating to X").
-
-## Related Documents
-
-- {Link to ADR, spec, or plan that this research informed}

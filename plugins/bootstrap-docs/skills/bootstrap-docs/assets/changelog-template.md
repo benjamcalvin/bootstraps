@@ -44,8 +44,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 - {Description of security fix or improvement}
-
-## Related Documents
-
-### Project Context
-- [AGENTS.md](../AGENTS.md) — Project documentation strategy

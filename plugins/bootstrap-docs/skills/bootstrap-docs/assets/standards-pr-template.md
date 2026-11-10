@@ -1,7 +1,6 @@
 # PR Standards
 
 **Status:** Draft
-**Last Updated:** {DATE}
 
 ## Overview
 
@@ -144,12 +143,3 @@ Use draft PRs for:
 Convert to ready-for-review when the PR meets all standards above.
 
 ---
-
-## Related Documents
-
-### Standards
-- [Code Conventions](code-conventions.md) — Coding standards enforced in review
-- [Testing Standards](testing-standards.md) — Test requirements for PR acceptance
-
-### Operational
-- {Link to development setup guide}

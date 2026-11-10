@@ -939,12 +939,20 @@ complete + referee -> refereeing
       if [ "$(rg -m1 '^## ' "$spec_template")" != '## Glossary' ] || \
         ! rg -q '^## Invariants$' "$spec_template" || \
         ! rg -q '^\*\*Covers:\*\*' "$spec_template" || \
-        rg -qi 'target lines|[0-9]+.[0-9]+ lines' "$spec_template"; then
-        echo "  ERROR: $spec_template must open with a Glossary, include an Invariants section and a Covers: field, with no line-count target"
+        rg -qi 'target lines|[0-9]+.[0-9]+ lines|Last Updated' "$spec_template"; then
+        echo "  ERROR: $spec_template must open with a Glossary, include an Invariants section and a Covers: field, with no line-count target and no Last Updated"
         ERRORS=$((ERRORS + 1))
         spec_ok=false
       fi
     done
+    if rg -qi 'Last Updated|Target Lines|bidirectional|line numbers|:[0-9]+-[0-9]+\)|[0-9]+[–-][0-9]+ lines' "$spec_dir/SKILL.md" "$spec_dir"/assets/*.md || \
+      rg -q '^## Related Documents' "$spec_dir"/assets/*.md || \
+      ! rg -q 'default to declined' "$spec_dir/SKILL.md" || \
+      [ "$(wc -l < "$spec_dir/assets/adr-template.md")" -gt 40 ]; then
+      echo "  ERROR: bootstrap-docs must not require Last Updated, a Related Documents section, two-way links, line-number references or line-count targets, and the ADR module must default to declined with a one-page template"
+      ERRORS=$((ERRORS + 1))
+      spec_ok=false
+    fi
     if rg -qi 'schema, indexes' "$spec_dir/SKILL.md" "$spec_dir/assets/strategy-template.md"; then
       echo "  ERROR: bootstrap-docs must not define technical specs as 'schema, indexes'"
       ERRORS=$((ERRORS + 1))
