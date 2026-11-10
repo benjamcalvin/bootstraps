@@ -968,6 +968,48 @@ complete + referee -> refereeing
       echo "  OK: spec templates carry the shared-model sections and review-docs checks spec vocabulary"
     fi
 
+    # Instruction files stay small: bootstrap-docs creates no per-folder index pairs, imports AGENTS.md everywhere, and migrates without unconfirmed deletes.
+    instr_skill="$spec_dir/SKILL.md"
+    instr_strategy="$spec_dir/assets/strategy-template.md"
+    instr_ok=true
+    if [ "$(wc -l < "$instr_strategy")" -gt 130 ] || \
+      ! rg -Fq 'The generated strategy doc stays under 200 lines' "$instr_skill" || \
+      ! rg -Fq '**Each `AGENTS.md` stays under 200 lines**' "$instr_strategy" || \
+      ! rg -Fq '**Line budgets only ever decrease, and they apply to instruction files only.**' "$instr_strategy" || \
+      ! rg -Fq '**Every `CLAUDE.md` imports `@AGENTS.md`.**' "$instr_strategy"; then
+      echo "  ERROR: the bootstrap-docs strategy template must stay within 130 lines (leaving room for module sections so the generated doc stays under 200) and state the instruction-file rules, and Phase 2 must keep the generated strategy doc under 200 lines"
+      ERRORS=$((ERRORS + 1))
+      instr_ok=false
+    fi
+    if rg -qi '\bcreat\w*\b[^.\n]*(AGENTS|CLAUDE)\.md[^.\n]*\b(pair|its directory|each (directory|folder|subfolder)|every (directory|folder|subfolder))\b' "$instr_skill" || \
+      rg -qi '\b(each|every) (directory|folder|subfolder)\b[^.\n]*\bcreat\w*[^.\n]*(AGENTS|CLAUDE)\.md' "$instr_skill" || \
+      rg -q '(docs|\{docs_location\})/[^/\s`)]+/(AGENTS|CLAUDE)\.md' "$instr_skill" || \
+      rg -q '^## Contents' "$instr_skill" "$instr_strategy" || \
+      rg -qi '\bupdate\b[^.\n]*\bContents\b' "$instr_skill"; then
+      echo "  ERROR: bootstrap-docs must not create AGENTS.md/CLAUDE.md pairs in docs subfolders or maintain Contents lists"
+      ERRORS=$((ERRORS + 1))
+      instr_ok=false
+    fi
+    instr_phase5=$(sed -n '/^### Phase 5: Root Integration$/,/^### Phase 6: Summary$/p' "$instr_skill")
+    if ! printf '%s\n' "$instr_phase5" | rg -Fq '**Every `CLAUDE.md` imports `@AGENTS.md`.**' || \
+      ! printf '%s\n' "$instr_phase5" | rg -Fq 'When one lacks an `@AGENTS.md` line, add `@AGENTS.md`' || \
+      printf '%s\n' "$instr_phase5" | rg -qi 'offer to add `@AGENTS\.md`'; then
+      echo "  ERROR: bootstrap-docs Phase 5 must add @AGENTS.md to every CLAUDE.md that lacks it"
+      ERRORS=$((ERRORS + 1))
+      instr_ok=false
+    fi
+    instr_migrate=$(sed -n '/^### Migrate Mode/,$p' "$instr_skill")
+    if ! rg -q '^argument-hint: .*\bmigrate\b' "$instr_skill" || \
+      ! printf '%s\n' "$instr_migrate" | rg -Fq '**Never delete a file without explicit confirmation.**' || \
+      ! printf '%s\n' "$instr_migrate" | rg -Fq '**Apply** only the confirmed items'; then
+      echo "  ERROR: bootstrap-docs must offer a migrate mode that applies only confirmed changes and never deletes a file without explicit confirmation"
+      ERRORS=$((ERRORS + 1))
+      instr_ok=false
+    fi
+    if [ "$instr_ok" = true ]; then
+      echo "  OK: bootstrap-docs keeps instruction files small, imports @AGENTS.md everywhere, and migrates only confirmed changes"
+    fi
+
     review_comment_ref="$plugin_dir/skills/implement/references/consolidated-review.md"
     if ! rg -Fq 'reading `references/consolidated-review.md`' "$lifecycle_implement_skill" || \
       ! lifecycle_details_lines outside "$review_comment_ref" | rg -q '^### Reviewer Findings$' || \

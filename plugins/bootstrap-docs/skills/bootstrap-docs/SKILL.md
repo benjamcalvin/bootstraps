@@ -3,14 +3,15 @@ name: bootstrap-docs
 description: >-
   Set up comprehensive AI-readable documentation strategy.
   Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates.
+  `migrate` upgrades a docs tree made by bootstrap-docs 1.x.
   Triggers: /bootstrap-docs, set up documentation, create docs structure, bootstrap docs
-argument-hint: "[adr|specs|plans|guides|vision|standards|research|all]"
+argument-hint: "[adr|specs|plans|guides|vision|standards|research|all|migrate]"
 context: fork
 agent: general-purpose
 allowed-tools: Read, Glob, Bash(cat *), Bash(find *)
 license: MIT
 metadata:
-  version: "1.9.0"
+  version: "2.0.0"
   tags: ["docs", "documentation", "strategy", "scaffolding"]
   author: benjamcalvin
   standards-sub-types: ["testing", "code", "pr"]
@@ -35,8 +36,9 @@ This skill runs six phases to set up project documentation. It is **re-runnable*
 
 **Argument handling:**
 - No arguments or `all`: run all phases for all enabled modules
-- Specific module (e.g., `adr`, `specs`, `plans`, `guides`, `vision`, `standards`, `research`): run only Phase 0 (preferences) then the phases relevant to that module (directory, AGENTS.md, starter doc)
+- Specific module (e.g., `adr`, `specs`, `plans`, `guides`, `vision`, `standards`, `research`): run only Phase 0 (preferences) then the phases relevant to that module (directory, strategy-doc section, starter doc)
 - Multiple modules can be comma-separated: `adr,specs`
+- `migrate`: run only Migrate Mode (below), which upgrades an existing docs tree; skip Phases 0–6
 
 **Template files** are in the skill's `assets/` directory at `$SKILL_DIR/assets/`. Read them on demand with the Read tool only when that phase needs them — e.g., `Read $SKILL_DIR/assets/adr-template.md`. Do NOT read all templates upfront; load each template only when creating the corresponding document.
 
@@ -131,8 +133,6 @@ On a fresh repo, the documentation strategy must be created **before** module se
    adr:
      status: enabled
      files:
-       - docs/adr/AGENTS.md
-       - docs/adr/CLAUDE.md
        - docs/adr/001-first-decision.md
    ```
 
@@ -160,9 +160,7 @@ For the docs location (e.g., `docs/`), create:
 - `{docs_location}/vision/` (if vision is pending)
 - `{docs_location}/research/` (if research is pending)
 
-For each directory created, also create the `AGENTS.md` + `CLAUDE.md` pair (these are populated in later phases — create empty files as placeholders if the content phase hasn't run yet).
-
-**Update `.bootstraps-preferences`** after this phase: for each module that got directories created, add the directory and placeholder files to its `files` list (but keep status as `pending` — it becomes `enabled` once the content phases fill them in).
+Docs subfolders get no `AGENTS.md`, `CLAUDE.md`, or Contents list. The strategy doc describes every folder (Phase 3), so the folder names are the only index.
 
 Report what was created and what was skipped.
 
@@ -185,7 +183,7 @@ Read the template, then customize it:
    - If guides not declined: `├── guides/             # HOW (do) — step-by-step operational instructions`
    - If research not declined: `├── research/           # WHAT (learned) — compiled LLM research for future reference`
    - If plans not declined: `└── plans/              # WHEN — active execution work, ephemeral`
-4. Build `{TAXONOMY_DESCRIPTIONS}` — include the description section for each non-declined module (vision, specs, adr, guides, research, plans). Use the descriptions from the strategy template but generalized for {PROJECT_NAME}.
+4. Build `{TAXONOMY_DESCRIPTIONS}` — one module section per non-declined module, written as Phase 3 describes.
 5. Build `{CLASSIFICATION_ROWS}` — include only rows for non-declined modules
 6. Build `{FRONTMATTER_ROWS}` — include only rows for non-declined document types:
    - ADR: `**Decision:** Accepted | Superseded | Deprecated` and `**Superseded By:** ADR-NNN`
@@ -197,6 +195,8 @@ Read the template, then customize it:
 
 **Ask the user:** "Use defaults for the master strategy, or customize interactively?" Defaults fill in all the template fields with sensible generic values. Interactive walks through each major section for the user's input.
 
+The generated strategy doc stays under 200 lines. Tighten wording rather than exceed it.
+
 Also create `{docs_location}/CLAUDE.md` containing only:
 ```
 @AGENTS.md
@@ -206,66 +206,21 @@ Also create `{docs_location}/CLAUDE.md` containing only:
 
 ---
 
-### Phase 3: Sub-Directory AGENTS.md Files
+### Phase 3: Module Sections
 
-For each module with status `pending` or `enabled` (not `declined`), create the AGENTS.md in its directory if it doesn't already have content. Each follows this pattern:
+Each module's purpose and rules live in one section of `{docs_location}/AGENTS.md`, under Document Taxonomy. For each module with status `pending` or `enabled` (not `declined`), make sure the strategy doc has that section, adding it when it is missing (for example, a module enabled after the strategy doc was created). Each section is a `### {folder}/` heading and at most three lines, generalized for {PROJECT_NAME}:
 
-```markdown
-{Brief description of directory purpose}
+- **vision/** — The WHY behind {PROJECT_NAME}: philosophy, strategic direction, foundational principles. Mostly stable; frames every design decision. Needs: Status.
+- **specs/** — The shared conceptual model of the system: concepts, vocabulary, boundaries, invariants (target state). Each spec opens with a Glossary, pins each invariant with a test named after it, gives one line of rationale per changed decision, and names the code it describes in `Covers:`. It omits implementation the code already shows, changes in the same PR as any change to a concept, term, or invariant, and never holds task lists or roadmaps.
+  - **product/** — The model as users see it: glossary, concepts, behaviors, boundaries, invariants. Needs: Status, Owner, Covers.
+  - **technical/** — The model as builders see it: glossary, components and boundaries, data model, invariants, in the product spec's vocabulary. Entities and relationships, not schema or indexes the code shows; for target state not yet built, the concepts and contracts the code will have. Needs: Status, Owner, Covers.
+  - **standards/** — Rules and conventions for how we work, one doc per type (testing, code, PR), each customized for the stack. "What is the standard?" goes here; "How do I follow it?" goes in guides/. Needs: Status.
+- **adr/** — Immutable records of significant decisions. Append-only: supersede, never edit, an accepted ADR. `NNN-short-title.md`, numbers never reused. One page; write one only when a decision is hard to reverse, spans components, or would leave a future reader asking why. The agent drafts, a human accepts. Needs: Status, Decision.
+- **guides/** — Step-by-step instructions for a task: how to do it, not why it is designed that way. Needs: Status, Audience.
+- **research/** — Findings from investigations (evaluations, comparisons, deep-dives) kept for reference; not decisions (ADRs) or the model (specs). Descriptive filenames; cite sources and say when the findings might go stale. Needs: Status, Topic.
+- **plans/** — How and when to get from the current state to the spec. Ephemeral: they become git history when complete. Needs: Status, Target Date.
 
-## Contents
-- (none yet — add entries as documents are created)
-
-## Key Principles
-- {principles specific to this doc type}
-```
-
-**Module-specific content:**
-
-**adr/AGENTS.md:**
-- Purpose: "Architecture Decision Records — immutable records of significant design decisions with context and rationale."
-- Principles: ADRs are append-only (never modify accepted ADRs; create new ones to supersede). Naming: `NNN-short-title.md`. Sequential numbering, never reuse. Every ADR needs frontmatter: Status, Decision. One page; write one only when a decision is hard to reverse, spans components, or would leave a future reader asking why. The agent drafts, a human accepts.
-
-**specs/AGENTS.md:**
-- Purpose: "Specifications — the shared conceptual model of the system: its concepts, vocabulary, boundaries, and invariants (target state)."
-- Principles: A spec aligns humans and agents on one model and omits implementation the code already shows. Each spec opens with a Glossary, lists invariants (each pinned by a test named after it), gives one line of rationale per changed decision, and names the code it describes in `Covers:`. Change a spec in the same PR as any change to a concept, term, or invariant. Never add task lists or roadmaps to specs.
-
-**specs/product/AGENTS.md:**
-- Purpose: "Product specifications — the shared model as users see it."
-- Principles: Glossary, concepts and how they relate, behaviors, boundaries, invariants, and rationale in the users' terms. Feature definitions and consumer-facing contracts belong here. Every product spec needs: Status, Owner, Covers.
-
-**specs/technical/AGENTS.md:**
-- Purpose: "Technical specifications — the shared model as builders see it."
-- Principles: Glossary, components and boundaries, data model, and invariants, in the same vocabulary as the product spec. Describe entities and relationships, not schema or indexes the code shows; for target state not yet built, describe the concepts and contracts the code will have. Every technical spec needs: Status, Owner, Covers.
-
-**specs/standards/AGENTS.md:**
-- Purpose: "Standards — rules and conventions for how we work."
-- Principles: Standards prescribe conventions. "What is the standard?" goes here. "How do I follow it?" goes in guides/. Every standards doc needs: Status.
-- Note: Standards are organized by type. The default types are:
-  - **Testing standards** — test organization, naming, assertions, coverage, mocking, CI integration
-  - **Code conventions** — project layout, naming, error handling, logging, formatting, documentation
-  - **PR standards** — branch naming, PR titles, descriptions, scope, review, stacking
-- Each type has its own template with opinionable defaults. Users select which types to adopt during setup and customize them for their stack.
-
-**plans/AGENTS.md:**
-- Purpose: "Plans — active execution work, how and when to build what the specs describe."
-- Principles: Plans are ephemeral — they become git history when complete. Answer "how to get from current state to spec?" Never put planning content in specs or ADRs. Every plan needs: Status, Target Date.
-
-**guides/AGENTS.md:**
-- Purpose: "Guides — step-by-step operational instructions for specific tasks."
-- Principles: Guides are instructional — tell you how to do something, not why it's designed that way. Every guide needs: Status, Audience.
-
-**research/AGENTS.md:**
-- Purpose: "Research — compiled findings from LLM research sessions, preserved for easy future reference."
-- Principles: Research docs capture what was learned during investigation — technology evaluations, API explorations, competitive analysis, library comparisons, debugging deep-dives. They are reference material, not decisions (those go in ADRs) or the shared model (that goes in specs). Name files descriptively: `auth-library-comparison.md`, `postgres-jsonb-performance.md`. Include sources and applicability notes so future readers know when the research might be stale. Every research doc needs: Status, Topic.
-
-**vision/AGENTS.md:**
-- Purpose: "Vision documents — the WHY behind {PROJECT_NAME}."
-- Principles: Capture project philosophy, strategic direction, foundational principles. Mostly stable, update infrequently. Provides context that frames every design decision. Every vision doc needs: Status.
-
-For each directory, also create a `CLAUDE.md` containing only `@AGENTS.md`.
-
-**Update `.bootstraps-preferences`:** For each module that got its AGENTS.md populated, add those files to the module's `files` list.
+Keep the strategy doc under 200 lines after adding a section.
 
 ---
 
@@ -302,8 +257,6 @@ For **defaults**: replace `{PROJECT_NAME}` with project name, `{DATE}` with toda
 
 For **interactive**: present each section header and ask the user what to fill in. Build the document incrementally.
 
-After creating each starter doc, update the corresponding directory's `AGENTS.md` Contents section to list the new file.
-
 **Update `.bootstraps-preferences`:** For each module where a starter doc was created, set status to `enabled` and add the file to `files`. For modules the user skipped, set status to `declined`.
 
 ---
@@ -326,7 +279,7 @@ Check if the project has a root `AGENTS.md` (in the project root, not the docs d
 - [Documentation Strategy]({docs_location}/AGENTS.md) — How we organize and maintain documentation
 ```
 
-Also ensure a root `CLAUDE.md` exists. If creating one, content is `@AGENTS.md`. If one exists, offer to add `@AGENTS.md` if it's not already referenced.
+**Every `CLAUDE.md` imports `@AGENTS.md`.** Ensure a root `CLAUDE.md` exists; when creating one, its content is `@AGENTS.md`. Then find every `CLAUDE.md` in the project, skipping `.git/`, `node_modules/`, and vendored dependencies. When one lacks an `@AGENTS.md` line, add `@AGENTS.md` as its first line. If no `AGENTS.md` sits beside it, create one first: ask the user whether to move the file's tool-neutral content into it or start it empty.
 
 **Update `.bootstraps-preferences`:** Record any root-level files created under the `strategy` module's `files` list.
 
@@ -369,3 +322,27 @@ When the skill detects an existing `.bootstraps-preferences` file, after reporti
 > - ⬜ **Standards** — not started
 >
 > Suggest the user work on the first incomplete step next.
+
+---
+
+### Migrate Mode (`migrate` argument)
+
+Upgrade a docs tree created by bootstrap-docs 1.x to the current rules. Migrate proposes; the user decides. **Never delete a file without explicit confirmation.**
+
+1. **Locate the docs.** Read `docs_location` from `.bootstraps-preferences`, or ask the user when there is no preferences file (default: `docs/`).
+2. **Detect.** Collect every old-style item below. Check each one; report "none found" for a check that finds nothing.
+
+   | Old-style item | How to detect | Proposed change |
+   |---|---|---|
+   | Per-folder index pair | An `AGENTS.md` or `CLAUDE.md` in any subfolder of `{docs_location}` | Move any rule the strategy doc lacks into that module's section (Phase 3), then delete the pair |
+   | Contents list | A `## Contents` section in a file under `{docs_location}` | Remove the section |
+   | Last Updated | A `Last Updated` line in a file under `{docs_location}` | Remove the line |
+   | Related Documents | A `## Related Documents` section in a file under `{docs_location}` | Remove the section, or keep it as optional links; ask per file |
+   | Length target | A target line-count table or a `Target: N lines` note under `{docs_location}` | Remove the target |
+   | Missing import | A `CLAUDE.md` anywhere in the project without an `@AGENTS.md` line | Add the import as Phase 5 describes |
+   | Outdated strategy doc | `{docs_location}/AGENTS.md` at 200 lines or more, or still prescribing per-folder index files, Contents lists, or length targets | Rebuild it from the current template and Phase 3 sections, carrying over the project's own rules |
+
+3. **Propose.** Show one numbered list: each item's file, what was found, and the exact change, marking every deletion as **DELETE**. Fold an item into another that already covers it, such as a Contents list inside a pair being deleted or anything inside a strategy doc being rebuilt. Change nothing yet.
+4. **Confirm.** Ask the user which items to apply: all, none, or a list of numbers. Ask about each deletion separately, naming the file; delete only files the user confirms by name. When an answer is unclear, ask again rather than guess.
+5. **Apply** only the confirmed items, leaving every other file untouched. Remove deleted files from `.bootstraps-preferences` `files` lists.
+6. **Report** applied, skipped, and declined items. A re-run proposes only what is left.
