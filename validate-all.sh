@@ -660,6 +660,7 @@ complete + referee -> refereeing
       comment_rule_invalid=true
     fi
     if ! rg -Fq 'Add no comments except a constraint imposed from outside the codebase' "$plugin_dir/skills/implement-code/SKILL.md" || \
+      ! rg -Fq 'write a test named after that guarantee' "$plugin_dir/skills/implement-code/SKILL.md" || \
       ! rg -Fq 'Leave existing comments alone unless your change makes them false.' "$plugin_dir/skills/implement-code/SKILL.md" || \
       ! rg -Fq 'Add no comments outside the allow-list' "$plugin_dir/skills/implement-address/SKILL.md" || \
       ! rg -Fq 'delete none unless your change makes it false' "$plugin_dir/skills/implement-address/SKILL.md"; then

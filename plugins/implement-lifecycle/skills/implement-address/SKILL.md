@@ -39,7 +39,7 @@ Read the code around each finding, then take one action:
 
 **Preserve test evidence when compressing.** If a finding asks you to tighten, dedupe, or compress tests, keep the assertions that bind the behavior — rollback seams, exhaustive comparators, boundary checks, regression coverage. Remove redundant assertions, not the strongest one.
 
-Add no comments outside the allow-list (an external constraint with its source linked, an untestable guarantee, `TODO(#N)`, tool directives, tool-output comments), and delete none unless your change makes it false. Fix accepted Minor findings in the same pass; they never prompt another round.
+Add no comments outside the allow-list (an external constraint with its source linked, an untestable guarantee, `TODO(#N)`, tool directives, tool-output comments; test the guarantee instead), and delete none unless your change makes it false. Fix accepted Minor findings in the same pass; they never prompt another round.
 
 ### Step 2: Focused Verification
 
