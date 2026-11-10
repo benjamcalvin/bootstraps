@@ -129,7 +129,7 @@ Exported symbols need no doc comment unless a tool turns it into output.
 
 - Python: ruff `ERA` (commented-out code) and `TD003` (TODO must link an issue).
 - Go: turn the revive `exported` rule off in applications; keep it on only for externally published packages.
-- Any language: a CI step that scans the comment lines a change adds (`git diff -U0 <base>...HEAD`) for tracker references (`#123`), step labels (`Step 3:`) and history words (`previously`, `no longer`), and fails on a match. Check added lines only, so existing comments never block a change.
+- Any language: `docs-check` scans the comment lines a change adds for tracker references (`#123`), step labels (`Step 3:`) and history words (`previously`, `no longer`), and fails on a match. Install it with `/bootstrap-docs docs-check`; do not write a second scan.
 
 ## Function Signatures
 

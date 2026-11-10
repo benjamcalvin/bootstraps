@@ -1018,6 +1018,14 @@ complete + referee -> refereeing
       echo "  OK: bootstrap-docs keeps instruction files small, imports @AGENTS.md everywhere, and migrates only confirmed changes"
     fi
 
+    if ! sed -n '/^### Step 4: Focused Verification$/,/^### Step 5: /p' "$plugin_dir/skills/implement-code/SKILL.md" | rg -Fq 'Run `docs-check` with lint when the project has a `docs-check.toml`.' || \
+      ! rg -Fq 'Run `docs-check` on docs changes when the project has a `docs-check.toml`.' "$plugin_dir/skills/review-docs/SKILL.md"; then
+      echo "  ERROR: implement-code Step 4 must run docs-check with lint, and review-docs must run it on docs changes, when the project has a docs-check.toml"
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "  OK: implement-code and review-docs run docs-check when the project has a docs-check.toml"
+    fi
+
     review_comment_ref="$plugin_dir/skills/implement/references/consolidated-review.md"
     if ! rg -Fq 'reading `references/consolidated-review.md`' "$lifecycle_implement_skill" || \
       ! lifecycle_details_lines outside "$review_comment_ref" | rg -q '^### Reviewer Findings$' || \
@@ -1085,6 +1093,38 @@ complete + referee -> refereeing
       ERRORS=$((ERRORS + 1))
     else
       echo "  OK: merge-pr evaluates pr-check inline; fallback-only failures are non-blocking"
+    fi
+  fi
+
+  if [ "$plugin_name" = "bootstrap-docs" ]; then
+    docs_check_skill="$plugin_dir/skills/bootstrap-docs/SKILL.md"
+    docs_check_install=$(sed -n '/^### docs-check Install (`docs-check` argument)$/,/^### /p' "$docs_check_skill")
+    if [ ! -s "$plugin_dir/skills/bootstrap-docs/assets/docs-check.py" ] || \
+      ! rg -q '^argument-hint: .*\bdocs-check\b' "$docs_check_skill" || \
+      ! rg -Fq -- '- `docs-check`: run only docs-check Install (below)' "$docs_check_skill" || \
+      ! rg -Fq 'When the project has no `docs-check.toml`, offer docs-check Install (below).' "$docs_check_skill" || \
+      ! printf '%s\n' "$docs_check_install" | rg -Fq '**Copy `$SKILL_DIR/assets/docs-check.py` into the project**' || \
+      ! printf '%s\n' "$docs_check_install" | rg -Fq '**Create `docs-check.toml` with the current baseline:** run `python3 scripts/docs-check.py --write-baseline`' || \
+      ! printf '%s\n' "$docs_check_install" | rg -Fq 'The baseline only shrinks' || \
+      ! printf '%s\n' "$docs_check_install" | rg -Fq '**Print the CI and pre-commit snippets**' || \
+      ! printf '%s\n' "$docs_check_install" | rg -Fq 'id: docs-check' || \
+      ! printf '%s\n' "$docs_check_install" | rg -Fq 'fetch-depth: 0'; then
+      echo "  ERROR: bootstrap-docs must ship docs-check.py with an install step that copies the script, creates docs-check.toml with the current baseline, and prints CI and pre-commit snippets, offered from migrate"
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "  OK: bootstrap-docs ships docs-check with an install step"
+    fi
+
+    docs_check_test="$plugin_dir/skills/bootstrap-docs/assets/docs-check/self_test.py"
+    if ! command -v python3 > /dev/null 2>&1; then
+      echo "  ERROR: python3 (3.11+) is required to run the docs-check self-test"
+      ERRORS=$((ERRORS + 1))
+    elif docs_check_output=$(python3 "$docs_check_test" 2>&1); then
+      echo "  OK: docs-check self-test passed"
+    else
+      echo "  ERROR: docs-check self-test failed:"
+      printf '%s\n' "$docs_check_output" | sed 's/^/    /'
+      ERRORS=$((ERRORS + 1))
     fi
   fi
 
