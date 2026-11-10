@@ -110,11 +110,27 @@ Use structured logging (key-value pairs), not string interpolation.
 {lint command}
 ```
 
-## Documentation
+## Comments
 
-- All public/exported symbols must have documentation comments.
-- Internal code: document when the purpose isn't obvious from the name and context.
-- Prefer self-documenting code over comments that restate what the code does.
+> Add no comments. Exceptions: a constraint imposed from outside the codebase (link its source), a guarantee that cannot be tested, `TODO(#N)`, tool directives, and comments a tool turns into output. If code must stay a certain way, write a test named after that guarantee instead of a comment. Put the reason for a change in the commit body and the PR. Leave existing comments alone unless your change makes them false.
+
+| Allowed | Banned |
+| --- | --- |
+| A constraint imposed from outside the codebase: a hardware quirk, an upstream bug (with its URL), a protocol or vendor rule | Restating the code, including a doc comment that paraphrases a name or signature |
+| A guarantee that cannot be tested, stated beside the code it binds | References to your own tracker or milestones ("for #131", "M7:", "see the PR") |
+| `TODO(#N)` pointing at an open issue | History: "previously", "changed from", "no longer" |
+| Comments a tool turns into output: CLI help, OpenAPI annotations, doctests, API docs of an externally published package | Step narration: "Step 3:", "Now we..." |
+| Tool directives and license headers | Commented-out code; a TODO without an issue |
+
+Exported symbols need no doc comment unless a tool turns it into output.
+
+### Enforcement
+
+{Adapt to your stack; remove tools you do not use.}
+
+- Python: ruff `ERA` (commented-out code) and `TD003` (TODO must link an issue).
+- Go: turn the revive `exported` rule off in applications; keep it on only for externally published packages.
+- Any language: a CI step that scans the comment lines a change adds (`git diff -U0 <base>...HEAD`) for tracker references (`#123`), step labels (`Step 3:`) and history words (`previously`, `no longer`), and fails on a match. Check added lines only, so existing comments never block a change.
 
 ## Function Signatures
 

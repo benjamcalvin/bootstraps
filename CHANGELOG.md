@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `implement-lifecycle` 3.15.0 scales verification by tier, accepts exact-head required-CI evidence (`suite-source: ci`), baselines suite failures on the merge-base so pre-existing-only failures return PARTIAL (the run stops for a human; not mergeable) instead of FAIL, re-verifies only failed scenarios, and caps verification at 2 fix cycles
 - `implement-lifecycle` 3.16.0 prints a per-run ledger (tier, children by role and model tier, rounds, fix commits, wall-clock per phase, follow-up items) on every completed or escalated run
 - `implement-lifecycle` 3.17.0 trims its skill instructions from ~125 KB to under an 80 KB byte budget (`implement` under 20 KB), moves rare-path material (reviewer-result recovery, convergence recovery, CI-evidence acceptance) into skill-local `references/`, and enforces the budget and reference existence in `validate-all.sh`
+- `bootstrap-docs` 1.6.0 replaces the "document every exported symbol" code-standard rule with a comment ban and short allow-list (external constraints, untestable guarantees, `TODO(#N)`, tool directives, tool-output comments), and the testing template names tests after the guarantee they pin
+- `implement-lifecycle` 3.18.0 has `implement-code` and `implement-address` add no comments outside the allow-list (with an added-line comment scan in focused verification and a commit body when the reason is not evident), and `review-general` flags added comments as non-blocking findings unless the target repository declares the policy; the PR-description altitude rules move to `implement-code/references/`
 
 ## implement-team [0.5.0] - 2026-07-26
 
