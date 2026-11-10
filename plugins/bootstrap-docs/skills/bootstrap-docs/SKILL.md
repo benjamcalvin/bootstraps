@@ -3,15 +3,15 @@ name: bootstrap-docs
 description: >-
   Set up comprehensive AI-readable documentation strategy.
   Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates.
-  `migrate` upgrades a docs tree made by bootstrap-docs 1.x.
+  `migrate` upgrades a docs tree made by bootstrap-docs 1.x; `docs-check` installs the drift checker.
   Triggers: /bootstrap-docs, set up documentation, create docs structure, bootstrap docs
-argument-hint: "[adr|specs|plans|guides|vision|standards|research|all|migrate]"
+argument-hint: "[adr|specs|plans|guides|vision|standards|research|all|migrate|docs-check]"
 context: fork
 agent: general-purpose
 allowed-tools: Read, Glob, Bash(cat *), Bash(find *)
 license: MIT
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
   tags: ["docs", "documentation", "strategy", "scaffolding"]
   author: benjamcalvin
   standards-sub-types: ["testing", "code", "pr"]
@@ -39,6 +39,7 @@ This skill runs six phases to set up project documentation. It is **re-runnable*
 - Specific module (e.g., `adr`, `specs`, `plans`, `guides`, `vision`, `standards`, `research`): run only Phase 0 (preferences) then the phases relevant to that module (directory, strategy-doc section, starter doc)
 - Multiple modules can be comma-separated: `adr,specs`
 - `migrate`: run only Migrate Mode (below), which upgrades an existing docs tree; skip Phases 0–6
+- `docs-check`: run only docs-check Install (below); skip Phases 0–6
 
 **Template files** are in the skill's `assets/` directory at `$SKILL_DIR/assets/`. Read them on demand with the Read tool only when that phase needs them — e.g., `Read $SKILL_DIR/assets/adr-template.md`. Do NOT read all templates upfront; load each template only when creating the corresponding document.
 
@@ -345,3 +346,37 @@ Upgrade a docs tree created by bootstrap-docs 1.x to the current rules. Migrate 
 4. **Confirm.** Ask the user which items to apply: all, none, or a list of numbers. Confirm each **DELETE** and each **REWRITE** separately, naming the file, exactly as for a deletion; a blanket "all" never applies a **DELETE** or **REWRITE** item. Before confirming a **REWRITE**, show the project-specific rules that will carry over into the rebuilt file. Delete or overwrite only files the user confirms by name. When an answer is unclear, ask again rather than guess.
 5. **Apply** only the confirmed items, leaving every other file untouched. Remove deleted files from `.bootstraps-preferences` `files` lists.
 6. **Report** applied, skipped, and declined items. A re-run proposes only what is left.
+7. **Offer docs-check.** When the project has no `docs-check.toml`, offer docs-check Install (below).
+
+---
+
+### docs-check Install (`docs-check` argument)
+
+`docs-check` catches docs drift with lint: broken links and paths, missing tasks, instruction-file rules and line budgets, and tracker, step, or history comments a change adds. It needs Python 3.11+ and nothing else.
+
+1. **Copy `$SKILL_DIR/assets/docs-check.py` into the project** as `scripts/docs-check.py`, or wherever the project keeps scripts.
+2. **Create `docs-check.toml` with the current baseline:** run `python3 scripts/docs-check.py --write-baseline` from the project root. Existing errors go into the baseline and instruction files already over budget get their current length, so old debt never blocks a change. The baseline only shrinks: new violations fail, and later runs of `--write-baseline` only drop fixed entries.
+3. **Print the CI and pre-commit snippets** for the user, and offer to add `python3 scripts/docs-check.py` to the project's lint task:
+
+   ```yaml
+   # .pre-commit-config.yaml
+   repos:
+     - repo: local
+       hooks:
+         - id: docs-check
+           name: docs-check
+           entry: python3 scripts/docs-check.py
+           language: system
+           pass_filenames: false
+           always_run: true
+   ```
+
+   ```yaml
+   # GitHub Actions job steps
+   - uses: actions/checkout@v4
+     with:
+       fetch-depth: 0
+   - run: python3 scripts/docs-check.py --base origin/${{ github.base_ref || github.event.repository.default_branch }}
+   ```
+
+4. **Report** the baseline size; each entry is existing debt to fix later.

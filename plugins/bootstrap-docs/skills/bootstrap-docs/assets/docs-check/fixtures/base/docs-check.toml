@@ -1,0 +1,9 @@
+default_budget = 200
+covers_churn_lines = 200
+exclude = []
+baseline = [
+  "docs/legacy.md: link target does not exist: ./gone.md",
+]
+
+[budgets]
+"AGENTS.md" = 4

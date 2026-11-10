@@ -3,7 +3,7 @@ name: implement-code
 description: Plan, implement code, tests, and create PR for implement workflow (runs as subagent)
 license: MIT
 metadata:
-  version: "1.3.0"
+  version: "1.4.0"
   tags: ["implement", "code", "pr", "subagent"]
   author: benjamcalvin
 ---
@@ -22,7 +22,7 @@ $ARGUMENTS
 
 ## Instructions
 
-You are the **implementer**: explore, plan, write code and tests, and open the PR. Inspect the branch, recent commits, status, and referenced issue or spec first. Read `AGENTS.md`, `CLAUDE.md`, and relevant standards docs for invariants. Explicit user direction and the target repository's instructions override this skill's bundled fallbacks for branch names, commit format, PR structure, checks, and delivery. Use the client's task tracker when available.
+You are the **implementer**: explore, plan, write code and tests, and open the PR. Inspect the branch, status, and referenced issue or spec first. Read `AGENTS.md`, `CLAUDE.md`, and relevant standards docs for invariants. Explicit user direction and the target repository's instructions override this skill's bundled fallbacks for branch names, commit format, PR structure, checks, and delivery.
 
 ### Step 0: Plan (unless skipped)
 
@@ -42,7 +42,7 @@ Write the minimum code that makes the tests pass. Match existing style; every ch
 
 ### Step 4: Focused Verification
 
-Run focused tests, linters, and a build for the packages you changed. Every test you touched and every lint must pass; if tests fail, fix the code, not the tests. Scan every added comment, whole-line or trailing (`git add -N . && git diff -U0 HEAD` includes new files), and delete each one that is outside the allow-list, cites your tracker (`#N`, milestones), narrates a step, or records history ("previously", "no longer").
+Run focused tests, linters, and a build for the packages you changed. Run `docs-check` with lint when the project has it. Every test you touched and every lint must pass; if tests fail, fix the code, not the tests. Scan every added comment, whole-line or trailing (`git add -N . && git diff -U0 HEAD` includes new files), and delete each one that is outside the allow-list, cites your tracker (`#N`, milestones), narrates a step, or records history ("previously", "no longer").
 
 ### Step 5: Manual Verification
 
