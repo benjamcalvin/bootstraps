@@ -6,7 +6,7 @@ description: >-
 argument-hint: <#issue-number>
 license: MIT
 metadata:
-  version: "1.1.1"
+  version: "1.2.0"
   tags: ["issue", "cleanup", "formatting"]
   author: benjamcalvin
 ---
@@ -71,9 +71,12 @@ If the issue lacks clear sections, restructure it using the standard template:
 **Out of scope:**
 - <extracted or inferred>
 
-## Technical Context
+<details>
+<summary>Technical Context</summary>
 
 - **Key files:** <extracted if present>
+
+</details>
 
 ## References
 
@@ -84,7 +87,7 @@ If the issue lacks clear sections, restructure it using the standard template:
 <extracted provenance, one or two lines — omit if none>
 ```
 
-Preserve all original information. Do not invent new requirements — only reorganize what exists.
+Preserve all original information. Do not invent new requirements — only reorganize what exists. Preserve existing `<details>` blocks and their summaries: restructure inside them, never unwrap them.
 
 #### 3b: Formatting Fixes
 
@@ -92,6 +95,7 @@ Preserve all original information. Do not invent new requirements — only reorg
 - Convert inline code references to backtick format
 - Convert unstructured lists of requirements into checkbox acceptance criteria
 - Ensure code snippets have language annotations
+- Keep a blank line after each `</summary>`; GitHub renders Markdown inside `<details>` only after one
 
 #### 3c: Clarity Fixes
 

@@ -3,7 +3,7 @@ name: implement-code
 description: Plan, implement code, tests, and create PR for implement workflow (runs as subagent)
 license: MIT
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
   tags: ["implement", "code", "pr", "subagent"]
   author: benjamcalvin
 ---
@@ -60,31 +60,28 @@ Follow the target repository's commit policy; when silent, use `<type>: <summary
 
 Rebase on the branch this work belongs on: the default branch (`gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name'`) for standalone work, or the parent feature branch for stacked work; never assume `main`. Resolve conflicts, rerun only affected focused checks, and push with `git push -u origin HEAD`.
 
-Use the target repository's PR template and formatting policy when present; the structure below is a fallback. When the issue number is not `0`, put `Closes #N` (only when this PR **fully completes** the issue) or `Part of #N` (one of several; the default when unsure) after the TL;DR unless policy places it elsewhere.
-
-Before writing the body, read `references/pr-description.md` (altitude rules for each section).
+Use the target repository's PR template and formatting policy when present; the shape below is a fallback. Before writing the body, read `references/pr-description.md`. Link the issue (when not `0`) with `Closes #N` only when this PR **fully completes** it, else `Part of #N`.
 
 ```bash
 gh pr create --title "<type>: <imperative summary>" --body "$(cat <<'EOF'
-## TL;DR
-<2-4 plain-language sentences: the resulting change and why it matters, for a reader who has never seen the code>
+<2–3 plain-language sentences: what changes and why, no code identifiers> *(agent-drafted lead)*
 
-<Closes #N or Part of #N — omit when the issue number is 0>
+<Closes #N or Part of #N> · Author ran: <commands you executed and their results>
+
+**Review focus:** <the decisions a reviewer should weigh, with file references>
+
+<details>
+<summary><your model name> · design, implementation, test evidence</summary>
 
 ## Design
-<Key design choices and reasons in component terms, including intentional spec deviations. Omit only when the TL;DR leaves no design question open.>
+<key choices and reasons in component terms, including intentional spec deviations>
 
 ## Implementation Notes
-<File-level shape of the diff and, when large, the order to read it>
+<file-level shape of the diff and, when large, the order to read it>
 
 ## Test evidence
-### Automated tests
-<command and result summary>
-### Manual verification
-<command, full output, and explanation per check, or "N/A — no runnable artifacts changed">
-
-## Review focus
-<decisions reviewers should weigh in on, with file references>
+<per check: command, full output, and what it shows; "N/A — no runnable artifacts changed" for manual>
+</details>
 EOF
 )"
 ```

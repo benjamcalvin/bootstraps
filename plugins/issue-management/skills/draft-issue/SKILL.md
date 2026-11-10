@@ -7,7 +7,7 @@ description: >-
 argument-hint: <brief description of what needs to be done>
 license: MIT
 metadata:
-  version: "1.1.1"
+  version: "1.2.0"
   tags: ["issue", "draft", "planning"]
   author: benjamcalvin
 ---
@@ -111,7 +111,8 @@ Cite a spec or guarantee at the end of the bullet, not mid-clause.>
 **Out of scope:**
 - <explicitly excluded item — why>
 
-## Technical Context
+<details>
+<summary>Technical Context</summary>
 
 <Implementation layer — the home for file paths, line numbers, and
 locational detail.>
@@ -119,6 +120,8 @@ locational detail.>
 - **Key files:** <exact paths to files the implementer must read or modify>
 - **Patterns to follow:** <reference existing analogous code>
 - **Constraints:** <tech stack requirements, no new dependencies, etc.>
+
+</details>
 
 ## References
 
@@ -138,7 +141,8 @@ Use when the work spans several logical changes — independent concerns, or lay
 Add these sections to the standard template:
 
 ```markdown
-## Proposed PRs
+<details>
+<summary>Proposed PRs</summary>
 
 ### PR 1: <imperative title>
 
@@ -162,7 +166,7 @@ Add these sections to the standard template:
 
 <Same structure>
 
----
+</details>
 
 ### Dependency Order
 
@@ -174,6 +178,10 @@ Add these sections to the standard template:
 |------|--------|------------|
 | <what could go wrong> | <consequence> | <countermeasure> |
 ```
+
+#### Collapsing detail
+
+Keep Problem, Solution, Acceptance Criteria, Verification, and Scope visible: they are what a human reader must see. Collapse Technical Context and Proposed PRs under `<details><summary>…</summary>`, with a blank line after `</summary>` (GitHub renders Markdown inside only after one) and before `</details>`. An implementing agent reads the collapsed sections in full; a skimming human opens them only when needed.
 
 ### Writing Good Acceptance Criteria
 
@@ -209,9 +217,10 @@ Before presenting to the user, verify:
 6. No ambiguity — an AI agent could start implementing without clarifying questions
 7. References are linked
 8. Verification is explicit
-9. **Altitude check:** Problem and Solution contain zero file paths, function names, or line numbers; all code identifiers live in Acceptance Criteria (contracts only), Technical Context, and Proposed PRs file tables
-10. **Skim test:** the first sentence of each section, read in order, forms a correct summary at descending altitude
-11. **Sentence discipline:** no sentence carries a claim, its mechanism, and a citation at once; provenance lives only in History
+9. **Collapse check:** Technical Context and Proposed PRs sit inside `<details>` blocks with a blank line after `</summary>`
+10. **Altitude check:** Problem and Solution contain zero file paths, function names, or line numbers; all code identifiers live in Acceptance Criteria (contracts only), Technical Context, and Proposed PRs file tables
+11. **Skim test:** the first sentence of each section, read in order, forms a correct summary at descending altitude
+12. **Sentence discipline:** no sentence carries a claim, its mechanism, and a citation at once; provenance lives only in History
 
 Present the draft to the user via `AskUserQuestion` with options to submit as-is, edit, or cancel.
 

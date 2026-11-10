@@ -7,7 +7,7 @@ description: >-
 argument-hint: <#issue-number>
 license: MIT
 metadata:
-  version: "1.1.1"
+  version: "1.2.0"
   tags: ["issue", "refine", "planning", "research"]
   author: benjamcalvin
 ---
@@ -28,7 +28,7 @@ You refine existing GitHub issues by grounding them in codebase reality. Unlike 
 
 The goal: after refinement, an AI agent can implement the issue without any codebase exploration of its own.
 
-Refinement adds depth **at the right altitude, not everywhere**. Issues descend through three layers: Problem stays at behavior altitude (plain domain language, no code identifiers), Solution stays at design altitude (component and operation names, no files/functions/lines), and file paths and line numbers live in Technical Context and PR decomposition tables — with one exception: an acceptance criterion may name the contract under test, but not where to find it. Research findings land in the layer they belong to — grounding an issue in the codebase must not mean pushing `file.go:line` references into Problem or Solution. If the existing issue already mixes altitudes, restore the separation as you refine.
+Refinement adds depth **at the right altitude, not everywhere**. Issues descend through three layers: Problem stays at behavior altitude (plain domain language, no code identifiers), Solution stays at design altitude (component and operation names, no files/functions/lines), and file paths and line numbers live in Technical Context and PR decomposition tables — with one exception: an acceptance criterion may name the contract under test, but not where to find it. Research findings land in the layer they belong to — grounding an issue in the codebase must not mean pushing `file.go:line` references into Problem or Solution. If the existing issue already mixes altitudes, restore the separation as you refine. Keep Problem, Solution, Acceptance Criteria, Verification, and Scope visible, and collapse Technical Context and Proposed PRs under `<details><summary>…</summary>` with a blank line after `</summary>`; GitHub renders Markdown inside only after one.
 
 ### Step 1: Parse the Target
 
@@ -78,10 +78,11 @@ Each criterion should be independently verifiable and name the observable contra
 
 #### 4b: Add Technical Context
 
-Add or enhance the Technical Context section:
+Add or enhance the Technical Context section, collapsed under `<details>`:
 
 ```markdown
-## Technical Context
+<details>
+<summary>Technical Context</summary>
 
 - **Key files:**
   - `path/to/main/file.go:L10-L45` — primary function to modify
@@ -93,6 +94,8 @@ Add or enhance the Technical Context section:
 - **Dependencies:** <modules that import/use the affected code>
 
 - **Constraints:** <discovered limitations — e.g., "this module has no external deps, keep it that way">
+
+</details>
 ```
 
 #### 4c: Decompose if Needed
@@ -100,7 +103,8 @@ Add or enhance the Technical Context section:
 If the issue spans more than one logical change — independent concerns, or layers that must land in sequence — add a "Proposed PRs" section that gives each its own PR. A batch of small, independent, same-kind housekeeping changes may stay a single PR:
 
 ```markdown
-## Proposed PRs
+<details>
+<summary>Proposed PRs</summary>
 
 ### PR 1: <imperative title>
 **What:** <1-2 sentences>
@@ -117,6 +121,8 @@ If the issue spans more than one logical change — independent concerns, or lay
 ### PR 2: <imperative title>
 **Depends on:** PR 1
 <same structure>
+
+</details>
 
 ### Dependency Order
 <which PRs can be parallelized, which must be sequential>
@@ -144,7 +150,8 @@ Before presenting, verify:
 4. Decomposition (if any) has clear dependency ordering
 5. No new requirements were invented — only existing intent was sharpened
 6. **Altitude check:** refinement did not push code identifiers into Problem or Solution; file/function/line references live only in Technical Context (and PR decomposition tables)
-7. **Skim test:** the first sentence of each section, read in order, still forms a correct summary at descending altitude
+7. **Collapse check:** Technical Context and Proposed PRs sit inside `<details>` blocks with a blank line after `</summary>`
+8. **Skim test:** the first sentence of each section, read in order, still forms a correct summary at descending altitude
 
 ### Step 6: Present and Apply
 

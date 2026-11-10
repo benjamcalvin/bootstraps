@@ -6,7 +6,7 @@ description: >-
   Triggers: /implement, $implement-lifecycle:implement, implement this, build this feature
 license: MIT
 metadata:
-  version: "3.1.0"
+  version: "3.2.0"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -186,25 +186,7 @@ If zero findings survive, still post the Step C comment, ending `**Result:** no 
 
 #### Step C: Post the Consolidated Review
 
-Post **one** comment per round (use `--body-file` when long). It is the round's entire audit trail: record every reviewer that ran and its verdict, and reproduce each reviewer's findings verbatim.
-
-```markdown
-## Review Round <N> — Consolidated Review & Referee Decisions
-
-**Reviewers run:** general<, specialists and `review-docs`, if any>
-**Tier:** <Small/Medium/Large + reason; round 1 only>
-**Specialist rationale:** <trigger per specialist and `review-docs`, or "none — tier/triggers did not call for one">
-
-### Reviewer Findings
-#### General
-<returned findings verbatim under their headings>
-#### <Specialty — one per reviewer invoked; "no findings" when clean>
-
-### Referee Decisions
-| # | Finding | Reviewer | Reviewer Severity | Concern (Valid/Unproven) | Decision | Reasoning / smallest remedy |
-
-**Findings forwarded to addresser:** <count>
-```
+Post **one** comment per round (use `--body-file` when long) by reading `references/consolidated-review.md` and following its template. It is the round's entire audit trail: every reviewer that ran with its verdict, each reviewer's findings verbatim, and each referee decision, all visible, with the referee reasoning collapsed under `<details>`.
 
 Write only accepted findings to a resolved findings path: `# Filtered Findings — Round <N>` and a `| # | Finding | Severity | Details |` table with file:line and what to fix.
 
@@ -231,7 +213,7 @@ Invoke `verify`:
 Payload: <pr-number> tier=<Small|Medium|Large> [failed-scenarios=<names>]
 ```
 
-`tier=` is the tier recorded at classification; never re-classify it. **PASS** or **N/A** → Phase 6. **FAIL** → delegate the fixes; do **not** fix the code yourself. **PARTIAL** (no authoritative contract, or only pre-existing failures) → stop, print the run ledger, and report the missing contract or pre-existing failures; do not address, merge, or invent a substitute.
+`tier=` is the tier recorded at classification; never re-classify it. **PASS** or **N/A** → correct any Claim Mismatches it lists in the PR description (`gh pr edit <pr-number> --body-file <path>`), then Phase 6. **FAIL** → delegate the fixes; do **not** fix the code yourself. **PARTIAL** (no authoritative contract, or only pre-existing failures) → stop, print the run ledger, and report the missing contract or pre-existing failures; do not address, merge, or invent a substitute.
 
 Capture the verifier's returned handoff-artifact JSON object: the complete durable `verification-record:v1` plus its `suite-evidence` object. Confirm every `#/suite-evidence/command-<N>` pointer resolves inside it to the matching command and complete unedited output, then write it byte-for-byte to a scratch file and pass that path to `merge-pr`; `suite-evidence` is never posted. If the object is absent, malformed, or has a dangling or mismatched pointer, stop rather than reconstruct it from the transcript.
 
@@ -255,18 +237,7 @@ Print the run ledger and report the result.
 
 ## Run ledger
 
-Record a UTC timestamp (`date -u +%FT%TZ`) at each phase start and end. On every terminal path (merge, escalation, cap or stall exit, third verify FAIL, PARTIAL, or any other stop), print it to the user; when a PR exists and the path posts a PR comment or merge summary, append it there too. Tally as you go: children per role and tier, addresser commits (from each Commits list, including verify fixes), and out-of-delta follow-ups.
-
-```
-## Run Ledger
-- Tier: <Small|Medium|Large> — <reason>
-- Children: <role>: <count> (<balanced|frontier>), ...
-- Rounds: review <n>, verification <n>
-- Fix commits: <count of addresser commits>
-- Wall-clock: plan/implement <m>, review <m>, verify <m>, merge <m>
-- Follow-up items: <out-of-delta findings, or none>
-- Outcome: <merged|escalated|partial|stopped|reviewed|addressed> — <phase>
-```
+Record a UTC timestamp (`date -u +%FT%TZ`) at each phase start and end. On every terminal path (merge, escalation, cap or stall exit, third verify FAIL, PARTIAL, or any other stop), print it to the user after reading `references/run-ledger.md`, collapsed under `<details>`; when a PR exists and the path posts a PR comment or merge summary, append it there too. Tally as you go: children per role and tier, addresser commits (from each Commits list, including verify fixes), and out-of-delta follow-ups.
 
 ## Escalation
 
