@@ -3,72 +3,44 @@
 **Status:** Draft
 **Last Updated:** {DATE}
 **Owner:** {OWNER}
+**Covers:** {paths of the code this spec describes}
 
-## Overview
+The shared model of this component as builders see it. One paragraph: what it is and the approach it takes.
 
-What this component does from an engineering perspective. One paragraph summary of the architecture and approach.
+## Glossary
 
-## Architecture
+One vocabulary for builders, agents, and code. Use these terms exactly, in docs and in code, and the same terms as the product spec.
 
-Describe the high-level architecture: components, boundaries, data flow.
+| Term | Meaning |
+|------|---------|
+| {Term} | What it means in the system |
 
-```
-Component diagram or data flow (ASCII art or description)
-```
+## Components and Boundaries
 
-### Key Components
+The components, what each owns, and where one ends and another begins. Draw a diagram where they have a shape.
 
-| Component | Responsibility | Interface |
-|-----------|---------------|-----------|
-| {Component} | What it does | How other components interact with it |
+| Component | Responsibility | Boundary |
+|-----------|---------------|----------|
+| {Component} | What it owns | How other components interact with it |
 
-## Implementation Design
+## Data Model
 
-### {Subsystem 1}
+The entities, their meaning, and how they relate. Omit column lists, indexes, and anything the code or migrations already show.
 
-Technical design details — schema, algorithms, protocols, patterns.
+| Entity | Meaning | Relationships |
+|--------|---------|---------------|
+| {Entity} | What it represents | Related to X via Y |
 
-### {Subsystem 2}
+## Invariants
 
-Another subsystem.
+What must always hold, including security and performance guarantees. Each invariant has a test named after it.
 
-## Data Storage
+- {Invariant} — test: `{test name}`
 
-If applicable, describe the storage design.
+## Rationale
 
-### Schema
-
-```sql
--- Key tables/collections and their purpose
-```
-
-### Indexing Strategy
-
-What indexes exist and why.
-
-## Security Considerations
-
-- Authentication/authorization approach
-- Data protection measures
-- Known attack surfaces and mitigations
-
-## Performance Considerations
-
-- Expected load characteristics
-- Performance targets
-- Known bottlenecks and mitigation strategies
+One line per changed decision: "{decision} — chosen over {X} because {Y}".
 
 ## Open Questions
 
 - [ ] Question that needs resolution before this spec is complete
-
-## Related Documents
-
-### Design Context
-- [ADR: Relevant Decision](../adr/NNN-title.md) — Why this approach was chosen
-
-### Specifications
-- [Product Spec](../specs/product/feature.md) — User-facing requirements this implements
-
-### Operational
-- [Setup Guide](../guides/setup.md) — How to configure and deploy

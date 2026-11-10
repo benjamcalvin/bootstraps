@@ -932,6 +932,34 @@ complete + referee -> refereeing
       echo "  OK: PR standards template and implement-code fallback specify the collapsed description shape"
     fi
 
+    # Specs are the shared conceptual model: bootstrap-docs templates are authoritative; review-docs checks them.
+    spec_dir="plugins/bootstrap-docs/skills/bootstrap-docs"
+    spec_ok=true
+    for spec_template in "$spec_dir/assets/product-spec-template.md" "$spec_dir/assets/technical-spec-template.md"; do
+      if [ "$(rg -m1 '^## ' "$spec_template")" != '## Glossary' ] || \
+        ! rg -q '^## Invariants$' "$spec_template" || \
+        ! rg -q '^\*\*Covers:\*\*' "$spec_template" || \
+        rg -qi 'target lines|[0-9]+.[0-9]+ lines' "$spec_template"; then
+        echo "  ERROR: $spec_template must open with a Glossary, include an Invariants section and a Covers: field, with no line-count target"
+        ERRORS=$((ERRORS + 1))
+        spec_ok=false
+      fi
+    done
+    if rg -qi 'schema, indexes' "$spec_dir/SKILL.md" "$spec_dir/assets/strategy-template.md"; then
+      echo "  ERROR: bootstrap-docs must not define technical specs as 'schema, indexes'"
+      ERRORS=$((ERRORS + 1))
+      spec_ok=false
+    fi
+    if ! rg -Fq 'Glossary terms that no longer appear in the covered code' "$plugin_dir/skills/review-docs/SKILL.md" || \
+      rg -qi 'Last Updated|bidirectional|reciprocated' "$plugin_dir/skills/review-docs/SKILL.md"; then
+      echo "  ERROR: review-docs must check spec glossary terms against covered code and must not check Last Updated or two-way links"
+      ERRORS=$((ERRORS + 1))
+      spec_ok=false
+    fi
+    if [ "$spec_ok" = true ]; then
+      echo "  OK: spec templates carry the shared-model sections and review-docs checks spec vocabulary"
+    fi
+
     review_comment_ref="$plugin_dir/skills/implement/references/consolidated-review.md"
     if ! rg -Fq 'reading `references/consolidated-review.md`' "$lifecycle_implement_skill" || \
       ! lifecycle_details_lines outside "$review_comment_ref" | rg -q '^### Reviewer Findings$' || \
