@@ -643,6 +643,40 @@ complete + referee -> refereeing
       echo "  OK: Every reviewer requires a non-empty four-heading canonical result"
     fi
 
+    # Comment rule: bootstrap-docs' code template is authoritative; the lifecycle skills paraphrase it.
+    comment_code_template="plugins/bootstrap-docs/skills/bootstrap-docs/assets/standards-code-template.md"
+    comment_test_template="plugins/bootstrap-docs/skills/bootstrap-docs/assets/standards-testing-template.md"
+    comment_rule_invalid=false
+    if ! rg -Fq 'Add no comments. Exceptions: a constraint imposed from outside the codebase (link its source), a guarantee that cannot be tested, `TODO(#N)`, tool directives, and comments a tool turns into output. If code must stay a certain way, write a test named after that guarantee instead of a comment. Put the reason for a change in the commit body and the PR. Leave existing comments alone unless your change makes them false.' "$comment_code_template" || \
+      rg -Fq 'must have documentation comments' "$comment_code_template"; then
+      echo "  ERROR: standards-code-template.md must carry the canonical comment rule and not require doc comments on exported symbols"
+      ERRORS=$((ERRORS + 1))
+      comment_rule_invalid=true
+    fi
+    if rg -Fq 'Test<Function>_<scenario>' "$comment_test_template" || \
+      ! rg -Fq 'Name each test after the guarantee it pins' "$comment_test_template"; then
+      echo "  ERROR: standards-testing-template.md must name tests after the guarantee they pin"
+      ERRORS=$((ERRORS + 1))
+      comment_rule_invalid=true
+    fi
+    if ! rg -Fq 'Add no comments except a constraint imposed from outside the codebase' "$plugin_dir/skills/implement-code/SKILL.md" || \
+      ! rg -Fq 'Leave existing comments alone unless your change makes them false.' "$plugin_dir/skills/implement-code/SKILL.md" || \
+      ! rg -Fq 'Add no comments outside the allow-list' "$plugin_dir/skills/implement-address/SKILL.md" || \
+      ! rg -Fq 'delete none unless your change makes it false' "$plugin_dir/skills/implement-address/SKILL.md"; then
+      echo "  ERROR: implement-code and implement-address must forbid comments outside the allow-list and deleting existing comments"
+      ERRORS=$((ERRORS + 1))
+      comment_rule_invalid=true
+    fi
+    if ! rg -Fq -- '- **Comments** —' "$plugin_dir/skills/review-general/SKILL.md" || \
+      ! rg -Fq 'never blocking unless the target repository declares the comment policy' "$plugin_dir/skills/review-general/SKILL.md"; then
+      echo "  ERROR: review-general must carry a Comments checklist item that is non-blocking unless repository policy declares it"
+      ERRORS=$((ERRORS + 1))
+      comment_rule_invalid=true
+    fi
+    if [ "$comment_rule_invalid" = false ]; then
+      echo "  OK: Comment rule pinned in the code template, testing template, implementer, addresser, and general reviewer"
+    fi
+
     lifecycle_merge_file="$plugin_dir/skills/merge-pr/SKILL.md"
     # CI-evidence acceptance rules live in a verify-local reference read before recording suite-source: ci.
     lifecycle_verify_ci_ref="$plugin_dir/skills/verify/references/ci-evidence.md"

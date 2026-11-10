@@ -40,12 +40,12 @@ Unit tests run fast with no external dependencies. Integration tests hit real se
 
 ### Convention
 
-Test names should communicate the function under test and the scenario being verified.
+Name each test after the guarantee it pins, so a failing test name states what broke. When code must stay a certain way, a test named after that guarantee replaces a comment.
 
 {Specify your naming pattern. Examples:}
-{- `Test<Function>_<scenario>` (Go)}
-{- `describe('Function', () => { it('should <behavior>', ...) })` (JS/TS)}
-{- `test_<function>_<scenario>` (Python)}
+{- `rejects_expired_tokens`, `retries_three_times_then_fails` (any language)}
+{- `describe('token validation', () => { it('rejects expired tokens', ...) })` (JS/TS)}
+{- `test_rejects_expired_tokens` (Python)}
 
 ### Readability
 

@@ -3,7 +3,7 @@ name: implement-address
 description: Address filtered review findings for implement workflow (runs as subagent)
 license: MIT
 metadata:
-  version: "2.0.1"
+  version: "2.1.0"
   tags: ["implement", "address", "subagent"]
   author: benjamcalvin
 ---
@@ -30,20 +30,20 @@ Use the client's task tracker when available.
 
 ### Step 1: Address Each Finding
 
-Read the surrounding code for each finding, not just the flagged line, then take one action:
+Read the code around each finding, then take one action:
 
 - **Apply** — the finding is correct; make the change.
 - **Partially apply** — the insight is right but the suggested fix is not; implement a better fix and explain the deviation.
 - **Reject with justification** — deeper investigation shows the current code is correct; cite specs, ADRs, or conventions. Never reject without a concrete justification.
 - **Escalate** — you cannot tell whether it is valid; report the evidence for and against. Never guess or silently skip.
 
-**Preserve test evidence when compressing.** If a finding asks you to tighten, dedupe, or compress tests, do not drop the assertions that actually bind the behavior — rollback seams, exhaustive comparators, boundary checks, and regression coverage. Remove redundant assertions, not the strongest one; dropping binding assertions reopens the gaps review caught.
+**Preserve test evidence when compressing.** If a finding asks you to tighten, dedupe, or compress tests, keep the assertions that bind the behavior — rollback seams, exhaustive comparators, boundary checks, regression coverage. Remove redundant assertions, not the strongest one.
 
-Fix accepted Minor findings in the same pass; they never prompt another round.
+Add no comments outside the allow-list (an external constraint with its source linked, an untestable guarantee, `TODO(#N)`, tool directives, tool-output comments), and delete none unless your change makes it false. Fix accepted Minor findings in the same pass; they never prompt another round.
 
 ### Step 2: Focused Verification
 
-Run focused tests, linters, and a build on the packages you changed. Every test you touched and every lint must pass; if tests fail, fix the code, not the tests. Then read your own diff for issues the fixes introduced. When no follow-up review will occur (Small tier, or the final permitted round), report the focused tests you ran.
+Run focused tests, linters, and a build on the packages you changed. Every test you touched and every lint must pass; if tests fail, fix the code, not the tests. Then read your own diff for issues the fixes introduced. When no follow-up review will occur (Small tier or final round), report the focused tests you ran.
 
 ### Step 3: Commit, Push, and Report
 
