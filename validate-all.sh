@@ -933,7 +933,7 @@ complete + referee -> refereeing
     fi
 
     review_comment_ref="$plugin_dir/skills/implement/references/consolidated-review.md"
-    if ! rg -Fq 'using the template in `references/consolidated-review.md`' "$lifecycle_implement_skill" || \
+    if ! rg -Fq 'reading `references/consolidated-review.md`' "$lifecycle_implement_skill" || \
       ! lifecycle_details_lines outside "$review_comment_ref" | rg -q '^### Reviewer Findings$' || \
       ! lifecycle_details_lines outside "$review_comment_ref" | rg -q '^\| # \| Finding \| Reviewer \| Reviewer Severity \| Decision \|$' || \
       lifecycle_details_lines outside "$review_comment_ref" | rg -Fq 'Reasoning' || \
