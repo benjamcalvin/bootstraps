@@ -48,30 +48,33 @@ chore: Upgrade database driver to v5
 
 ## PR Description
 
-Every PR description must include:
-
-1. **Summary** — 1-3 sentences explaining what the change does and why
-2. **Test evidence** — How the change was verified (test output, manual steps, or "covered by existing tests")
-
-Include when relevant:
-
-3. **Review focus** — Specific areas where reviewer attention is most valuable
-4. **Context** — Links to related issues, PRs, specs, or ADRs
+A description shows only what the reviewer must see. The lead, the "Author ran" line, and the review focus stay visible; everything else the author or agent wrote collapses under a `<details>` block.
 
 ### Template
 
 ```markdown
-## Summary
-{What this PR does and why.}
+{2–3 sentences: what changes and why, in plain language}
 
-{Closes #N | Part of #N — pick one, see Issue Linking below}
+{Closes #N | Part of #N} · Author ran: {commands and results}
 
-## Test evidence
-{How the change was verified.}
+**Review focus:** {the decisions a reviewer should weigh}
 
-## Review focus
-{Where reviewer attention is most valuable.}
+<details>
+<summary>{model name, or author} · design, implementation, test evidence</summary>
+
+## Design
+...
+</details>
 ```
+
+**Rules:**
+- The lead is plain language with no code identifiers. A lead drafted by an unattended agent ends with `*(agent-drafted lead)*` until a human edits it.
+- "Author ran" states only what the author executed. CI and verification results arrive later as checks and comments.
+- A blank line follows `</summary>`; GitHub only renders Markdown inside `<details>` after one.
+- No living sections ("Progress log", "Live status").
+- A comment that another tool parses keeps its parsed lines outside any `<details>` block.
+- Agent-written review summaries, run ledgers, and long issues follow the same shape: what the reader must act on stays visible, and supporting detail collapses.
+- Link related issues, PRs, specs, or ADRs where they apply.
 
 ### Issue Linking
 

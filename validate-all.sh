@@ -267,7 +267,7 @@ for plugin_dir in plugins/*/; do
       ERRORS=$((ERRORS + 1))
       lifecycle_mapping_invalid=true
     fi
-    untiered_rows=$(printf '%s\n' "$lifecycle_mapping" | rg '^\| (Implement|Address|Review|Verify)' | rg -vc '\| `(balanced|frontier)`[^|]*\|$' || true)
+    untiered_rows=$(printf '%s\n' "$lifecycle_mapping" | rg '^\| (Implement|Address|Review|Verify)' | rg -vc '\| `(balanced|frontier)`[^|]*\|$' || echo 0)
     if [ "$untiered_rows" -ne 0 ]; then
       echo "  ERROR: Every canonical lifecycle mapping row must carry a balanced or frontier tier (found $untiered_rows without)"
       ERRORS=$((ERRORS + 1))
@@ -869,22 +869,118 @@ complete + referee -> refereeing
     if [ "$lifecycle_loop_ok" = true ]; then
       echo "  OK: Phase 4 keeps tier thresholds, per-tier round caps, delta-only follow-ups, and Minor-only exit"
     fi
+    lifecycle_details_lines() {
+      awk -v mode="$1" '
+        /^<details>$/ { inside = 1; state = 1; rendered = 0; next }
+        /^<\/details>$/ { inside = 0; next }
+        inside && state == 1 && /^<summary>.*<\/summary>$/ { state = 2; next }
+        inside && state == 2 { rendered = ($0 == ""); state = 3; next }
+        mode == "outside" && !inside { print }
+        mode == "inside" && inside { print }
+        mode == "rendered" && inside && rendered { print }
+      ' "$2"
+    }
+
     ledger_section=$(sed -n '/^## Run ledger$/,/^## Escalation$/p' "$lifecycle_implement_skill")
+    ledger_ref="$plugin_dir/skills/implement/references/run-ledger.md"
+    ledger_collapsed=$(lifecycle_details_lines rendered "$ledger_ref" 2>/dev/null || true)
     ledger_ok=true
     if [ -z "$ledger_section" ] || ! rg -q '^## Escalation$' "$lifecycle_implement_skill"; then
       echo "  ERROR: implement must have '## Run ledger' followed by '## Escalation' headings"
       ERRORS=$((ERRORS + 1))
       ledger_ok=false
     fi
-    for ledger_field in 'date -u +%FT%TZ' 'every terminal path' '- Tier:' '- Children:' '- Rounds: review' '- Fix commits:' '- Wall-clock:' '- Follow-up items:' '- Outcome:'; do
+    for ledger_field in 'date -u +%FT%TZ' 'every terminal path' 'references/run-ledger.md'; do
       if ! printf '%s' "$ledger_section" | rg -Fq -- "$ledger_field"; then
         echo "  ERROR: implement run ledger must include: $ledger_field"
         ERRORS=$((ERRORS + 1))
         ledger_ok=false
       fi
     done
+    for ledger_field in '## Run Ledger' '- Tier:' '- Children:' '- Rounds: review' '- Fix commits:' '- Wall-clock:' '- Follow-up items:' '- Outcome:'; do
+      if ! printf '%s' "$ledger_collapsed" | rg -Fq -- "$ledger_field"; then
+        echo "  ERROR: implement run ledger template must collapse under <details> (blank line after </summary>) and include: $ledger_field"
+        ERRORS=$((ERRORS + 1))
+        ledger_ok=false
+      fi
+    done
     if [ "$ledger_ok" = true ]; then
-      echo "  OK: implement prints a run ledger with tier, children, rounds, fix commits, wall-clock, and follow-ups"
+      echo "  OK: implement prints a collapsed run ledger with tier, children, rounds, fix commits, wall-clock, and follow-ups"
+    fi
+
+    description_shape_ok=true
+    for shape_file in "plugins/bootstrap-docs/skills/bootstrap-docs/assets/standards-pr-template.md" "$plugin_dir/skills/implement-code/SKILL.md"; do
+      shape_visible=$(lifecycle_details_lines outside "$shape_file")
+      shape_collapsed=$(lifecycle_details_lines rendered "$shape_file")
+      if ! printf '%s' "$shape_visible" | rg -Fq '*(agent-drafted lead)*' || \
+        ! printf '%s' "$shape_visible" | rg -q '· Author ran: ' || \
+        ! printf '%s' "$shape_visible" | rg -Fq '**Review focus:** ' || \
+        ! printf '%s' "$shape_collapsed" | rg -q '^## Design$' || \
+        rg -q 'Verified' "$shape_file" || \
+        printf '%s\n' "$shape_visible" | rg -q '^#{1,6} (TL;DR|Summary|Review focus|Test evidence|Progress|Live status|Status)'; then
+        echo "  ERROR: $shape_file must specify the description shape: lead with *(agent-drafted lead)*, '· Author ran:', '**Review focus:**', the rest under <details> with a blank line after </summary>, and no Verified or living sections"
+        ERRORS=$((ERRORS + 1))
+        description_shape_ok=false
+      fi
+    done
+    if [ "$description_shape_ok" = true ]; then
+      echo "  OK: PR standards template and implement-code fallback specify the collapsed description shape"
+    fi
+
+    review_comment_ref="$plugin_dir/skills/implement/references/consolidated-review.md"
+    if ! rg -Fq 'using the template in `references/consolidated-review.md`' "$lifecycle_implement_skill" || \
+      ! lifecycle_details_lines outside "$review_comment_ref" | rg -q '^### Reviewer Findings$' || \
+      ! lifecycle_details_lines outside "$review_comment_ref" | rg -q '^\| # \| Finding \| Reviewer \| Reviewer Severity \| Decision \|$' || \
+      lifecycle_details_lines outside "$review_comment_ref" | rg -Fq 'Reasoning' || \
+      ! lifecycle_details_lines rendered "$review_comment_ref" | rg -Fq '| Reasoning / smallest remedy |'; then
+      echo "  ERROR: The consolidated review comment must show findings and decisions visibly and collapse referee reasoning under <details>"
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "  OK: The consolidated review comment shows findings and decisions and collapses referee reasoning"
+    fi
+
+    verify_step5=$(sed -n '/^### Step 5: Report Findings$/,$p' "$lifecycle_verify_file")
+    verify_record_keys='^(verification-record|verification-head|suite-[a-z-]+):'
+    verify_record_ok=true
+    if [ -z "$(printf '%s\n' "$verify_step5" | lifecycle_details_lines rendered -)" ] || \
+      printf '%s\n' "$verify_step5" | lifecycle_details_lines inside - | rg -q "$verify_record_keys" || \
+      [ "$(printf '%s\n' "$verify_step5" | lifecycle_details_lines outside - | rg -c "$verify_record_keys" || echo 0)" -lt 10 ] || \
+      ! rg -Fq 'Keep every record line outside any `<details>` block, since merge-pr parses them' "$lifecycle_verify_file"; then
+      echo "  ERROR: verify must keep every verification-record line outside <details> and collapse only evidence"
+      ERRORS=$((ERRORS + 1))
+      verify_record_ok=false
+    fi
+    if ! rg -Fq 'Compare each change the PR description claims with `gh pr diff <number>`' "$lifecycle_verify_file" || \
+      ! rg -q '^### Claim Mismatches$' "$lifecycle_verify_file" || \
+      ! rg -Fq 'correct any Claim Mismatches it lists in the PR description' "$lifecycle_implement_skill"; then
+      echo "  ERROR: verify must report PR-description claims absent from the diff, and implement must correct them before merge"
+      ERRORS=$((ERRORS + 1))
+      verify_record_ok=false
+    fi
+    if [ "$verify_record_ok" = true ]; then
+      echo "  OK: verify keeps record lines outside <details> and checks description claims against the diff"
+    fi
+
+    issue_collapse_ok=true
+    for issue_skill in draft-issue refine-issue; do
+      issue_skill_file="plugins/issue-management/skills/$issue_skill/SKILL.md"
+      if rg -q '^## (Technical Context|Proposed PRs)$' "$issue_skill_file" || \
+        ! rg -q '^<summary>Technical Context</summary>$' "$issue_skill_file" || \
+        ! rg -q '^<summary>Proposed PRs</summary>$' "$issue_skill_file" || \
+        ! lifecycle_details_lines rendered "$issue_skill_file" | rg -Fq -- '- **Key files:**' || \
+        ! lifecycle_details_lines rendered "$issue_skill_file" | rg -q '^### PR 1: '; then
+        echo "  ERROR: $issue_skill must collapse Technical Context and Proposed PRs under <details> with a blank line after </summary>"
+        ERRORS=$((ERRORS + 1))
+        issue_collapse_ok=false
+      fi
+    done
+    if ! rg -Fq 'Preserve existing `<details>` blocks and their summaries: restructure inside them, never unwrap them.' plugins/issue-management/skills/cleanup-issue/SKILL.md; then
+      echo "  ERROR: cleanup-issue must preserve existing <details> blocks"
+      ERRORS=$((ERRORS + 1))
+      issue_collapse_ok=false
+    fi
+    if [ "$issue_collapse_ok" = true ]; then
+      echo "  OK: draft-issue and refine-issue collapse Technical Context and Proposed PRs; cleanup-issue preserves <details>"
     fi
     lifecycle_prcheck_file="$plugin_dir/skills/pr-check/SKILL.md"
     if ! rg -Fq 'Claude Code, Codex, Pi, or generic adapter' "$lifecycle_implement_skill" || \

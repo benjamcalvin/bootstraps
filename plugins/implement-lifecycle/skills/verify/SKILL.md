@@ -6,7 +6,7 @@ description: >-
   authoritative-suite evidence.
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   tags: ["verify", "e2e", "integration", "subagent"]
   author: benjamcalvin
 ---
@@ -53,6 +53,8 @@ After execution, fetch `headRefOid` again. If it differs from `verification-head
 
 From the PR, linked issues, and context bundle, identify what users or consumers now experience differently, what triggers the changed code, its downstream effects, and what is observable (responses, persisted state, files, logs, artifacts).
 
+**Claims against the diff.** Compare each change the PR description claims with `gh pr diff <number>`, and list every claimed change absent from the diff under Claim Mismatches. A mismatch alone does not change the verdict; the orchestrator corrects the description.
+
 ### Step 2: Check for Existing Evidence
 
 Reuse manual evidence from the PR description or comments for a scenario only when it has the exact command and complete unedited output and exercises that behavior end to end at the current head. Authoritative-suite evidence additionally needs the complete canonical record and an exact `verification-head` match.
@@ -82,7 +84,7 @@ Do not pipe it through a formatter unless `pipefail` is set and the original sta
 
 ### Step 5: Report Findings
 
-Post a concise PR comment (`gh pr comment <pr-number>`): the verdict plus the complete `verification-record:v1` with every command, result, status, and pointer, not the verbose transcript. Return:
+Post a concise PR comment (`gh pr comment <pr-number>`): the verdict, the complete `verification-record:v1` with every command, result, status, and pointer, Issues Found, and Claim Mismatches, not the verbose transcript. Keep every record line outside any `<details>` block, since merge-pr parses them; collapse any evidence you include. Return:
 
 ```
 ## End-to-End Verification — PR #<number>
@@ -108,15 +110,21 @@ suite-baseline: <merge-base-sha> <ordered-result-list> | none
 handoff-artifact:
   {"verification-record":"v1",...,"suite-evidence":{"command-<N>":{"command":"<exact-command>","output":"<complete-unedited-output>"}}}
 
-### Evidence
+### Issues Found
+<PR-introduced bugs or regressions, and pre-existing failures labeled as such — or "None">
+
+### Claim Mismatches
+<claimed changes absent from the diff, or "None">
+
+<details>
+<summary>Evidence</summary>
+
 #### <Scenario>
 **Flow:** <trigger> → <processing> → <outcome>
 **Command:** <exact command>
 **Output:** <complete output>
 **Result:** PASS / FAIL — <what this demonstrates end to end>
-
-### Issues Found
-<PR-introduced bugs or regressions, and pre-existing failures labeled as such — or "None">
+</details>
 ```
 
 For missing-contract PARTIAL, use the canonical values and list the target sources checked under Evidence. For an ordered plan, `suite-command` is a JSON string array with one result entry per command reached. For a pure documentation/comment change, return verdict N/A with `suite-result: not-required`, the canonical empty values, and this handoff artifact:
