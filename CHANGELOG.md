@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `bootstrap-docs` 1.9.0 slims the document templates: "Last Updated", the required two-way "Related Documents" section, line-number code references and the "Target Lines" table are gone (maximums remain), and the ADR module is opt-in, defaults to declined, and uses a one-page template with a when-to-write trigger (the agent drafts, a human accepts)
 - `bootstrap-docs` 1.8.0 redefines specs as the shared conceptual model: both spec templates open with a Glossary and carry Invariants, Rationale, and a `Covers:` field, the product spec is the model as users see it and the technical spec the model as builders see it, and "schema, indexes" is gone from the spec definitions
 - `implement-lifecycle` 3.20.0 has `review-docs` report spec glossary terms that no longer appear in the covered code, and drops its separate two-way link check
 - Documented the repository's Claude Code/Codex compatibility matrix and installation flows

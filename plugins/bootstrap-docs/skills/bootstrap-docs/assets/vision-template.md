@@ -1,7 +1,6 @@
 # {TITLE}
 
 **Status:** Draft
-**Last Updated:** {DATE}
 
 ## Vision
 
@@ -41,11 +40,3 @@ Explicit boundaries — things that are out of scope by design, not by omission.
 
 - Not {thing} — why this boundary exists
 - Not {thing} — why
-
-## Related Documents
-
-### Specifications
-- [Product Spec](../specs/product/overview.md) — What the system does (derived from this vision)
-
-### Decisions
-- [ADR: Key Decision](../adr/NNN-title.md) — Architectural decision rooted in these principles

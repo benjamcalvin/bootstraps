@@ -3,7 +3,6 @@
 > **Note:** Plans are an opt-in module. For most projects, git issues and PRs provide better execution tracking. Use plan documents when a narrative execution plan adds value beyond issue tracking — e.g., multi-phase migrations or cross-team coordination.
 
 **Status:** Draft
-**Last Updated:** {DATE}
 **Target Date:** {TARGET_DATE}
 
 ## Objective
@@ -50,9 +49,3 @@ What "done" looks like. Reference the relevant spec for full details.
 
 - [ ] Measurable criterion that proves the plan succeeded
 - [ ] Another criterion
-
-## Related Documents
-
-### Design Context
-- [Relevant Spec](../specs/product/feature.md) — What we're building toward
-- [ADR: Relevant Decision](../adr/NNN-title.md) — Key decisions shaping this plan

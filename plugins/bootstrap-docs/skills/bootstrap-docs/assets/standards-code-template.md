@@ -1,7 +1,6 @@
 # Code Conventions
 
 **Status:** Draft
-**Last Updated:** {DATE}
 
 ## Overview
 
@@ -140,12 +139,3 @@ Exported symbols need no doc comment unless a tool turns it into output.
 {- When to use options/builder patterns vs. explicit parameters}
 
 ---
-
-## Related Documents
-
-### Standards
-- [Testing Standards](testing-standards.md) — Testing patterns and conventions
-- [PR Standards](pr-standards.md) — PR conventions enforced in review
-
-### Operational
-- {Link to development setup guide}

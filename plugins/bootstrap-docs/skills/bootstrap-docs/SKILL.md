@@ -10,7 +10,7 @@ agent: general-purpose
 allowed-tools: Read, Glob, Bash(cat *), Bash(find *)
 license: MIT
 metadata:
-  version: "1.8.0"
+  version: "1.9.0"
   tags: ["docs", "documentation", "strategy", "scaffolding"]
   author: benjamcalvin
   standards-sub-types: ["testing", "code", "pr"]
@@ -77,9 +77,9 @@ On a fresh repo, the documentation strategy must be created **before** module se
    > - **research/** — WHAT (learned): compiled LLM research for future reference
    > - **plans/** — WHEN: active execution work, ephemeral
    >
-   > Which modules would you like to enable? (default: all except `plans`, which is opt-in)"
+   > Which modules would you like to enable? (default: all except `plans` and `adr`, which are opt-in)"
 
-   Ask which modules to enable (default: all except `plans`). Modules: `adr`, `specs` (with sub-options: `product`, `technical`, `standards`), `plans`, `guides`, `vision`, `research`.
+   Ask which modules to enable (default: all except `plans` and `adr`, which are opt-in and default to declined). Modules: `adr`, `specs` (with sub-options: `product`, `technical`, `standards`), `plans`, `guides`, `vision`, `research`.
    If standards enabled, ask which standard types to include (default: all): `testing`, `code`, `pr`.
 
 6. Update `.bootstraps-preferences` with the user's module selections. Modules the user selects start as `pending`. Modules the user declines are `declined`.
@@ -96,7 +96,7 @@ On a fresh repo, the documentation strategy must be created **before** module se
          - docs/AGENTS.md
          - docs/CLAUDE.md
      adr:
-       status: pending
+       status: declined
      specs:
        status: pending
        product:
@@ -177,18 +177,17 @@ Create `{docs_location}/AGENTS.md` using the strategy template from `$SKILL_DIR/
 Read the template, then customize it:
 
 1. Replace `{PROJECT_NAME}` with the project name from preferences
-2. Replace `{DATE}` with today's date
-3. Replace `{DOCS_LOCATION}` with the configured docs location
-4. Build the `{TAXONOMY_ENTRIES}` block — include modules with status `pending` or `enabled` (not `declined`):
+2. Replace `{DOCS_LOCATION}` with the configured docs location
+3. Build the `{TAXONOMY_ENTRIES}` block — include modules with status `pending` or `enabled` (not `declined`):
    - If vision not declined: `├── vision/             # WHY — project vision, philosophy, strategy`
    - If specs not declined: `├── specs/` with sub-entries for product/, technical/, standards/ as applicable
    - If adr not declined: `├── adr/                # WHY (decisions) — immutable architecture decision records`
    - If guides not declined: `├── guides/             # HOW (do) — step-by-step operational instructions`
    - If research not declined: `├── research/           # WHAT (learned) — compiled LLM research for future reference`
    - If plans not declined: `└── plans/              # WHEN — active execution work, ephemeral`
-5. Build `{TAXONOMY_DESCRIPTIONS}` — include the description section for each non-declined module (vision, specs, adr, guides, research, plans). Use the descriptions from the strategy template but generalized for {PROJECT_NAME}.
-6. Build `{CLASSIFICATION_ROWS}` — include only rows for non-declined modules
-7. Build `{FRONTMATTER_ROWS}` — include only rows for non-declined document types:
+4. Build `{TAXONOMY_DESCRIPTIONS}` — include the description section for each non-declined module (vision, specs, adr, guides, research, plans). Use the descriptions from the strategy template but generalized for {PROJECT_NAME}.
+5. Build `{CLASSIFICATION_ROWS}` — include only rows for non-declined modules
+6. Build `{FRONTMATTER_ROWS}` — include only rows for non-declined document types:
    - ADR: `**Decision:** Accepted | Superseded | Deprecated` and `**Superseded By:** ADR-NNN`
    - Product Spec: `**Owner:** name` and `**Covers:** code paths`
    - Technical Spec: `**Owner:** name` and `**Covers:** code paths`
@@ -219,16 +218,13 @@ For each module with status `pending` or `enabled` (not `declined`), create the 
 
 ## Key Principles
 - {principles specific to this doc type}
-
-## Related Documents
-- [Documentation Strategy](../AGENTS.md) — Rules governing all documentation
 ```
 
 **Module-specific content:**
 
 **adr/AGENTS.md:**
 - Purpose: "Architecture Decision Records — immutable records of significant design decisions with context and rationale."
-- Principles: ADRs are append-only (never modify accepted ADRs; create new ones to supersede). Naming: `NNN-short-title.md`. Sequential numbering, never reuse. Every ADR needs frontmatter: Status, Last Updated, Decision. Target: 200–600 lines (max 800).
+- Principles: ADRs are append-only (never modify accepted ADRs; create new ones to supersede). Naming: `NNN-short-title.md`. Sequential numbering, never reuse. Every ADR needs frontmatter: Status, Decision. One page; write one only when a decision is hard to reverse, spans components, or would leave a future reader asking why. The agent drafts, a human accepts.
 
 **specs/AGENTS.md:**
 - Purpose: "Specifications — the shared conceptual model of the system: its concepts, vocabulary, boundaries, and invariants (target state)."
@@ -236,15 +232,15 @@ For each module with status `pending` or `enabled` (not `declined`), create the 
 
 **specs/product/AGENTS.md:**
 - Purpose: "Product specifications — the shared model as users see it."
-- Principles: Glossary, concepts and how they relate, behaviors, boundaries, invariants, and rationale in the users' terms. Feature definitions and consumer-facing contracts belong here. Every product spec needs: Status, Last Updated, Owner, Covers.
+- Principles: Glossary, concepts and how they relate, behaviors, boundaries, invariants, and rationale in the users' terms. Feature definitions and consumer-facing contracts belong here. Every product spec needs: Status, Owner, Covers.
 
 **specs/technical/AGENTS.md:**
 - Purpose: "Technical specifications — the shared model as builders see it."
-- Principles: Glossary, components and boundaries, data model, and invariants, in the same vocabulary as the product spec. Describe entities and relationships, not schema or indexes the code shows; for target state not yet built, describe the concepts and contracts the code will have. Every technical spec needs: Status, Last Updated, Owner, Covers.
+- Principles: Glossary, components and boundaries, data model, and invariants, in the same vocabulary as the product spec. Describe entities and relationships, not schema or indexes the code shows; for target state not yet built, describe the concepts and contracts the code will have. Every technical spec needs: Status, Owner, Covers.
 
 **specs/standards/AGENTS.md:**
 - Purpose: "Standards — rules and conventions for how we work."
-- Principles: Standards prescribe conventions. "What is the standard?" goes here. "How do I follow it?" goes in guides/. Every standards doc needs: Status, Last Updated.
+- Principles: Standards prescribe conventions. "What is the standard?" goes here. "How do I follow it?" goes in guides/. Every standards doc needs: Status.
 - Note: Standards are organized by type. The default types are:
   - **Testing standards** — test organization, naming, assertions, coverage, mocking, CI integration
   - **Code conventions** — project layout, naming, error handling, logging, formatting, documentation
@@ -253,23 +249,21 @@ For each module with status `pending` or `enabled` (not `declined`), create the 
 
 **plans/AGENTS.md:**
 - Purpose: "Plans — active execution work, how and when to build what the specs describe."
-- Principles: Plans are ephemeral — they become git history when complete. Answer "how to get from current state to spec?" Never put planning content in specs or ADRs. Every plan needs: Status, Last Updated, Target Date.
+- Principles: Plans are ephemeral — they become git history when complete. Answer "how to get from current state to spec?" Never put planning content in specs or ADRs. Every plan needs: Status, Target Date.
 
 **guides/AGENTS.md:**
 - Purpose: "Guides — step-by-step operational instructions for specific tasks."
-- Principles: Guides are instructional — tell you how to do something, not why it's designed that way. Every guide needs: Status, Last Updated, Audience.
+- Principles: Guides are instructional — tell you how to do something, not why it's designed that way. Every guide needs: Status, Audience.
 
 **research/AGENTS.md:**
 - Purpose: "Research — compiled findings from LLM research sessions, preserved for easy future reference."
-- Principles: Research docs capture what was learned during investigation — technology evaluations, API explorations, competitive analysis, library comparisons, debugging deep-dives. They are reference material, not decisions (those go in ADRs) or design (those go in specs). Name files descriptively: `auth-library-comparison.md`, `postgres-jsonb-performance.md`. Include sources and applicability notes so future readers know when the research might be stale. Every research doc needs: Status, Last Updated, Topic.
+- Principles: Research docs capture what was learned during investigation — technology evaluations, API explorations, competitive analysis, library comparisons, debugging deep-dives. They are reference material, not decisions (those go in ADRs) or the shared model (that goes in specs). Name files descriptively: `auth-library-comparison.md`, `postgres-jsonb-performance.md`. Include sources and applicability notes so future readers know when the research might be stale. Every research doc needs: Status, Topic.
 
 **vision/AGENTS.md:**
 - Purpose: "Vision documents — the WHY behind {PROJECT_NAME}."
-- Principles: Capture project philosophy, strategic direction, foundational principles. Mostly stable, update infrequently. Provides context that frames every design decision. Every vision doc needs: Status, Last Updated.
+- Principles: Capture project philosophy, strategic direction, foundational principles. Mostly stable, update infrequently. Provides context that frames every design decision. Every vision doc needs: Status.
 
 For each directory, also create a `CLAUDE.md` containing only `@AGENTS.md`.
-
-**Adjust relative links** based on directory depth. For sub-directories under specs/, the link to the strategy doc is `../../AGENTS.md`.
 
 **Update `.bootstraps-preferences`:** For each module that got its AGENTS.md populated, add those files to the module's `files` list.
 

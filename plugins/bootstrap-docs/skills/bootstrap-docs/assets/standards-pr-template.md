@@ -1,7 +1,6 @@
 # PR Standards
 
 **Status:** Draft
-**Last Updated:** {DATE}
 
 ## Overview
 
@@ -90,7 +89,7 @@ Use the correct keyword based on whether this PR **fully completes** the issue o
 ### Other References
 
 - Reference related PRs with `Depends on #N` or `See also #N`
-- Link to specs or ADRs when the PR implements a design document
+- Link to specs or ADRs when the PR implements a spec
 
 ## PR Scope
 
@@ -144,12 +143,3 @@ Use draft PRs for:
 Convert to ready-for-review when the PR meets all standards above.
 
 ---
-
-## Related Documents
-
-### Standards
-- [Code Conventions](code-conventions.md) — Coding standards enforced in review
-- [Testing Standards](testing-standards.md) — Test requirements for PR acceptance
-
-### Operational
-- {Link to development setup guide}

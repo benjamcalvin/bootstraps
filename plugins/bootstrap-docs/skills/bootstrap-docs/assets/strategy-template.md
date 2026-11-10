@@ -1,7 +1,6 @@
 # Documentation Strategy
 
 **Version:** 1.0
-**Last Updated:** {DATE}
 
 **This document defines mandatory documentation standards. All contributors — human and AI — must follow these rules when creating or modifying documentation. Consistency is not optional; it ensures documentation remains navigable, maintainable, and valuable as a shared context layer.**
 
@@ -11,9 +10,9 @@ This strategy defines how we organize and maintain documentation in {PROJECT_NAM
 
 ## Core Principles
 
-1. **Living documents over proposals** — Design docs evolve during implementation rather than being written once and frozen. Update when thinking changes, not when tasks complete.
+1. **Living documents over proposals** — Specs evolve during implementation rather than being written once and frozen. Update when thinking changes, not when tasks complete.
 2. **Modular over monolithic** — Split documents by concern, not by phase or role
-3. **Cross-linked over isolated** — Documents reference related docs with clear relationship descriptions
+3. **Linked where useful** — Link to related docs when the link helps a reader; none are required
 4. **Concise over comprehensive** — Each document has a clear scope; prefer multiple focused docs
 5. **Consistent over creative** — Follow established patterns and structures. Consistency makes documentation predictable and navigable
 6. **AI-readable** — Docs are frequently consumed by AI agents during development. Be succinct, specific, and clear. Prefer shorter, well-named documents. Don't overexplain, but make requirements and decisions explicit
@@ -47,7 +46,6 @@ Every document must have frontmatter:
 
 ```markdown
 **Status:** Draft | Partial | Complete
-**Last Updated:** YYYY-MM-DD
 ```
 
 **Additional fields by document type:**
@@ -87,18 +85,18 @@ Documentation is frequently consumed by AI agents during development. Optimize f
 
 ## Length Guidelines
 
-Not rigid rules, but signals for document health:
+Maximums, not goals. Write as little as the content needs.
 
-| Document Type | Target Lines | Max Lines |
-|---|---|---|
-| ADR | 200–600 | 800 |
-| Product Spec | 300–700 | 1,000 |
-| Technical Spec | 400–800 | 1,000 |
-| Standards | 200–500 | 700 |
-| Vision | 300–600 | 800 |
-| Guide | 300–600 | 800 |
-| Plan | Variable | — |
-| Changelog | Variable | — |
+| Document Type | Max Lines |
+|---|---|
+| ADR | one page (about 40) |
+| Product Spec | 1,000 |
+| Technical Spec | 1,000 |
+| Standards | 700 |
+| Vision | 800 |
+| Guide | 800 |
+| Plan | — |
+| Changelog | — |
 
 **Split when:**
 - Document exceeds 1,000 lines
@@ -106,32 +104,7 @@ Not rigid rules, but signals for document health:
 - Different readers need different sections
 - Table of contents has >8 top-level sections
 
-## Cross-Linking Standards
-
-Every document must include a "Related Documents" section at the bottom.
-
-**Requirements:**
-1. **Bidirectional** — if A links to B, B must link to A
-2. **Contextual** — explain the relationship, not just the link
-3. **Specific** — link to code with line numbers when relevant
-
-**Link categories template:**
-```markdown
-## Related Documents
-
-### Design Context
-- [ADR: Decision Name](adr/NNN-title.md) — Why this approach was chosen
-
-### Specifications
-- [Related Product Spec](specs/product/feature.md) — User-facing requirements
-- [Related Technical Spec](specs/technical/component.md) — Implementation design
-
-### Operational
-- [Setup Guide](guides/setup.md) — How to configure this
-
-### Code References
-- [Implementation](../src/module/file.ts:45-120) — Production code
-```
+Refer to code by path or symbol name, never with a line reference, which goes stale.
 
 ## Instruction Files (AGENTS.md + CLAUDE.md)
 
@@ -178,10 +151,8 @@ Create an `AGENTS.md` + `CLAUDE.md` pair when:
 ## Maintenance Rules
 
 **When code changes:**
-1. Update the relevant design doc in the same PR (if design changed)
-2. Update "Last Updated" timestamp
-3. Check if cross-references need updates
-4. Verify bidirectional links
+1. Update the relevant spec in the same PR (if a concept, term, or invariant changed)
+2. Fix links that the change breaks
 
 **When documents get long:**
 1. Identify distinct concerns within the document
@@ -196,9 +167,8 @@ Create an `AGENTS.md` + `CLAUDE.md` pair when:
 
 **Common violations to avoid:**
 - Adding "Next Steps" or task lists to specs or ADRs
-- Mixing planning (roadmaps, tasks) into design documents
-- Creating documents without "Related Documents" sections
-- Failing to update cross-references when moving or splitting documents
+- Mixing planning (roadmaps, tasks) into specs
+- Leaving broken links when moving or splitting documents
 
 ---
 
@@ -211,8 +181,3 @@ For tracking implementation work (tasks, milestones, delivery), use **git issues
 - Use `/implement` to plan and execute work against your specs
 
 Plan documents (`docs/plans/`) are available as an opt-in module for cases where a narrative execution plan adds value beyond issue tracking, but issues + PRs are the recommended default.
-
-## Related Documents
-
-### Project Context
-- [AGENTS.md](../AGENTS.md) — Root project instructions, development standards

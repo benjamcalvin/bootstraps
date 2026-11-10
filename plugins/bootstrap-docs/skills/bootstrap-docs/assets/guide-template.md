@@ -1,7 +1,6 @@
 # {TITLE}
 
 **Status:** Draft
-**Last Updated:** {DATE}
 **Audience:** contributor | operator | consumer
 
 ## Overview
@@ -62,11 +61,3 @@ Expected output: what success looks like.
 **Symptom:** What you see
 **Cause:** Why it happens
 **Fix:** What to do
-
-## Related Documents
-
-### Design Context
-- [Relevant Standard](../specs/standards/standard.md) — Convention this guide implements
-
-### Operational
-- [Related Guide](../guides/other.md) — Next steps after this guide
