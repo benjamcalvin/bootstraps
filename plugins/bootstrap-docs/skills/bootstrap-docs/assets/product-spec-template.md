@@ -9,7 +9,7 @@ The shared model of this feature as users see it. One paragraph: what it is for 
 
 ## Glossary
 
-One vocabulary for users, agents, and code. Use these terms exactly, in docs and in code.
+One vocabulary for users, agents, and code; the technical spec uses these same terms. Use these terms exactly, in docs and in code.
 
 | Term | Meaning |
 |------|---------|

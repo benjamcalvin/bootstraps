@@ -71,7 +71,7 @@ On a fresh repo, the documentation strategy must be created **before** module se
    > "Your documentation strategy has been created at `{docs_location}/AGENTS.md`. It defines these documentation categories:
    >
    > - **vision/** — WHY: project vision, philosophy, strategy
-   > - **specs/** — WHAT: design documents (product, technical, standards)
+   > - **specs/** — WHAT: the shared conceptual model (concepts, vocabulary, boundaries, invariants) plus standards
    > - **adr/** — WHY (decisions): immutable architecture decision records
    > - **guides/** — HOW: step-by-step operational instructions
    > - **research/** — WHAT (learned): compiled LLM research for future reference
@@ -236,7 +236,7 @@ For each module with status `pending` or `enabled` (not `declined`), create the 
 
 **specs/product/AGENTS.md:**
 - Purpose: "Product specifications — the shared model as users see it."
-- Principles: Glossary, concepts and how they relate, behaviors, and invariants in the users' terms. Feature definitions and consumer-facing contracts belong here. Every product spec needs: Status, Last Updated, Owner, Covers.
+- Principles: Glossary, concepts and how they relate, behaviors, boundaries, invariants, and rationale in the users' terms. Feature definitions and consumer-facing contracts belong here. Every product spec needs: Status, Last Updated, Owner, Covers.
 
 **specs/technical/AGENTS.md:**
 - Purpose: "Technical specifications — the shared model as builders see it."
@@ -353,8 +353,8 @@ Report to the user:
    >
    > 1. **Documentation Strategy** — If strategy status is `enabled`: "✅ Complete. Establishes the rules for how all docs are organized, classified, and maintained." If `pending`: "Establish the rules for how all docs are organized, classified, and maintained. Ensure it's linked from your root `AGENTS.md`/`CLAUDE.md` so agents discover it automatically."
    > 2. **Vision** — Articulate the product vision, philosophy, and success metrics
-   > 3. **Product Specs** — Detail features, user stories, and requirements from the consumer perspective
-   > 4. **Tech Specs** — Design the technical architecture and implementation approach
+   > 3. **Product Specs** — The shared model as users see it (glossary, concepts, behaviors, invariants)
+   > 4. **Tech Specs** — The shared model as builders see it (components, boundaries, data model, invariants)
    > 5. **Standards** — Establish coding standards and engineering practices for the team
    >
    > Skip any step whose module you declined. For execution tracking (tasks, milestones, delivery), use git issues and PRs — run `/implement` to plan and track work against your specs.
