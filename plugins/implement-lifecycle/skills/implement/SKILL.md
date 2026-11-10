@@ -186,7 +186,7 @@ If zero findings survive, still post the Step C comment, ending `**Result:** no 
 
 #### Step C: Post the Consolidated Review
 
-Post **one** comment per round (use `--body-file` when long) using the template in `references/consolidated-review.md`. It is the round's entire audit trail: every reviewer that ran with its verdict, each reviewer's findings verbatim, and each referee decision, all visible, with the referee reasoning collapsed under `<details>`.
+Post **one** comment per round (use `--body-file` when long) by reading `references/consolidated-review.md` and following its template. It is the round's entire audit trail: every reviewer that ran with its verdict, each reviewer's findings verbatim, and each referee decision, all visible, with the referee reasoning collapsed under `<details>`.
 
 Write only accepted findings to a resolved findings path: `# Filtered Findings — Round <N>` and a `| # | Finding | Severity | Details |` table with file:line and what to fix.
 
@@ -237,7 +237,7 @@ Print the run ledger and report the result.
 
 ## Run ledger
 
-Record a UTC timestamp (`date -u +%FT%TZ`) at each phase start and end. On every terminal path (merge, escalation, cap or stall exit, third verify FAIL, PARTIAL, or any other stop), print it to the user using `references/run-ledger.md`, collapsed under `<details>`; when a PR exists and the path posts a PR comment or merge summary, append it there too. Tally as you go: children per role and tier, addresser commits (from each Commits list, including verify fixes), and out-of-delta follow-ups.
+Record a UTC timestamp (`date -u +%FT%TZ`) at each phase start and end. On every terminal path (merge, escalation, cap or stall exit, third verify FAIL, PARTIAL, or any other stop), print it to the user after reading `references/run-ledger.md`, collapsed under `<details>`; when a PR exists and the path posts a PR comment or merge summary, append it there too. Tally as you go: children per role and tier, addresser commits (from each Commits list, including verify fixes), and out-of-delta follow-ups.
 
 ## Escalation
 

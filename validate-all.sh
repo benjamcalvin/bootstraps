@@ -890,6 +890,11 @@ complete + referee -> refereeing
       ERRORS=$((ERRORS + 1))
       ledger_ok=false
     fi
+    if ! rg -q '^</details>$' "$ledger_ref" 2>/dev/null; then
+      echo "  ERROR: run-ledger.md must close its <details> block with a closing </details> line"
+      ERRORS=$((ERRORS + 1))
+      ledger_ok=false
+    fi
     for ledger_field in 'date -u +%FT%TZ' 'every terminal path' 'references/run-ledger.md'; do
       if ! printf '%s' "$ledger_section" | rg -Fq -- "$ledger_field"; then
         echo "  ERROR: implement run ledger must include: $ledger_field"

@@ -127,7 +127,7 @@ handoff-artifact:
 </details>
 ```
 
-For missing-contract PARTIAL, use the canonical values and list the target sources checked under Evidence. For an ordered plan, `suite-command` is a JSON string array with one result entry per command reached. For a pure documentation/comment change, return verdict N/A with `suite-result: not-required`, the canonical empty values, and this handoff artifact:
+For missing-contract PARTIAL, use the canonical values and list the target sources checked under Evidence. For an ordered plan, `suite-command` is a JSON string array with one result entry per command reached. For a pure documentation/comment change, return verdict N/A with `suite-result: not-required`, the canonical empty values, any Claim Mismatches section, and this handoff artifact:
 
 ```
 {"verification-record":"v1","verification-head":"<full-head-sha>","suite-result":"not-required","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}

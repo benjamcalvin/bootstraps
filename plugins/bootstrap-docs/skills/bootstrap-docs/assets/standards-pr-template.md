@@ -85,7 +85,7 @@ Use the correct keyword based on whether this PR **fully completes** the issue o
 | `Closes #N` / `Fixes #N` | This single PR **fully completes** the issue. GitHub will auto-close the issue on merge. |
 | `Part of #N` | This PR is **one of several** addressing the issue. The issue stays open for remaining work. |
 
-**Default to `Part of #N`** when in doubt — prematurely closing a tracking issue loses visibility into remaining work. Only use `Closes` when you are certain no further PRs are needed.
+**Default to `Part of #N`** when in doubt — prematurely closing a tracking issue loses visibility into remaining work. Only use `Closes` when you are certain no further PRs are needed. Omit the reference when there is no issue.
 
 ### Other References
 

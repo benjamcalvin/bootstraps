@@ -71,9 +71,12 @@ If the issue lacks clear sections, restructure it using the standard template:
 **Out of scope:**
 - <extracted or inferred>
 
-## Technical Context
+<details>
+<summary>Technical Context</summary>
 
 - **Key files:** <extracted if present>
+
+</details>
 
 ## References
 

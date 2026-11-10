@@ -14,5 +14,6 @@ Print the ledger in this shape. Keep the `<details>` wrapper, and the blank line
 - Wall-clock: plan/implement <m>, review <m>, verify <m>, merge <m>
 - Follow-up items: <out-of-delta findings, or none>
 - Outcome: <merged|escalated|partial|stopped|reviewed|addressed> — <phase>
+
 </details>
 ```
