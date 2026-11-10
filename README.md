@@ -98,6 +98,7 @@ Some skills accept arguments:
 
 ```
 /bootstrap-docs adr
+/bootstrap-docs migrate
 /implement #42
 /implement fix the login bug
 /implement 17 just review
