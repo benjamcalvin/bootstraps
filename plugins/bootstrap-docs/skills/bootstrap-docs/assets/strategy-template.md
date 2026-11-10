@@ -57,7 +57,24 @@ Every document starts with:
 - Never write "we should consider": decide, or defer with a reason.
 - Refer to code by path or symbol name, never by line number, which goes stale.
 
-**Split a document when** it covers more than one concern, different readers need different sections, or it has more than eight top-level sections.
+## Length Guidelines
+
+Maximums, not goals. Write as little as the content needs.
+
+| Document Type | Max Lines |
+|---|---|
+| ADR | one page (about 40) |
+| Product Spec | 1,000 |
+| Technical Spec | 1,000 |
+| Standards | 700 |
+| Vision | 800 |
+| Guide | 800 |
+| Plan | — |
+| Changelog | — |
+
+**Line budgets only ever decrease, and they apply to instruction files only.** The maximums above are ceilings for other docs, not enforced limits.
+
+**Split when** a document exceeds 1,000 lines, covers more than one concern, serves readers who need different sections, or has more than eight top-level sections.
 
 ## Instruction Files
 
@@ -65,10 +82,8 @@ Every document starts with:
 
 - **Every `CLAUDE.md` imports `@AGENTS.md`.** Claude-specific lines go below the import, which is relative to the importing file.
 - **Each `AGENTS.md` stays under 200 lines**, including this one and the project root's.
-- **Line budgets only ever decrease, and they apply to instruction files only.**
 - **Only what an agent cannot infer from the code:** commands, gotchas, conventions that differ from defaults, and pointers to docs. Leave out anything a directory listing or the code already shows.
 - **No per-folder index files.** Docs subfolders get no `AGENTS.md`, `CLAUDE.md`, or Contents list; the folder names and this file's taxonomy are the index.
-- **Refer to code by symbol, never by line number.**
 
 ## Maintenance Rules
 

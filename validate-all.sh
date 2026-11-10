@@ -976,6 +976,8 @@ complete + referee -> refereeing
       ! rg -Fq 'The generated strategy doc stays under 200 lines' "$instr_skill" || \
       ! rg -Fq '**Each `AGENTS.md` stays under 200 lines**' "$instr_strategy" || \
       ! rg -Fq '**Line budgets only ever decrease, and they apply to instruction files only.**' "$instr_strategy" || \
+      ! rg -Fq 'Maximums, not goals.' "$instr_strategy" || \
+      ! rg -Fq '| Product Spec | 1,000 |' "$instr_strategy" || \
       ! rg -Fq '**Every `CLAUDE.md` imports `@AGENTS.md`.**' "$instr_strategy"; then
       echo "  ERROR: the bootstrap-docs strategy template must stay within 130 lines (leaving room for module sections so the generated doc stays under 200) and state the instruction-file rules, and Phase 2 must keep the generated strategy doc under 200 lines"
       ERRORS=$((ERRORS + 1))
@@ -992,7 +994,9 @@ complete + referee -> refereeing
     fi
     instr_phase5=$(sed -n '/^### Phase 5: Root Integration$/,/^### Phase 6: Summary$/p' "$instr_skill")
     if ! printf '%s\n' "$instr_phase5" | rg -Fq '**Every `CLAUDE.md` imports `@AGENTS.md`.**' || \
-      ! printf '%s\n' "$instr_phase5" | rg -Fq 'When one lacks an `@AGENTS.md` line, add `@AGENTS.md`' || \
+      ! printf '%s\n' "$instr_phase5" | rg -Fq 'When one lacks an `@AGENTS.md` line, add `@AGENTS.md` after any YAML frontmatter' || \
+      ! printf '%s\n' "$instr_phase5" | rg -Fq 'Never add the import where the sibling `AGENTS.md` neither exists nor is being created' || \
+      ! printf '%s\n' "$instr_phase5" | rg -Fq '`.claude/`' || \
       printf '%s\n' "$instr_phase5" | rg -qi 'offer to add `@AGENTS\.md`'; then
       echo "  ERROR: bootstrap-docs Phase 5 must add @AGENTS.md to every CLAUDE.md that lacks it"
       ERRORS=$((ERRORS + 1))
@@ -1001,8 +1005,12 @@ complete + referee -> refereeing
     instr_migrate=$(sed -n '/^### Migrate Mode/,$p' "$instr_skill")
     if ! rg -q '^argument-hint: .*\bmigrate\b' "$instr_skill" || \
       ! printf '%s\n' "$instr_migrate" | rg -Fq '**Never delete a file without explicit confirmation.**' || \
-      ! printf '%s\n' "$instr_migrate" | rg -Fq '**Apply** only the confirmed items'; then
-      echo "  ERROR: bootstrap-docs must offer a migrate mode that applies only confirmed changes and never deletes a file without explicit confirmation"
+      ! printf '%s\n' "$instr_migrate" | rg -Fq '**Apply** only the confirmed items' || \
+      ! printf '%s\n' "$instr_migrate" | rg -Fq 'every rebuild or overwrite of an existing file (such as the strategy doc) as **REWRITE**' || \
+      ! printf '%s\n' "$instr_migrate" | rg -Fq 'Confirm each **DELETE** and each **REWRITE** separately, naming the file' || \
+      ! printf '%s\n' "$instr_migrate" | rg -Fq 'a blanket "all" never applies a **DELETE** or **REWRITE** item' || \
+      ! printf '%s\n' "$instr_migrate" | rg -Fq 'show the project-specific rules that will carry over'; then
+      echo "  ERROR: bootstrap-docs must offer a migrate mode that applies only confirmed changes, never deletes a file without explicit confirmation, and confirms each DELETE and REWRITE item by file name"
       ERRORS=$((ERRORS + 1))
       instr_ok=false
     fi
