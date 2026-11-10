@@ -103,6 +103,8 @@ Maximums, not goals. Write as little as the content needs.
 - Broken links after moving or splitting documents
 - An instruction file growing past its line budget
 
+`docs-check` enforces the instruction-file line budgets, links, and instruction-file rules; `/bootstrap-docs docs-check` installs it.
+
 ## Execution Tracking
 
 Track implementation work (tasks, milestones, delivery) in git issues and pull requests, not plan documents. Create issues tied to specs, link PRs to them, and use `/implement` to plan and execute the work. Plan documents are an opt-in module for when a narrative execution plan adds value beyond issue tracking.

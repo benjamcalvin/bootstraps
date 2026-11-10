@@ -95,8 +95,9 @@ class UsageError(Exception):
     pass
 
 
-def run_git(root, *args):
-    result = subprocess.run(["git", "-c", "core.quotePath=false", *args], cwd=root, capture_output=True, text=True)
+def run_git(root, *args, stdin=None):
+    result = subprocess.run(["git", "-c", "core.quotePath=false", *args], cwd=root, capture_output=True,
+                            text=True, encoding="utf-8", errors="replace", input=stdin)
     if result.returncode != 0:
         return None
     return result.stdout
@@ -138,6 +139,36 @@ def resolve_base(root, explicit):
             return None, None
     merge_base = run_git(root, "merge-base", "HEAD", target)
     return (merge_base.strip() if merge_base else target), label
+
+
+C_ESCAPES = {"a": 7, "b": 8, "t": 9, "n": 10, "v": 11, "f": 12, "r": 13, '"': 34, "\\": 92}
+
+
+def unquote_c(text):
+    out = bytearray()
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char != "\\" or index + 1 >= len(text):
+            out += char.encode("utf-8")
+            index += 1
+            continue
+        nxt = text[index + 1]
+        if nxt in "01234567":
+            digits = re.match(r"[0-7]{1,3}", text[index + 1:]).group(0)
+            out.append(int(digits, 8) & 255)
+            index += 1 + len(digits)
+        else:
+            out.append(C_ESCAPES.get(nxt, ord(nxt) & 127))
+            index += 2
+    return out.decode("utf-8", errors="replace")
+
+
+def diff_target(header):
+    target = header[4:].rstrip("\t")
+    if target.startswith('"') and target.endswith('"') and len(target) >= 2:
+        target = unquote_c(target[1:-1])
+    return target[2:] if target.startswith("b/") else None
 
 
 def list_files(root, in_git, excludes):
@@ -325,6 +356,7 @@ class Checker:
 
     def check_paths(self, doc):
         doc_dir = os.path.dirname(doc.path)
+        unresolved = []
         for number, span in doc.spans:
             if not PATH_SPAN_RE.match(span) or "//" in span or PLACEHOLDER_RE.search(span) or BARE_EXTENSION_RE.match(span):
                 continue
@@ -340,7 +372,18 @@ class Checker:
                 continue
             if self.path_resolves(doc_dir, rel.rstrip("/"), len(segments) == 1):
                 continue
-            self.add(doc.path, number, "ERROR", f"backticked path does not exist: {span}")
+            local = os.path.normpath(os.path.join(doc_dir, rel.rstrip("/"))).replace(os.sep, "/")
+            unresolved.append((number, span, [c for c in dict.fromkeys((local, rel.rstrip("/"))) if not c.startswith("../")]))
+        ignored = self.ignored_paths({c for _, _, candidates in unresolved for c in candidates})
+        for number, span, candidates in unresolved:
+            if not ignored.intersection(candidates):
+                self.add(doc.path, number, "ERROR", f"backticked path does not exist: {span}")
+
+    def ignored_paths(self, candidates):
+        if not self.in_git or not candidates:
+            return set()
+        out = run_git(self.root, "check-ignore", "-z", "--stdin", stdin="\0".join(sorted(candidates)) + "\0") or ""
+        return {p for p in out.split("\0") if p}
 
     def path_resolves(self, doc_dir, rel, bare):
         local = os.path.normpath(os.path.join(doc_dir, rel)).replace(os.sep, "/")
@@ -513,10 +556,12 @@ class Checker:
         if new["default_budget"] > old["default_budget"]:
             self.add(self.config_rel, line_of(text, "default_budget"), "ERROR",
                      f"default_budget raised from {old['default_budget']} to {new['default_budget']}; budgets only fall", False)
-        for path, value in sorted(new["budgets"].items()):
+        for path in sorted(set(old["budgets"]) | set(new["budgets"])):
             previous = old["budgets"].get(path, old["default_budget"])
+            value = new["budgets"].get(path, new["default_budget"])
             if value > previous:
-                self.add(self.config_rel, line_of(text, json.dumps(path)), "ERROR",
+                line = line_of(text, json.dumps(path)) if path in new["budgets"] else line_of(text, "[budgets]")
+                self.add(self.config_rel, line, "ERROR",
                          f"line budget for {path} raised from {previous} to {value}; budgets only fall", False)
         old_entries = set(old["baseline"])
         if old["has_baseline"]:
@@ -541,8 +586,8 @@ class Checker:
         if marker == "//" and stripped.startswith(("/*", "*")):
             return stripped.lstrip("/*").rstrip("*/")
         if stripped.startswith(marker):
-            return stripped[len(marker):]
-        match = re.search(r"(?:^|\s)" + re.escape(marker) + r"(?!!)(.*)$", line)
+            return stripped
+        match = re.search(r"(?:^|\s)(" + re.escape(marker) + r"(?!!).*)$", line)
         return match.group(1) if match else None
 
     def added_lines(self):
@@ -556,8 +601,7 @@ class Checker:
                 path, number, in_header = None, None, True
                 continue
             if in_header and line.startswith("+++ "):
-                target = line[4:]
-                path = target[2:] if target.startswith("b/") else None
+                path = diff_target(line)
                 continue
             match = HUNK_RE.match(line)
             if match:
@@ -656,7 +700,7 @@ def parse_args(argv):
     parser.add_argument("--config", type=Path, help=f"config file (default: <root>/{CONFIG_NAME})")
     parser.add_argument("--base", help="compare added lines against the merge-base of HEAD and this ref "
                                        "(default: the merge-base with the default branch)")
-    parser.add_argument("--network", action="store_true", help="also check external and cross-repository links over the network")
+    parser.add_argument("--network", action="store_true", help="also check external http(s) links over the network; a failing link is an error")
     parser.add_argument("--write-baseline", action="store_true", help="write the current errors to the baseline (it only ever shrinks), then check")
     return parser.parse_args(argv)
 

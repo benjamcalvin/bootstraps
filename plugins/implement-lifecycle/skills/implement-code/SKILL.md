@@ -42,7 +42,7 @@ Write the minimum code that makes the tests pass. Match existing style; every ch
 
 ### Step 4: Focused Verification
 
-Run focused tests, linters, and a build for the packages you changed. Run `docs-check` with lint when the project has it. Every test you touched and every lint must pass; if tests fail, fix the code, not the tests. Scan every added comment, whole-line or trailing (`git add -N . && git diff -U0 HEAD` includes new files), and delete each one that is outside the allow-list, cites your tracker (`#N`, milestones), narrates a step, or records history ("previously", "no longer").
+Run focused tests, linters, and a build for the packages you changed. Run `docs-check` with lint when the project has a `docs-check.toml`. Every touched test and every lint must pass; fix the code, not the tests. Scan every added comment, whole-line or trailing (`git add -N . && git diff -U0 HEAD` includes new files), and delete each one that is outside the allow-list, cites your tracker (`#N`, milestones), narrates a step, or records history ("previously", "no longer").
 
 ### Step 5: Manual Verification
 

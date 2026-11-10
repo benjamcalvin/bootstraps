@@ -354,7 +354,7 @@ Upgrade a docs tree created by bootstrap-docs 1.x to the current rules. Migrate 
 
 `docs-check` catches docs drift with lint: broken links and paths, missing tasks, instruction-file rules and line budgets, and tracker, step, or history comments a change adds. It needs Python 3.11+ and nothing else.
 
-1. **Copy `$SKILL_DIR/assets/docs-check.py` into the project** as `scripts/docs-check.py`, or wherever the project keeps scripts.
+1. **Copy `$SKILL_DIR/assets/docs-check.py` into the project** as `scripts/docs-check.py`. Every snippet below uses that path.
 2. **Create `docs-check.toml` with the current baseline:** run `python3 scripts/docs-check.py --write-baseline` from the project root. Existing errors go into the baseline and instruction files already over budget get their current length, so old debt never blocks a change. The baseline only shrinks: new violations fail, and later runs of `--write-baseline` only drop fixed entries.
 3. **Print the CI and pre-commit snippets** for the user, and offer to add `python3 scripts/docs-check.py` to the project's lint task:
 

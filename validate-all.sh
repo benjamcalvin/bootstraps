@@ -1018,12 +1018,12 @@ complete + referee -> refereeing
       echo "  OK: bootstrap-docs keeps instruction files small, imports @AGENTS.md everywhere, and migrates only confirmed changes"
     fi
 
-    if ! sed -n '/^### Step 4: Focused Verification$/,/^### Step 5: /p' "$plugin_dir/skills/implement-code/SKILL.md" | rg -Fq 'Run `docs-check` with lint when the project has it.' || \
-      ! rg -Fq 'Run `docs-check` on docs changes when the project has it.' "$plugin_dir/skills/review-docs/SKILL.md"; then
-      echo "  ERROR: implement-code Step 4 must run docs-check with lint, and review-docs must run it on docs changes, when the project has it"
+    if ! sed -n '/^### Step 4: Focused Verification$/,/^### Step 5: /p' "$plugin_dir/skills/implement-code/SKILL.md" | rg -Fq 'Run `docs-check` with lint when the project has a `docs-check.toml`.' || \
+      ! rg -Fq 'Run `docs-check` on docs changes when the project has a `docs-check.toml`.' "$plugin_dir/skills/review-docs/SKILL.md"; then
+      echo "  ERROR: implement-code Step 4 must run docs-check with lint, and review-docs must run it on docs changes, when the project has a docs-check.toml"
       ERRORS=$((ERRORS + 1))
     else
-      echo "  OK: implement-code and review-docs run docs-check when the project has it"
+      echo "  OK: implement-code and review-docs run docs-check when the project has a docs-check.toml"
     fi
 
     review_comment_ref="$plugin_dir/skills/implement/references/consolidated-review.md"

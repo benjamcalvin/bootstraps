@@ -120,6 +120,32 @@ def main():
         if "docs/legacy.md" in (install / "docs-check.toml").read_text():
             failures.append("--write-baseline did not drop the fixed baseline entry")
 
+        edge = Path(tmp) / "edge"
+        edge.mkdir()
+        git(edge, "init", "-q", "-b", "main")
+        (edge / "docs-check.toml").write_text('default_budget = 200\n[budgets]\n"AGENTS.md" = 10\n')
+        (edge / "AGENTS.md").write_text("Notes.\n")
+        (edge / "my file.py").write_text("x = 1\n")
+        (edge / "latin.txt").write_bytes(b"caf\xe9\n")
+        (edge / ".gitignore").write_text("build/\n")
+        git(edge, "add", "-A")
+        git(edge, "commit", "-q", "--no-verify", "-m", "base")
+        git(edge, "checkout", "-q", "-b", "change")
+        (edge / "docs-check.toml").write_text("default_budget = 200\n")
+        (edge / "AGENTS.md").write_text("Notes.\n" * 20)
+        (edge / "my file.py").write_text("x = 1\n# previously a thing\n")
+        (edge / "latin.txt").write_bytes(b"caf\xe9 more\n")
+        (edge / "tags.py").write_text("y = 1  #123\n#42 done\n#!not a tracker\n")
+        (edge / "README.md").write_text("Output goes to `build/out.txt` and `build/`.\n")
+        git(edge, "add", "-A")
+        git(edge, "commit", "-q", "--no-verify", "-m", "change")
+        expect_run("edge cases", docs_check(edge), 1, [
+            "docs-check.toml:1: ERROR: line budget for AGENTS.md raised from 10 to 200; budgets only fall",
+            "my file.py:2: ERROR: added comment records history: previously",
+            "tags.py:1: ERROR: added comment cites a tracker reference: #123",
+            "tags.py:2: ERROR: added comment cites a tracker reference: #42",
+        ])
+
     if failures:
         print("docs-check self-test FAILED")
         print("\n".join(failures))
