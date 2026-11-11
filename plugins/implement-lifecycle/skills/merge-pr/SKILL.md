@@ -36,17 +36,17 @@ All gates must pass:
 2. **CI status** — enforce required checks. Billing/account failures remain blocking unless policy or user direction permits an explicit exception.
 3. **PR standards** — Evaluate the canonical `pr-check` checklist inline; do not spawn a child for it. Apply the 7 standard checks: branch naming (`<type>/<short-description>`), title (`<type>: <summary>`), lead (2–3 plain-language sentences ending with `*(agent-drafted lead)*`), shape (`Author ran:`, `**Review focus:**`, rest under `<details>` with blank line after `</summary>`), commits (no WIP/fixup), references (`Closes #N` only for complete resolution, else `Part of #N`), and altitude layering. Block only on failures of those rules declared by repository policy. Bundled fallback checks apply only where policy is silent, are non-blocking, and are reported as WARN in the merge summary; WARNs never stop the merge.
 4. **Approvals** — `CHANGES_REQUESTED` stops merge. If repository policy requires approvals, require the declared number and kind. If the established policy does not require approval, do not invent a requirement from the base branch name.
-5. **Exact-head verification evidence** — validate exact-head verification evidence; never execute the authoritative suite here.
+5. **Exact-head verification evidence** — validate evidence; never execute the authoritative suite here.
    - **With `[verification-record-path]`:** Read that JSON file. If the path is absent, unreadable, or does not contain a complete `verification-record:v1` plus its referenced `suite-evidence`, stop rather than reconstructing evidence from an inaccessible parent transcript. Match `verification-record:v1` fields with the latest verification PR comment semantically. For every result, require its `#/suite-evidence/command-<N>` pointer to resolve inside the handed-off object to an entry with the exact command and nonempty output.
-   - **Without `[verification-record-path]`:** Validate exact-head `verification-record: v1` directly from PR's latest verification comment on GitHub.
-   - **Exact head and plan:** Current `headRefOid` must equal `verification-head`. Match authoritative plan independently established from target repository sources. Accept `pass` only when `suite-command` exactly matches that plan, overall exit status is 0, and per-command results match every plan command with `pass`/0.
+   - **Without `[verification-record-path]`:** Validate exact-head `verification-record: v1` from latest PR verification comment.
+   - **Exact head and plan:** Current `headRefOid` must equal `verification-head`. Match authoritative plan established from target repository sources. Accept `pass` only when `suite-command` exactly matches that plan, overall exit status is 0, `suite-source: executed` with `suite-executions: 1` (or `suite-source: ci` with `suite-executions: 0`), and per-command results match every plan command with `pass`/0.
    - **CI source.** When `suite-source` is `ci`, read `references/ci-source.md` and satisfy every condition there.
    - **Baseline.** Never treat `suite-baseline` results as PR-head evidence: they ran on the merge-base, and a `fail` record whose failures are all pre-existing is not mergeable.
    - **Not required.** Accept `not-required` only after independently inspecting the changed files and confirming that every change is documentation or comments only, with JSON `null` command and exit status, zero executions, empty results, and empty `suite-evidence`.
    - Store matching head as `VERIFIED_SHA`.
 
-**Human approval stop:** When repository policy requires human approvals or merge-queue checks not yet met and all agent gates pass, report `## Ready for Human Merge` cleanly:
-- `## Ready for Human Merge` — PR #<number>, awaiting required human approval or merge queue.
+**Human approval stop:** When repository policy requires human approvals or merge-queue checks not yet met and all agent gates pass, report `## Ready for Human Merge`:
+- `## Ready for Human Merge` — PR #<number>, awaiting human approval or merge queue.
 
 ### Step 2: Merge
 
@@ -58,12 +58,12 @@ gh pr merge <pr-number> <merge-method-flag> <optional-delete-branch-flag> --matc
 
 ### Step 3: Update Linked Issues
 
-When the PR title or body references `#N`, read `references/issue-updates.md` and comment on linked issues. Skip when no issues are referenced.
+When PR title or body references `#N`, read `references/issue-updates.md` and comment on linked issues. Skip when none are referenced.
 
 ### Step 4: Report
 
-Report `## Merge Complete` with PR number, title, base branch, updated issues, warnings, and delivered changes summary.
+Report `## Merge Complete` with PR number, title, base branch, updated issues, warnings, and changes summary.
 
 ## Escalation
 
-Consult user for flaky CI, unresolved conversations, unexpected merge errors, or ambiguous policy.
+Consult user for flaky CI, unresolved conversations, merge errors, or ambiguous policy.

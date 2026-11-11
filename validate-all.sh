@@ -811,10 +811,10 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
       ! rg -Fq 'Reject the run if a plan step is conditional or `continue-on-error` in the workflow definition the run executed' "$lifecycle_verify_ci_ref" || \
       ! rg -Fq 'suite-ci-attempt: <n> | none' "$lifecycle_verify_file" || \
       ! rg -Fq '(an integer ≥ 1; a CI record without one is rejected)' "$lifecycle_verify_ci_ref" || \
-      ! rg -Fq 'reject a record whose `suite-ci-attempt` is none or not an integer ≥ 1' "$lifecycle_merge_ci_ref" || \
+      ! rg -Fq 'Reject a record whose `suite-ci-attempt` is none or not an integer ≥ 1' "$lifecycle_merge_ci_ref" || \
       ! rg -Fq 'complete log from the same attempt' "$lifecycle_verify_ci_ref" || \
       ! rg -Fq 'Never use a run for any other SHA.' "$lifecycle_verify_ci_ref" || \
-      ! rg -Fq '`suite-source: executed` with exactly one plan execution or `suite-source: ci` with zero executions' "$lifecycle_merge_ci_ref" || \
+      ! rg -Fq '`suite-source: executed` with `suite-executions: 1` (or `suite-source: ci` with `suite-executions: 0`)' "$lifecycle_merge_file" || \
       ! rg -Fq -- '--attempt <suite-ci-attempt>' "$lifecycle_merge_ci_ref" || \
       ! rg -Fq 'Require the repository to be the target repository, its `headSha` to equal `verification-head`, that attempt'"'"'s `conclusion` to be `success`, and, in every job or matrix leg with a step running a plan command, each established command to map in order to a `success` step, none `skipped`' "$lifecycle_merge_ci_ref" || \
       ! rg -Fq 'reject a conditional or `continue-on-error` plan step in the workflow definition the run executed' "$lifecycle_merge_ci_ref" || \
