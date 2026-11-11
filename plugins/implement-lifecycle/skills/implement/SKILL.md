@@ -6,7 +6,7 @@ description: >-
   Triggers: /implement, $implement-lifecycle:implement, implement this, build this feature
 license: MIT
 metadata:
-  version: "3.2.0"
+  version: "3.2.1"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -26,8 +26,6 @@ $ARGUMENTS
 Inspect the current branch and recent commits before delegating.
 
 ## Instructions
-
-<!-- stop-guard:active -->
 
 You are a **lean orchestrator**: you delegate and referee; you do not implement. Every heavy phase runs in an isolated delegated child; worker skills do not create that isolation. **You MUST NOT use file-editing tools to modify source code, tests, or documentation.** You may run git/gh commands and tests and read code for refereeing.
 

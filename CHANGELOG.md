@@ -35,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `bootstrap-docs` 2.1.0 ships `docs-check`, a standard-library Python 3.11+ drift checker installed with `/bootstrap-docs docs-check` (also offered after `migrate`). Errors: relative links and backticked paths that do not resolve, npm/make/mise tasks named in docs that do not exist, a `CLAUDE.md` without `@AGENTS.md` or an inexactly named instruction file, an instruction file over its line budget or a raised budget, and comment lines the change adds that cite a tracker, label a step, or record history. Warnings, which never change the exit code: issue numbers or history phrasing in docs (ADRs and changelogs exempt), spec glossary terms missing from the covered code, and heavy churn under a spec's `Covers:` paths. `docs-check.toml` holds the budgets and a baseline of existing errors that only shrinks; external links are checked only with `--network`. A fixture self-test runs in `validate-all.sh`
 - `implement-lifecycle` 3.21.0 has `implement-code` run `docs-check` with lint and `review-docs` run it on docs changes when the project has it, paid for by trims in both skills
 - `issue-management` 1.3.0 has `draft-issue` and `refine-issue` collapse Technical Context and Proposed PRs under `<details>`, and `cleanup-issue` preserve existing `<details>` blocks
+- `implement-lifecycle` 3.21.1 removes the `stop-guard` activation marker from `implement`
+
+### Removed
+
+- Retired and removed `bootstrap-worktrees`, `implement-cli`, `implement-team`, `second-opinion`, and `stop-guard` so the marketplace retains only the actively maintained cross-client plugins
 
 ## implement-team [0.5.0] - 2026-07-26
 
