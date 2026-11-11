@@ -249,8 +249,8 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
     fi
 
     # Instruction byte budget: every child re-reads these files, so growth is a cost regression.
-    lifecycle_budget_total=80000
-    lifecycle_budget_implement=20000
+    lifecycle_budget_total=56000
+    lifecycle_budget_implement=14000
     lifecycle_bytes_total=$(cat "$plugin_dir"/skills/*/SKILL.md | wc -c | tr -d ' ')
     lifecycle_bytes_implement=$(wc -c < "$plugin_dir/skills/implement/SKILL.md" | tr -d ' ')
     if [ "$lifecycle_bytes_total" -gt "$lifecycle_budget_total" ] || [ "$lifecycle_bytes_implement" -gt "$lifecycle_budget_implement" ]; then
@@ -265,14 +265,14 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
     for lifecycle_ref_skill in "$plugin_dir"/skills/*/; do
       while IFS= read -r lifecycle_ref; do
         if [ ! -s "$lifecycle_ref_skill$lifecycle_ref" ]; then
-          echo "  ERROR: $(basename "$lifecycle_ref_skill")/SKILL.md references missing file: $lifecycle_ref"
+          echo "  ERROR: $(basename "$lifecycle_ref_skill") references missing file: $lifecycle_ref"
           ERRORS=$((ERRORS + 1))
           lifecycle_refs_missing=true
         fi
-      done < <(rg -o --no-filename 'references/[A-Za-z0-9._-]+\.md' "$lifecycle_ref_skill/SKILL.md" 2>/dev/null | sort -u)
+      done < <(rg -o --no-filename 'references/[A-Za-z0-9._-]+\.md' "$lifecycle_ref_skill/SKILL.md" "$lifecycle_ref_skill"/references/*.md 2>/dev/null | sort -u)
     done
     if [ "$lifecycle_refs_missing" = false ]; then
-      echo "  OK: Every skill-local reference named by an implement-lifecycle SKILL.md exists"
+      echo "  OK: Every skill-local reference named by an implement-lifecycle SKILL.md or reference exists"
     fi
 
     lifecycle_metadata_missing=false
@@ -434,8 +434,8 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
       echo "  OK: Lifecycle reviewer skills prohibit modifying reviewed code and posting to GitHub"
     fi
 
-    lifecycle_focused_contract="**Suite capability: \`focused-only\`. Run focused tests, lint, builds, and acceptance commands only. Do not execute or consume the target repository's authoritative verification command or ordered command plan. Final verification owns that evidence.**"
-    lifecycle_owner_contract="**Suite capability: \`full-suite-owner\`. Verification is the sole phase authorized to execute or consume the target repository's authoritative verification command or ordered command plan, at most once for the exact PR head.**"
+    lifecycle_focused_contract="**Suite capability: \`focused-only\`. Prefer fast package- or target-scoped checks during iteration (using the repository's default check only when fast and no narrower check exists); \`verify\` owns authoritative exact-head suite signoff.**"
+    lifecycle_owner_contract="**Suite capability: \`full-suite-owner\`. Sole phase authorized to produce authoritative exact-head suite signoff (at most one full execution per PR head).**"
     lifecycle_focused_skills=(
       implement implement-code implement-address review-general review-correctness
       review-security review-architecture review-testing review-docs merge-pr pr-check
@@ -711,21 +711,7 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
 
     # The recovery graph lives in a skill-local reference read on the incomplete-result path.
     lifecycle_recovery_ref="$plugin_dir/skills/implement/references/reviewer-recovery.md"
-    lifecycle_recovery_graph=$(sed -n '/^<!-- lifecycle-reviewer-recovery:v1$/,/^-->$/p' "$lifecycle_recovery_ref" 2>/dev/null || true)
-    lifecycle_expected_recovery_graph='<!-- lifecycle-reviewer-recovery:v1
-delegated + nonempty-canonical-result -> complete
-delegated + empty-or-incomplete-result -> incomplete
-incomplete + transcript-recovery-complete -> complete
-incomplete + transcript-recovery-incomplete -> fresh-retry
-incomplete + transcript-recovery-unavailable -> fresh-retry
-fresh-retry + nonempty-canonical-result -> complete
-fresh-retry + empty-or-incomplete-result -> stop
-complete + referee -> refereeing
--->'
-    if [ "$lifecycle_recovery_graph" != "$lifecycle_expected_recovery_graph" ]; then
-      echo "  ERROR: Lifecycle reviewer recovery must match the authoritative non-empty-result state graph"
-      ERRORS=$((ERRORS + 1))
-    elif ! rg -q 'context: "fresh"' "$plugin_dir/skills/implement/references/adapter-pi.md" || \
+    if ! rg -q 'context: "fresh"' "$plugin_dir/skills/implement/references/adapter-pi.md" || \
       [ "$(rg -Fc 'context: "fresh"' "$lifecycle_recovery_ref")" -lt 2 ]; then
       echo '  ERROR: Pi delegation and recovery must set context: "fresh" explicitly'
       ERRORS=$((ERRORS + 1))
@@ -794,6 +780,10 @@ complete + referee -> refereeing
     lifecycle_merge_file="$plugin_dir/skills/merge-pr/SKILL.md"
     # CI-evidence acceptance rules live in a verify-local reference read before recording suite-source: ci.
     lifecycle_verify_ci_ref="$plugin_dir/skills/verify/references/ci-evidence.md"
+    lifecycle_special_verdicts_ref="$plugin_dir/skills/verify/references/special-verdicts.md"
+    lifecycle_merge_ci_ref="$plugin_dir/skills/merge-pr/references/ci-source.md"
+    lifecycle_verify_baseline_ref="$plugin_dir/skills/verify/references/baseline-on-failure.md"
+    lifecycle_verify_loop_ref="$plugin_dir/skills/implement/references/verify-fail-loop.md"
     if ! rg -Fq 'Before relying on one, read `references/ci-evidence.md` and satisfy every condition there' "$lifecycle_verify_file" || \
       ! rg -Fq "Apply repository instructions first, then CI configuration, documented development commands, and build or test configuration." "$lifecycle_verify_file" || \
       ! rg -Fq 'When it declares several required commands, preserve their order as one authoritative plan; do not select a subset or reorder them.' "$lifecycle_verify_file" || \
@@ -808,12 +798,12 @@ complete + referee -> refereeing
       ! rg -Fq 'suite-result: pass | fail | missing-contract | not-required' "$lifecycle_verify_file" || \
       ! rg -Fq 'suite-command: <exact-command-or-ordered-JSON-command-array> | none' "$lifecycle_verify_file" || \
       ! rg -Fq 'suite-command-results:' "$lifecycle_verify_file" || \
-      ! rg -Fq 'The missing-contract/PARTIAL record is canonical:' "$lifecycle_verify_file" || \
-      ! rg -Fq '{"verification-record":"v1","verification-head":"<full-head-sha>","suite-result":"not-required","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}' "$lifecycle_verify_file" || \
+      ! rg -Fq 'The missing-contract/PARTIAL record is canonical:' "$lifecycle_special_verdicts_ref" || \
+      ! rg -Fq '{"verification-record":"v1","verification-head":"<full-head-sha>","suite-result":"not-required","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}' "$lifecycle_special_verdicts_ref" || \
       ! rg -Fq 'If the path is absent, unreadable, or does not contain a complete `verification-record:v1` plus its referenced `suite-evidence`, stop rather than reconstructing evidence from an inaccessible parent transcript.' "$lifecycle_merge_file" || \
       ! rg -Fq 'For every result, require its `#/suite-evidence/command-<N>` pointer to resolve inside the handed-off object' "$lifecycle_merge_file" || \
       ! rg -Fq 'Accept `not-required` only after independently inspecting the changed files and confirming that every change is documentation or comments only' "$lifecycle_merge_file" || \
-      ! rg -Fq 'Capture the verifier'"'"'s returned handoff-artifact JSON object: the complete durable `verification-record:v1`' "$lifecycle_implement_skill" || \
+      ! rg -Fq 'confirm the verification record file at `<resolved-verification-record-path>` exists and its `#/suite-evidence/command-<N>` pointers resolve' "$lifecycle_implement_skill" || \
       ! rg -Fq 'Evaluate and execute the canonical `merge-pr` skill inline against `<pr-number> <resolved-verification-record-path>`; do not spawn a child for it.' "$lifecycle_implement_skill" || \
       ! rg -Fq 'suite-source: executed | ci' "$lifecycle_verify_file" || \
       ! rg -Fq 'a failing, other-SHA, other-repository, or unconfirmable run is not evidence, so execute instead.' "$lifecycle_verify_file" || \
@@ -821,14 +811,14 @@ complete + referee -> refereeing
       ! rg -Fq 'Reject the run if a plan step is conditional or `continue-on-error` in the workflow definition the run executed' "$lifecycle_verify_ci_ref" || \
       ! rg -Fq 'suite-ci-attempt: <n> | none' "$lifecycle_verify_file" || \
       ! rg -Fq '(an integer ≥ 1; a CI record without one is rejected)' "$lifecycle_verify_ci_ref" || \
-      ! rg -Fq 'reject a record whose `suite-ci-attempt` is none or not an integer ≥ 1' "$lifecycle_merge_file" || \
+      ! rg -Fq 'reject a record whose `suite-ci-attempt` is none or not an integer ≥ 1' "$lifecycle_merge_ci_ref" || \
       ! rg -Fq 'complete log from the same attempt' "$lifecycle_verify_ci_ref" || \
       ! rg -Fq 'Never use a run for any other SHA.' "$lifecycle_verify_ci_ref" || \
-      ! rg -Fq '`suite-source: executed` with exactly one plan execution or `suite-source: ci` with zero executions' "$lifecycle_merge_file" || \
-      ! rg -Fq -- '--attempt <suite-ci-attempt>' "$lifecycle_merge_file" || \
-      ! rg -Fq 'Require the repository to be the target repository, its `headSha` to equal `verification-head`, that attempt'"'"'s `conclusion` to be `success`, and, in every job or matrix leg with a step running a plan command, each established command to map in order to a `success` step, none `skipped`' "$lifecycle_merge_file" || \
-      ! rg -Fq 'reject a conditional or `continue-on-error` plan step in the workflow definition the run executed' "$lifecycle_merge_file" || \
-      ! rg -Fq 'Reject a run for any other SHA, repository, or attempt.' "$lifecycle_merge_file"; then
+      ! rg -Fq '`suite-source: executed` with exactly one plan execution or `suite-source: ci` with zero executions' "$lifecycle_merge_ci_ref" || \
+      ! rg -Fq -- '--attempt <suite-ci-attempt>' "$lifecycle_merge_ci_ref" || \
+      ! rg -Fq 'Require the repository to be the target repository, its `headSha` to equal `verification-head`, that attempt'"'"'s `conclusion` to be `success`, and, in every job or matrix leg with a step running a plan command, each established command to map in order to a `success` step, none `skipped`' "$lifecycle_merge_ci_ref" || \
+      ! rg -Fq 'reject a conditional or `continue-on-error` plan step in the workflow definition the run executed' "$lifecycle_merge_ci_ref" || \
+      ! rg -Fq 'Reject a run for any other SHA, repository, or attempt.' "$lifecycle_merge_ci_ref"; then
       echo "  ERROR: Verification evidence and merge must remain bound to the exact PR head"
       ERRORS=$((ERRORS + 1))
     else
@@ -837,21 +827,21 @@ complete + referee -> refereeing
 
     lifecycle_verify_scope_ok=true
     for lifecycle_scope_check in \
-      "$lifecycle_implement_skill|Allow at most 2 FAIL → address → re-verify cycles; on a third FAIL, do not address again" \
-      "$lifecycle_implement_skill|Payload: <pr-number> tier=<Small|Medium|Large> [failed-scenarios=<names>] bundle=<resolved-context-bundle-path>" \
+      "$lifecycle_verify_loop_ref|Allow at most 2 FAIL → address → re-verify cycles; on a third FAIL, do not address again" \
+      "$lifecycle_implement_skill|Payload: <pr-number> tier=<Small|Medium|Large> record=<resolved-verification-record-path> [failed-scenarios=<names>] bundle=<resolved-context-bundle-path>" \
       "$lifecycle_verify_file|**Small** — suite evidence, plus one live check only when runtime behavior changed" \
       "$lifecycle_verify_file|re-run only those scenarios plus suite evidence for the new head" \
-      "$lifecycle_verify_file|When the head's suite fails, run each failing command once on the PR's merge-base" \
-      "$lifecycle_verify_file|a failure present at both SHAs is pre-existing; any other failure, or one you cannot match, is PR-introduced and produces FAIL." \
-      "$lifecycle_verify_file|the record keeps \`suite-result: fail\` and is not mergeable. Baseline results are never PR-head evidence." \
+      "$lifecycle_verify_baseline_ref|When the head's suite fails, run each failing command once on the PR's merge-base" \
+      "$lifecycle_verify_baseline_ref|a failure present at both SHAs is pre-existing; any other failure, or one you cannot match, is PR-introduced and produces FAIL." \
+      "$lifecycle_verify_baseline_ref|the record keeps \`suite-result: fail\` and is not mergeable. Baseline results are never PR-head evidence." \
       "$lifecycle_merge_file|Never treat \`suite-baseline\` results as PR-head evidence" \
       "$lifecycle_implement_skill|\`tier=\` is the tier recorded at classification; never re-classify it." \
-      "$lifecycle_implement_skill|without \`failed-scenarios\` when only the suite failed" \
+      "$lifecycle_verify_loop_ref|without \`failed-scenarios\` when only the suite failed" \
       "$lifecycle_verify_file|\`live check skipped (Small, no runtime change)\`" \
       "$lifecycle_verify_file|without \`failed-scenarios\`, re-run suite evidence only" \
       "$lifecycle_verify_ci_ref|at most the suite's own typical runtime, and never more than 30 minutes" \
-      "$lifecycle_verify_file|A setup, missing-command, or error-class mismatch between the SHAs is PR-introduced." \
-      "$lifecycle_verify_file|name every plan command never run on the head because the plan stopped"; do
+      "$lifecycle_verify_baseline_ref|A setup, missing-command, or error-class mismatch between the SHAs is PR-introduced." \
+      "$lifecycle_verify_baseline_ref|name every plan command never run on the head because the plan stopped"; do
       if ! rg -Fq -- "${lifecycle_scope_check#*|}" "${lifecycle_scope_check%%|*}"; then
         echo "  ERROR: Verification scope invariant missing from $(basename "$(dirname "${lifecycle_scope_check%%|*}")"): ${lifecycle_scope_check#*|}"
         ERRORS=$((ERRORS + 1))
@@ -1011,7 +1001,7 @@ complete + referee -> refereeing
       ERRORS=$((ERRORS + 1))
       ledger_ok=false
     fi
-    for ledger_field in 'date -u +%FT%TZ' 'every terminal path' 'references/run-ledger.md'; do
+    for ledger_field in 'every terminal path' 'references/run-ledger.md'; do
       if ! printf '%s' "$ledger_section" | rg -Fq -- "$ledger_field"; then
         echo "  ERROR: implement run ledger must include: $ledger_field"
         ERRORS=$((ERRORS + 1))
@@ -1030,7 +1020,7 @@ complete + referee -> refereeing
     fi
 
     description_shape_ok=true
-    for shape_file in "plugins/bootstrap-docs/skills/bootstrap-docs/assets/standards-pr-template.md" "$plugin_dir/skills/implement-code/SKILL.md"; do
+    for shape_file in "plugins/bootstrap-docs/skills/bootstrap-docs/assets/standards-pr-template.md" "$plugin_dir/skills/implement-code/references/pr-description.md"; do
       shape_visible=$(lifecycle_details_lines outside "$shape_file")
       shape_collapsed=$(lifecycle_details_lines rendered "$shape_file")
       if ! printf '%s' "$shape_visible" | rg -Fq '*(agent-drafted lead)*' || \
@@ -1134,7 +1124,7 @@ complete + referee -> refereeing
       echo "  OK: bootstrap-docs keeps instruction files small, imports @AGENTS.md everywhere, and migrates only confirmed changes"
     fi
 
-    if ! sed -n '/^### Step 4: Focused Verification$/,/^### Step 5: /p' "$plugin_dir/skills/implement-code/SKILL.md" | rg -Fq 'Run `docs-check` with lint when the project has a `docs-check.toml`.' || \
+    if ! sed -n '/^### Step 4: Verify and Self-Review$/,/^### Step 5: /p' "$plugin_dir/skills/implement-code/SKILL.md" | rg -Fq 'Run `docs-check` with lint when the project has a `docs-check.toml`.' || \
       ! rg -Fq 'Run `docs-check` on docs changes when the project has a `docs-check.toml`.' "$plugin_dir/skills/review-docs/SKILL.md"; then
       echo "  ERROR: implement-code Step 4 must run docs-check with lint, and review-docs must run it on docs changes, when the project has a docs-check.toml"
       ERRORS=$((ERRORS + 1))
