@@ -23,7 +23,7 @@ Verify the PR supplied with the invocation in the real, running system, not in i
 $ARGUMENTS
 ```
 
-Parse the PR number, tier, and any failed-scenario list from the payload; fetch the PR metadata, comments, and changed-file summary. Confirm the changed behavior works as a user, operator, or consumer experiences it, and that the authoritative suite holds for the exact head. Use the client's task tracker when available.
+Parse the PR number, tier, any failed-scenario list, and any `bundle=` path from the payload; read the supplied context-bundle file when provided, fetching PR metadata, comments, and `--json files` only when absent. Confirm the changed behavior works as a user, operator, or consumer experiences it, and that the authoritative suite holds for the exact head. Use the client's task tracker when available.
 
 ## Scope
 

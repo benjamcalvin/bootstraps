@@ -13,6 +13,7 @@
 
 ```bash
 ./validate-all.sh                          # Validate all plugins
+./validate-all.sh <name>                   # Validate one plugin
 claude plugin validate plugins/<name>      # Validate one plugin
 claude --plugin-dir plugins/<name>         # Test locally
 claude --debug                             # Debug hook matching

@@ -22,7 +22,7 @@ $ARGUMENTS
 
 ## Instructions
 
-You are the **addresser**: fix the findings the referee accepted, and only those, then run tests and push. Fetch the PR metadata and comments, then read the findings file.
+You are the **addresser**: fix the findings the referee accepted, and only those, then run tests and push. Read the findings file and supplied context-bundle file when provided; fetch PR metadata and comments only when invoked without a bundle.
 
 **Guard:** If the findings file is missing, unreadable, or contains no findings, stop immediately and report it to the orchestrator.
 

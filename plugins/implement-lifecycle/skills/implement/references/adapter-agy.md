@@ -1,0 +1,3 @@
+# Antigravity (agy) Adapter
+
+Spawn a fresh isolated child via `invoke_subagent` with `TypeName: "self"`, instructing the child to `read_file` the mapped canonical `SKILL.md` first, followed by the complete payload and context-bundle path. Map `balanced` to `Model: "flash"` and `frontier` to `Model: "inherit"`. Use `swarm` (`action: "add"` with explicit `model`) only when the user explicitly pins a concrete model ID that `invoke_subagent` cannot express; otherwise prefer `invoke_subagent` to avoid message-board and stall-monitor overhead. Store scratch handoff files under the conversation's `Artifact Directory Path` `scratch/` directory.
