@@ -1,7 +1,6 @@
 # ADR-001: Task-delegation substrate, privilege tiers, and exposure model
 
 **Status:** Deprecated
-**Last Updated:** 2026-07-19
 **Decision:** Deprecated
 
 **Issue:** [#77 — feat: generalize second-opinion into a privilege-tiered task-delegation tool](https://github.com/benjamcalvin/bootstraps/issues/77)

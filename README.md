@@ -1,6 +1,6 @@
 # Bootstraps
 
-A cross-compatible Claude Code, OpenAI Codex, and Pi collection of reusable skills, hooks, and project scaffolds.
+A cross-compatible Claude Code, OpenAI Codex, and Pi collection of reusable skills and project scaffolds.
 
 ## Prerequisites
 
