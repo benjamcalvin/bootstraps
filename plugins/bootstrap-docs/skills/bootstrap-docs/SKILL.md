@@ -11,7 +11,7 @@ agent: general-purpose
 allowed-tools: Read, Glob, Bash(cat *), Bash(find *)
 license: MIT
 metadata:
-  version: "2.1.0"
+  version: "2.2.0"
   tags: ["docs", "documentation", "strategy", "scaffolding"]
   author: benjamcalvin
   standards-sub-types: ["testing", "code", "pr"]

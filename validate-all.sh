@@ -65,8 +65,52 @@ fi
 
 echo ""
 
+if [ ! -f ".agents/plugins.json" ]; then
+  echo "ERROR: .agents/plugins.json not found"
+  ERRORS=$((ERRORS + 1))
+else
+  if ! jq . .agents/plugins.json > /dev/null 2>&1; then
+    echo "ERROR: .agents/plugins.json is not valid JSON"
+    ERRORS=$((ERRORS + 1))
+  else
+    if ! jq -e '
+      type == "object" and
+      (.entries | type == "array") and
+      any(.entries[]; type == "object" and .path == "plugins")
+    ' .agents/plugins.json > /dev/null 2>&1; then
+      echo "ERROR: .agents/plugins.json missing required entries array pointing to plugins"
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "OK: .agents/plugins.json is valid JSON with plugins path"
+    fi
+  fi
+fi
+
+echo ""
+
+target_plugins=()
+if [ "$#" -gt 0 ]; then
+  for arg in "$@"; do
+    cleaned_arg="${arg#./}"
+    cleaned_arg="${cleaned_arg#plugins/}"
+    cleaned_arg="${cleaned_arg%/}"
+    plugin_path="plugins/$cleaned_arg"
+    if [ ! -d "$plugin_path" ]; then
+      echo "ERROR: Plugin directory not found: $arg"
+      ERRORS=$((ERRORS + 1))
+    else
+      target_plugins+=("$plugin_path/")
+    fi
+  done
+else
+  for plugin_path in plugins/*/; do
+    target_plugins+=("$plugin_path")
+  done
+fi
+
 # Validate each plugin
-for plugin_dir in plugins/*/; do
+for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
+  [ -d "$plugin_dir" ] || continue
   plugin_name=$(basename "$plugin_dir")
   echo "--- Plugin: $plugin_name ---"
 
@@ -105,6 +149,39 @@ for plugin_dir in plugins/*/; do
 
       if [ -n "$name" ] && [ -n "$desc" ] && [ -n "$version" ]; then
         echo "  OK: plugin.json has required fields (name=$name, version=$version)"
+      fi
+    fi
+  fi
+
+  if [ ! -f "$plugin_dir/.antigravity-plugin/plugin.json" ]; then
+    echo "  ERROR: Missing .antigravity-plugin/plugin.json"
+    ERRORS=$((ERRORS + 1))
+  else
+    if ! jq . "$plugin_dir/.antigravity-plugin/plugin.json" > /dev/null 2>&1; then
+      echo "  ERROR: .antigravity-plugin/plugin.json is not valid JSON"
+      ERRORS=$((ERRORS + 1))
+    else
+      agy_name=$(jq -r '.name // empty' "$plugin_dir/.antigravity-plugin/plugin.json")
+      agy_version=$(jq -r '.version // empty' "$plugin_dir/.antigravity-plugin/plugin.json")
+      agy_desc=$(jq -r '.description // empty' "$plugin_dir/.antigravity-plugin/plugin.json")
+      agy_author=$(jq -r '.author.name // empty' "$plugin_dir/.antigravity-plugin/plugin.json")
+      agy_license=$(jq -r '.license // empty' "$plugin_dir/.antigravity-plugin/plugin.json")
+
+      if [ "$agy_name" != "$plugin_name" ]; then
+        echo "  ERROR: Antigravity plugin name must match directory ($agy_name != $plugin_name)"
+        ERRORS=$((ERRORS + 1))
+      fi
+      if [ -z "$agy_version" ] || [ -z "$agy_desc" ] || [ -z "$agy_author" ] || [ -z "$agy_license" ]; then
+        echo "  ERROR: Antigravity plugin manifest is missing required metadata"
+        ERRORS=$((ERRORS + 1))
+      else
+        echo "  OK: .antigravity-plugin/plugin.json has required metadata"
+      fi
+      if [ -n "$version" ] && [ "$agy_version" != "$version" ]; then
+        echo "  ERROR: Version mismatch — Claude=$version, Antigravity=$agy_version"
+        ERRORS=$((ERRORS + 1))
+      elif [ -n "$version" ]; then
+        echo "  OK: Claude and Antigravity versions in sync ($version)"
       fi
     fi
   fi
@@ -261,32 +338,68 @@ for plugin_dir in plugins/*/; do
       ERRORS=$((ERRORS + 1))
       lifecycle_mapping_invalid=true
     fi
-    claude_adapter=$(rg '^\*\*Claude Code adapter\.\*\*' "$lifecycle_implement_skill")
-    if ! printf '%s' "$claude_adapter" | rg -Fq '`model`' || ! printf '%s' "$claude_adapter" | rg -Fq '`"sonnet"` for `balanced`' || ! printf '%s' "$claude_adapter" | rg -q 'omit it \(inherit\) for `frontier`'; then
-      echo "  ERROR: Claude Code adapter must map tiers explicitly (\`model\`, \"sonnet\" for balanced, omit/inherit for frontier)"
-      ERRORS=$((ERRORS + 1))
-      lifecycle_mapping_invalid=true
-    fi
     untiered_rows=$(printf '%s\n' "$lifecycle_mapping" | rg '^\| (Implement|Address|Review|Verify)' | rg -vc '\| `(balanced|frontier)`[^|]*\|$' || echo 0)
     if [ "$untiered_rows" -ne 0 ]; then
       echo "  ERROR: Every canonical lifecycle mapping row must carry a balanced or frontier tier (found $untiered_rows without)"
       ERRORS=$((ERRORS + 1))
       lifecycle_mapping_invalid=true
     fi
-    for adapter_syntax in \
-      'Use the implement-lifecycle:<skill> plugin skill' \
-      'Use $implement-lifecycle:<skill>' \
-      'generic `delegate` child with `skill: <skill>`' \
-      'fresh isolated child, load the mapped Agent Skill explicitly'; do
-      adapter_count=$(rg -Fc "$adapter_syntax" "$lifecycle_implement_skill")
-      if [ "$adapter_count" -ne 1 ]; then
-        echo "  ERROR: Lifecycle adapter syntax must be centralized exactly once: $adapter_syntax (found $adapter_count)"
+    for adapter_ref in \
+      'references/adapter-claude.md' \
+      'references/adapter-codex.md' \
+      'references/adapter-agy.md' \
+      'references/adapter-pi.md' \
+      'references/adapter-generic.md'; do
+      if ! rg -Fq "$adapter_ref" "$lifecycle_implement_skill"; then
+        echo "  ERROR: implement must dispatch to adapter reference: $adapter_ref"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_mapping_invalid=true
+      fi
+      if [ ! -s "$plugin_dir/skills/implement/$adapter_ref" ]; then
+        echo "  ERROR: Missing adapter reference file: $adapter_ref"
         ERRORS=$((ERRORS + 1))
         lifecycle_mapping_invalid=true
       fi
     done
+    claude_adapter_file="$plugin_dir/skills/implement/references/adapter-claude.md"
+    if ! rg -Fq 'Use the implement-lifecycle:<skill> plugin skill' "$claude_adapter_file" || \
+      ! rg -Fq '`model`' "$claude_adapter_file" || \
+      ! rg -Fq '`"sonnet"` for `balanced`' "$claude_adapter_file" || \
+      ! rg -q 'omit it \(inherit\) for `frontier`' "$claude_adapter_file"; then
+      echo "  ERROR: Claude Code adapter must map tiers explicitly (\`model\`, \"sonnet\" for balanced, omit/inherit for frontier)"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_mapping_invalid=true
+    fi
+    codex_adapter_file="$plugin_dir/skills/implement/references/adapter-codex.md"
+    if ! rg -Fq 'Use $implement-lifecycle:<skill>' "$codex_adapter_file"; then
+      echo "  ERROR: Codex adapter must use plugin-qualified skill prefix"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_mapping_invalid=true
+    fi
+    agy_adapter_file="$plugin_dir/skills/implement/references/adapter-agy.md"
+    if ! rg -Fq '`invoke_subagent`' "$agy_adapter_file" || \
+      ! rg -Fq '`TypeName: "self"`' "$agy_adapter_file" || \
+      ! rg -Fq '`Model: "flash"`' "$agy_adapter_file" || \
+      ! rg -Fq '`Model: "inherit"`' "$agy_adapter_file"; then
+      echo "  ERROR: Antigravity adapter must specify invoke_subagent with flash and inherit tiers"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_mapping_invalid=true
+    fi
+    pi_adapter_file="$plugin_dir/skills/implement/references/adapter-pi.md"
+    if ! rg -Fq 'generic `delegate` child with `skill: <skill>`' "$pi_adapter_file" || \
+      ! rg -Fq 'context: "fresh"' "$pi_adapter_file"; then
+      echo "  ERROR: Pi adapter must specify delegate child with fresh context"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_mapping_invalid=true
+    fi
+    generic_adapter_file="$plugin_dir/skills/implement/references/adapter-generic.md"
+    if ! rg -Fq 'fresh isolated child, load the mapped Agent Skill explicitly' "$generic_adapter_file"; then
+      echo "  ERROR: Generic adapter must specify fresh isolated child and explicit skill load"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_mapping_invalid=true
+    fi
     if [ "$lifecycle_mapping_invalid" = false ]; then
-      echo "  OK: Canonical lifecycle mapping contains each worker once and adapter syntax is centralized"
+      echo "  OK: Canonical lifecycle mapping contains each worker once and progressive-disclosure adapters are valid"
     fi
 
     lifecycle_pi_manifest="$plugin_dir/package.json"
@@ -612,7 +725,7 @@ complete + referee -> refereeing
     if [ "$lifecycle_recovery_graph" != "$lifecycle_expected_recovery_graph" ]; then
       echo "  ERROR: Lifecycle reviewer recovery must match the authoritative non-empty-result state graph"
       ERRORS=$((ERRORS + 1))
-    elif ! rg -q '^\*\*Pi adapter\.\*\*.*context: "fresh"' "$lifecycle_implement_skill" || \
+    elif ! rg -q 'context: "fresh"' "$plugin_dir/skills/implement/references/adapter-pi.md" || \
       [ "$(rg -Fc 'context: "fresh"' "$lifecycle_recovery_ref")" -lt 2 ]; then
       echo '  ERROR: Pi delegation and recovery must set context: "fresh" explicitly'
       ERRORS=$((ERRORS + 1))
@@ -701,7 +814,7 @@ complete + referee -> refereeing
       ! rg -Fq 'For every result, require its `#/suite-evidence/command-<N>` pointer to resolve inside the handed-off object' "$lifecycle_merge_file" || \
       ! rg -Fq 'Accept `not-required` only after independently inspecting the changed files and confirming that every change is documentation or comments only' "$lifecycle_merge_file" || \
       ! rg -Fq 'Capture the verifier'"'"'s returned handoff-artifact JSON object: the complete durable `verification-record:v1`' "$lifecycle_implement_skill" || \
-      ! rg -Fq 'Payload: <pr-number> <resolved-verification-record-path>' "$lifecycle_implement_skill" || \
+      ! rg -Fq 'Evaluate and execute the canonical `merge-pr` skill inline against `<pr-number> <resolved-verification-record-path>`; do not spawn a child for it.' "$lifecycle_implement_skill" || \
       ! rg -Fq 'suite-source: executed | ci' "$lifecycle_verify_file" || \
       ! rg -Fq 'a failing, other-SHA, other-repository, or unconfirmable run is not evidence, so execute instead.' "$lifecycle_verify_file" || \
       ! rg -Fq 'Require: the repository is the target repository; `headSha` equals `verification-head`; that attempt'"'"'s `conclusion` is `success`; and in every job or matrix leg with a step running a plan command, each established command maps, in order, to a step whose conclusion is `success`, never `skipped`.' "$lifecycle_verify_ci_ref" || \
@@ -725,7 +838,7 @@ complete + referee -> refereeing
     lifecycle_verify_scope_ok=true
     for lifecycle_scope_check in \
       "$lifecycle_implement_skill|Allow at most 2 FAIL → address → re-verify cycles; on a third FAIL, do not address again" \
-      "$lifecycle_implement_skill|Payload: <pr-number> tier=<Small|Medium|Large> [failed-scenarios=<names>]" \
+      "$lifecycle_implement_skill|Payload: <pr-number> tier=<Small|Medium|Large> [failed-scenarios=<names>] bundle=<resolved-context-bundle-path>" \
       "$lifecycle_verify_file|**Small** — suite evidence, plus one live check only when runtime behavior changed" \
       "$lifecycle_verify_file|re-run only those scenarios plus suite evidence for the new head" \
       "$lifecycle_verify_file|When the head's suite fails, run each failing command once on the PR's merge-base" \
@@ -854,6 +967,9 @@ complete + referee -> refereeing
       'Reject findings about code outside the round'"'"'s delta' \
       'Follow-up reviewers judge only that range' \
       'specialists are selected mechanically by tier and path trigger' \
+      'excluding whole-file deletions, lockfiles, and generated files' \
+      'inspect all changed paths (including deleted files)' \
+      'when the prior round accepted only `review-docs` findings and the fix delta touches only documentation files, run `review-docs` only; otherwise run `review-general`' \
       'do not poll, sleep, or schedule wake-ups'; do
       if ! rg -Fiq -- "$loop_text" "$lifecycle_implement_skill"; then
         echo "  ERROR: implement Phase 4 must keep tier/loop invariant: $loop_text"
@@ -1082,7 +1198,8 @@ complete + referee -> refereeing
       echo "  OK: draft-issue and refine-issue collapse Technical Context and Proposed PRs; cleanup-issue preserves <details>"
     fi
     lifecycle_prcheck_file="$plugin_dir/skills/pr-check/SKILL.md"
-    if ! rg -Fq 'Claude Code, Codex, Pi, or generic adapter' "$lifecycle_implement_skill" || \
+    if ! rg -Fq 'Evaluate and execute the canonical `merge-pr` skill inline' "$lifecycle_implement_skill" || \
+      ! rg -Fq 'do not spawn a child for it' "$lifecycle_implement_skill" || \
       ! rg -Fq 'Evaluate the canonical `pr-check` checklist inline' "$lifecycle_merge_file" || \
       ! rg -Fq 'do not spawn a child for it' "$lifecycle_merge_file" || \
       ! rg -Fq 'Block only on failures of those rules' "$lifecycle_merge_file" || \
@@ -1093,6 +1210,28 @@ complete + referee -> refereeing
       ERRORS=$((ERRORS + 1))
     else
       echo "  OK: merge-pr evaluates pr-check inline; fallback-only failures are non-blocking"
+    fi
+
+    lifecycle_bundle_missing=false
+    for lifecycle_reviewer in review-general review-correctness review-security review-architecture review-testing review-docs; do
+      if ! rg -Fq 'Read the supplied context-bundle file when provided; fetch `gh pr view <pr-number>`, its changed-file summary (`--json files`), and `--comments` only when invoked standalone without a bundle.' "$plugin_dir/skills/$lifecycle_reviewer/SKILL.md"; then
+        echo "  ERROR: $lifecycle_reviewer must support file-backed context bundle and skip fetch when bundle is provided"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_bundle_missing=true
+      fi
+    done
+    if ! rg -Fq 'Read the findings file and supplied context-bundle file when provided; fetch PR metadata and comments only when invoked without a bundle.' "$plugin_dir/skills/implement-address/SKILL.md"; then
+      echo "  ERROR: implement-address must support file-backed context bundle and skip fetch when bundle is provided"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_bundle_missing=true
+    fi
+    if ! rg -Fq 'read the supplied context-bundle file when provided, fetching PR metadata, comments, and `--json files` only when absent' "$plugin_dir/skills/verify/SKILL.md"; then
+      echo "  ERROR: verify must support file-backed context bundle and skip fetch when bundle is provided"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_bundle_missing=true
+    fi
+    if [ "$lifecycle_bundle_missing" = false ]; then
+      echo "  OK: File-backed context bundle skip-fetch rule enforced across reviewers, addresser, and verifier"
     fi
   fi
 
