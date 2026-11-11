@@ -1,8 +1,9 @@
 # Run ledger
 
-Print the ledger in this shape. Keep the `<details>` wrapper, and the blank line after `</summary>`, wherever it is posted to the PR.
+Track phase durations and tally execution metrics as you go: children per role and tier, addresser commits (from each Commits list, including verify fixes), and out-of-delta follow-ups.
 
-```markdown
+On every terminal path (merge, escalation, cap or stall exit, third verify FAIL, PARTIAL, or any other stop), print the ledger to the user, collapsed under `<details>`. When a PR exists and the path posts a PR comment or merge summary, append it there too. Keep the blank line after `</summary>` so Markdown renders properly.
+
 <details>
 <summary>Run ledger · <outcome> · <tier></summary>
 
@@ -16,4 +17,3 @@ Print the ledger in this shape. Keep the `<details>` wrapper, and the blank line
 - Outcome: <merged|escalated|partial|stopped|reviewed|addressed> — <phase>
 
 </details>
-```

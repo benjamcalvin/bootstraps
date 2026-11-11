@@ -1,9 +1,9 @@
 ---
 name: implement-address
-description: Address filtered review findings for implement workflow (runs as subagent)
+description: Delegated implement-lifecycle worker: address accepted review findings and push fixes.
 license: MIT
 metadata:
-  version: "2.1.0"
+  version: "2.2.0"
   tags: ["implement", "address", "subagent"]
   author: benjamcalvin
 ---
@@ -12,7 +12,7 @@ metadata:
 
 <!-- lifecycle-suite-capability: focused-only -->
 
-**Suite capability: `focused-only`. Run focused tests, lint, builds, and acceptance commands only. Do not execute or consume the target repository's authoritative verification command or ordered command plan. Final verification owns that evidence.**
+**Suite capability: `focused-only`. Prefer fast package- or target-scoped checks during iteration (using the repository's default check only when fast and no narrower check exists); `verify` owns authoritative exact-head suite signoff.**
 
 Parse the PR number, round identifier, and findings-file path from the invocation input. If the client leaves `$ARGUMENTS` literal, use the delegation prompt.
 
@@ -47,7 +47,7 @@ Run focused tests, linters, and a build on the packages you changed. Every test 
 
 ### Step 3: Commit, Push, and Report
 
-Commit as `fix: address review round <round> — <description>`, keeping unrelated fixes in separate commits, and `git push`. Post your summary with `gh pr comment <pr-number>`, and return:
+Commit as `fix: address review round <round> — <description>`, keeping unrelated fixes in separate commits, and `git push`. Return:
 
 | # | Finding | Action | Details |
 |---|---------|--------|---------|

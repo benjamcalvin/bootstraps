@@ -159,16 +159,16 @@ Provides a shared lifecycle orchestrator, two utility skills, three delegated wo
 | Skill | Description |
 |-------|-------------|
 | `/implement` / `$implement-lifecycle:implement` | Lean orchestrator — lifecycle of plan → implement → PR → review loop → verify → merge. Accepts `#issue`, PR number, or freeform task. Supports trailing instructions like "just review" or "skip planning". |
-| `/merge-pr <pr-number> <handoff-artifact-path>` / `$implement-lifecycle:merge-pr <pr-number> <handoff-artifact-path>` | Lifecycle-internal merge step. Validates readiness and updates linked issues using the temporary verification artifact produced by `verify`; it fails closed without that artifact. Evaluated inline by the orchestrator in Phase 6 or executed standalone. |
+| `/merge-pr <pr-number> [verification-record-path]` / `$implement-lifecycle:merge-pr <pr-number> [verification-record-path]` | Merge a verified PR following repository policy and post issue updates; validates exact-head verification record from comment or optional record path. Evaluated inline by the orchestrator in Phase 6 or executed standalone. |
 | `/pr-check` / `$implement-lifecycle:pr-check` | Pre-flight PR validation — branch naming, title, description, commits, references, plus an advisory scope note. |
 
 **Delegated worker roles** (invoked by the orchestrator, not directly):
 
 | Role | Description |
 |-------|-------------|
-| `implement-code` | Explore codebase, plan, write tests first, implement, self-review, commit, and create PR. |
+| `implement-code` | Explore codebase, plan, write outcome-based tests covering new/changed behavior, implement, self-review, commit, and create PR. |
 | `implement-address` | Address filtered review findings from the referee's action plan. |
-| `verify` | End-to-end verification and sole authoritative-suite owner — scales live scenarios by tier, records one execution or exact-head required-CI evidence, and baselines suite failures on the merge-base. |
+| `verify` | End-to-end verification and sole authoritative-suite owner — scales live scenarios by tier, records one execution or exact-head required-CI evidence, baselines suite failures on the merge-base, and writes structured verification artifacts directly to the requested record path. |
 
 **Review roles:**
 
@@ -185,11 +185,11 @@ Heavy phases run in fresh generic isolated delegated children, while Phase 6 `me
 
 Every lifecycle skill declares a machine-checkable, command-neutral suite capability. `verify` is the sole `full-suite-owner`; it discovers the target repository's authoritative verification command or ordered command plan from repository instructions, CI, development documentation, and build/test configuration. The orchestrator, implementers, addressers, reviewers, PR checker, and merger are `focused-only` and may run focused checks without executing or consuming that plan. Verification evidence records the exact command or ordered plan once for the exact PR head (or a successful required-CI run attempt whose steps ran that plan on the same head in the target repository, which merge independently re-confirms), and merge uses that verified SHA as an atomic precondition. When every suite failure is also present on the merge-base, verification returns PARTIAL: the run stops for a human, the record is not mergeable, and nothing is sent back for fixes; verification fix cycles are capped at 2.
 
-Enforced target-repository constraints are binding; explicit user direction selects only among permitted choices, and unresolved conflicts stop the merge. Bundled conventions are fallbacks only when both sources are silent about toolchains, branch names, commits, PR formatting, required checks, approvals, merge method, or branch retention. Findings handoffs use harness-provided or system-created temporary paths passed explicitly between workers, and verification passes a temporary, self-contained evidence artifact to the fresh merger.
+Enforced target-repository constraints are binding; explicit user direction selects only among permitted choices, and unresolved conflicts stop the merge. Bundled conventions are fallbacks only when both sources are silent about toolchains, branch names, commits, PR formatting, required checks, approvals, merge method, or branch retention. Findings handoffs use harness-provided or system-created temporary paths passed explicitly between workers, and verification writes a structured verification artifact directly to the requested record path for inline or standalone merge.
 
 The skill-local `agents/openai.yaml` files are optional OpenAI skill metadata that supplies presentation and invocation policy. They are not subagent definitions, are retained for Codex compatibility, and do not change the harness-neutral worker behavior. No custom Pi agent templates are distributed.
 
-Skill instructions are held to a byte budget (80 KB across all lifecycle skills, 20 KB for `implement`) enforced by `validate-all.sh`, because every child re-reads them. Material needed only on a named path (reviewer-result recovery, convergence recovery, CI-evidence acceptance, and the PR-description, review-comment, and run-ledger templates) lives in skill-local `references/` files that the skill reads only on that path.
+Skill instructions are held to a byte budget (56 KB across all lifecycle skills, 14 KB for `implement`) enforced by `validate-all.sh`, because every child re-reads them. Material needed only on a named path (Large-tier triggers and convergence audits, verification failure loops, reviewer-result recovery, baseline-on-failure workflow, special-verdict records, CI source validation, linked issue update templates, and the PR-description, review-comment, and run-ledger templates) lives in skill-local `references/` files that the skill reads only on that path.
 
 Reviewers return their findings to the orchestrator and post nothing themselves. The orchestrator is the sole publisher to the PR timeline: it publishes one consolidated comment per round carrying every reviewer's findings plus its referee decisions, with the referee reasoning collapsed under `<details>`.
 

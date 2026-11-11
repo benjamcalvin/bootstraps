@@ -8,3 +8,26 @@ Only the lead, the "Author ran" line, and the review focus stay visible; everyth
 - No living sections ("Progress log", "Live status").
 - One idea per sentence; cite an issue or spec at the end of a bullet, never mid-clause; keep review chronology ("round 1 added X") out.
 - Skim test: the lead, then the first sentence of each collapsed section, summarizes the PR at descending altitude.
+
+## Fallback Template
+
+Use this shape when the target repository does not supply its own PR template:
+
+<2–3 plain-language sentences: what changes and why, no code identifiers> *(agent-drafted lead)*
+
+<Closes #N or Part of #N> · Author ran: <commands you executed and their results>
+
+**Review focus:** <the decisions a reviewer should weigh, with file references>
+
+<details>
+<summary><your model name> · design, implementation, test evidence</summary>
+
+## Design
+<key choices and reasons in component terms, including intentional spec deviations>
+
+## Implementation Notes
+<file-level shape of the diff and, when large, the order to read it>
+
+## Test evidence
+<per check: command, full output, and what it shows; "N/A — no runnable artifacts changed" for manual>
+</details>
