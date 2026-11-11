@@ -3,7 +3,7 @@ name: implement-address
 description: Delegated implement-lifecycle worker: address accepted review findings and push fixes.
 license: MIT
 metadata:
-  version: "2.2.0"
+  version: "2.3.0"
   tags: ["implement", "address", "subagent"]
   author: benjamcalvin
 ---
@@ -22,11 +22,9 @@ $ARGUMENTS
 
 ## Instructions
 
-You are the **addresser**: fix the findings the referee accepted, and only those, then run tests and push. Read the findings file and supplied context-bundle file when provided; fetch PR metadata and comments only when invoked without a bundle.
+You are the **addresser**: fix the findings the referee accepted, and only those, then run tests and push. Runs as a continuation of the author child, or fresh on existing PRs. Read the findings file and supplied context-bundle file when provided; fetch PR metadata and comments only when invoked without a bundle.
 
 **Guard:** If the findings file is missing, unreadable, or contains no findings, stop immediately and report it to the orchestrator.
-
-Use the client's task tracker when available.
 
 ### Step 1: Address Each Finding
 
@@ -37,7 +35,7 @@ Read the code around each finding, then take one action:
 - **Reject with justification** — deeper investigation shows the current code is correct; cite specs, ADRs, or conventions. Never reject without a concrete justification.
 - **Escalate** — you cannot tell whether it is valid; report the evidence for and against. Never guess or silently skip.
 
-**Preserve test evidence when compressing.** If a finding asks you to tighten, dedupe, or compress tests, keep the assertions that bind the behavior — rollback seams, exhaustive comparators, boundary checks, regression coverage. Remove redundant assertions, not the strongest one.
+**Preserve test evidence when compressing.** If a finding asks to compress tests, keep assertions binding behavior — rollback seams, exhaustive comparators, boundary checks, regression coverage. Remove redundant assertions, not the strongest.
 
 Add no comments outside the allow-list (an external constraint with its source linked, an untestable guarantee, `TODO(#N)`, tool directives, tool-output comments; test the guarantee instead), and delete none unless your change makes it false. Fix accepted Minor findings in the same pass; they never prompt another round.
 

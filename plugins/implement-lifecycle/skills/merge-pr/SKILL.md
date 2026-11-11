@@ -45,7 +45,7 @@ All gates must pass:
    - **Not required.** Accept `not-required` only after independently inspecting the changed files and confirming that every change is documentation or comments only, with JSON `null` command and exit status, zero executions, empty results, and empty `suite-evidence`.
    - Store matching head as `VERIFIED_SHA`.
 
-**Human approval stop:** When repository policy requires human approvals or merge-queue checks not yet met and all agent gates pass, report `## Ready for Human Merge`:
+**Human approval stop:** When policy requires human approvals or merge-queue checks not yet met and agent gates pass, report `## Ready for Human Merge`:
 - `## Ready for Human Merge` — PR #<number>, awaiting human approval or merge queue.
 
 ### Step 2: Merge
@@ -62,8 +62,8 @@ When PR title or body references `#N`, read `references/issue-updates.md` and co
 
 ### Step 4: Report
 
-Report `## Merge Complete` with PR number, title, base branch, updated issues, warnings, and changes summary.
+Report `## Merge Complete` with PR number, title, base branch, issues, warnings, and summary.
 
 ## Escalation
 
-Consult user for flaky CI, unresolved conversations, merge errors, or ambiguous policy.
+Consult user for flaky CI, open threads, merge errors, or ambiguous policy.
