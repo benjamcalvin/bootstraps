@@ -36,7 +36,7 @@ For code changes, fetch `gh pr view <number> --json headRefOid --jq .headRefOid`
 
 **Baseline on failure.** When any authoritative command exits non-zero, read `references/baseline-on-failure.md` before classifying FAIL vs PARTIAL.
 
-**Direct file handoff.** Write the JSON verification artifact directly to `record=<path>` (or a scratch file) with file tools or python/jq scripts. Map comment `none`/`n/a` to JSON `null`, adding `suite-evidence` mapping each `command-<N>` pointer to `{"command": "<exact-command>", "output": "<complete-unedited-output>"}`. Do not dump escaped JSON into the LLM message.
+**Direct file handoff.** Write the JSON verification artifact to `record=<path>` (or scratch file) with file tools or python/jq. Map comment `none`/`n/a` to JSON `null`, adding `suite-evidence` mapping each `command-<N>` pointer to `{"command": "<exact-command>", "output": "<complete-unedited-output>"}`. Do not dump escaped JSON into the LLM message.
 
 After execution, re-check `headRefOid`. If it differs from `verification-head`, report FAIL and claim no evidence for the new head.
 

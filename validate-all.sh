@@ -402,6 +402,30 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
       echo "  OK: Canonical lifecycle mapping contains each worker once and progressive-disclosure adapters are valid"
     fi
 
+    lifecycle_continuation_invalid=false
+    lifecycle_convergence_ref="$plugin_dir/skills/implement/references/convergence-recovery.md"
+    if ! rg -Fq 'Spawn a fresh isolated child (never inheriting orchestrator history)' "$lifecycle_implement_skill" || \
+      ! rg -Fq 'reuse that same subagent rather than spawning a new one' "$lifecycle_implement_skill"; then
+      echo "  ERROR: implement must specify fresh child isolation for new tasks and continuation reuse for follow-ups"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_continuation_invalid=true
+    fi
+    if ! rg -Fq 'resume' "$claude_adapter_file" || \
+      ! rg -Fq 'send_input' "$codex_adapter_file" || \
+      ! rg -Fq 'send_message' "$agy_adapter_file"; then
+      echo "  ERROR: Progressive-disclosure adapters must specify continuation mechanisms (resume, send_input, send_message)"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_continuation_invalid=true
+    fi
+    if ! rg -Fq 'spawn fresh children' "$lifecycle_convergence_ref"; then
+      echo "  ERROR: convergence-recovery must specify spawning fresh children on a clean reset"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_continuation_invalid=true
+    fi
+    if [ "$lifecycle_continuation_invalid" = false ]; then
+      echo "  OK: Subagent continuation and fresh reset rules verified across orchestrator and adapters"
+    fi
+
     lifecycle_pi_manifest="$plugin_dir/package.json"
     if ! jq -e '
       .name == "implement-lifecycle" and

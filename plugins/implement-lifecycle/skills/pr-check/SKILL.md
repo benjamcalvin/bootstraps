@@ -29,7 +29,7 @@ If the client leaves `$ARGUMENTS` literal, use the invoking prompt. Without a PR
 
 Inspect the branch, PR metadata, and comments; determine the actual base branch before inspecting commits and diff size. Read explicit user direction and the target repository's governing instructions and contribution docs first: they take precedence over the bundled checks below for branch names, commits, PR formatting, required references, and blocking/advisory status. Use a bundled check only where target policy is silent, and label it as a fallback. A fallback check never blocks.
 
-Result per check: **PASS**, **WARN** (minor deviation or bundled-fallback miss), or **FAIL** (violates repository-declared blocking rule). A repository-declared rule carries its declared status; otherwise a miss is WARN. A fallback check never blocks.
+Result per check: **PASS**, **WARN** (minor deviation or bundled-fallback miss), or **FAIL** (violates repository-declared blocking rule). A fallback check never blocks.
 
 ### Checks (bundled fallbacks)
 
@@ -43,7 +43,7 @@ Result per check: **PASS**, **WARN** (minor deviation or bundled-fallback miss),
 
 ### Scope Note (advisory — not scored)
 
-Judge whether the PR is **one logical change a reviewer can hold in their head in one sitting**, or a small batch of same-kind housekeeping. This is cohesion, not size: one ADR, a module scaffold, or a mechanical rename is one change at any size; a small PR that fixes a bug *and* refactors an unrelated module is two. Give a one-line observation: cohesive, or the seam to split along. When over-scoped, recommend splitting before implementation proceeds. Never score it, count lines against a threshold, or treat it as a blocker.
+Judge whether the PR is **one logical change a reviewer can hold in their head in one sitting**, or small housekeeping. This is cohesion, not size: an ADR, module scaffold, or rename is one change; a PR fixing a bug *and* refactoring unrelated code is two. Give a one-line observation: cohesive, or the seam to split along. Never score it or treat it as a blocker.
 
 ### Output Format
 

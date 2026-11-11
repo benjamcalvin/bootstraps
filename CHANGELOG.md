@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Subagent continuation support in `implement-lifecycle` 3.24.0 across Claude Code (`resume`), Codex (`send_input`), Antigravity (`send_message`), Pi (session resume), and generic adapters; reuses existing author, reviewer, and verifier subagents for follow-ups, feedback addressing, delta reviews, referee clarifications, and re-verification while spawning fresh isolated children for new tasks, distinct roles, and convergence resets
 - Progressive-disclosure references in `implement-lifecycle` 3.23.0 (`large-tier.md`, `verify-fail-loop.md`, `baseline-on-failure.md`, `special-verdicts.md`, `ci-source.md`, `issue-updates.md`)
 - Native Antigravity (`agy`) support: `.agents/plugins.json` workspace manifest for native discovery, `.antigravity-plugin/plugin.json` manifests across all plugins, and `references/adapter-agy.md` adapter for Antigravity subagent invocation
 - Progressive-disclosure harness adapters in `implement-lifecycle` 3.22.0 (`references/adapter-*.md` for Claude Code, Codex, Antigravity, Pi, and generic harnesses)
@@ -18,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `implement-lifecycle` 3.24.0 updates orchestrator delegation and adapter references to continue existing subagents on compatible harnesses rather than spawning fresh children for every follow-up, adjusts `implement-address` to run as a continuation or fresh subagent, records continuations in the run ledger, and ensures convergence resets discard prior sessions
 - `implement-lifecycle` 3.23.0 tightens instructions into lower byte budgets (56 KB total across all 12 skills, 14 KB for `implement`), adopts outcome-based test requirements covering new/changed behavior, introduces direct file-backed verification artifact handoffs (`record=<path>`), makes `<verification-record-path>` optional on `/merge-pr` (validating from comments when standalone or file when provided), adds first-class `Ready for Human Merge` reporting, and streamlines reviewer methodology and referee postures across skills
 - `implement-lifecycle` 3.22.0 discounts whole-file deletions in authoritative tier classification, runs `review-docs` only on docs-only follow-up deltas, executes Phase 6 `merge-pr` inline without spawning a child, and introduces a file-backed scratch context bundle (`bundle=<path>`) across post-PR workers to eliminate redundant metadata fetching
 - `bootstrap-docs` 2.2.0 adds Antigravity plugin manifest metadata
