@@ -6,7 +6,7 @@ description: >-
   Triggers: /pr-check, check this PR, validate PR
 license: MIT
 metadata:
-  version: "2.2.0"
+  version: "2.3.0"
   tags: ["pr", "check", "standards", "validation"]
   author: benjamcalvin
 ---
@@ -15,7 +15,7 @@ metadata:
 
 <!-- lifecycle-suite-capability: focused-only -->
 
-**Suite capability: `focused-only`. Prefer fast package- or target-scoped checks during iteration (using the repository's default check only when fast and no narrower check exists); `verify` owns authoritative exact-head suite signoff.**
+**Suite capability: `focused-only`. Prefer fast package- or target-scoped checks during iteration; Phase 5 (`verify` or inline fast gate) owns authoritative exact-head suite signoff.**
 
 Pre-flight validation for PRs.
 

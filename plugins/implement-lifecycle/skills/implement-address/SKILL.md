@@ -1,9 +1,9 @@
 ---
 name: implement-address
-description: Delegated implement-lifecycle worker: address accepted review findings and push fixes.
+description: "Delegated implement-lifecycle worker: address accepted review findings when running standalone or fresh on an existing PR."
 license: MIT
 metadata:
-  version: "2.3.0"
+  version: "2.4.0"
   tags: ["implement", "address", "subagent"]
   author: benjamcalvin
 ---
@@ -12,9 +12,9 @@ metadata:
 
 <!-- lifecycle-suite-capability: focused-only -->
 
-**Suite capability: `focused-only`. Prefer fast package- or target-scoped checks during iteration (using the repository's default check only when fast and no narrower check exists); `verify` owns authoritative exact-head suite signoff.**
+**Suite capability: `focused-only`. Prefer fast package- or target-scoped checks during iteration; Phase 5 (`verify` or inline fast gate) owns authoritative exact-head suite signoff.**
 
-Parse the PR number, round identifier, and findings-file path from the invocation input. If the client leaves `$ARGUMENTS` literal, use the delegation prompt.
+Parse `<pr-number> <round-id> <resolved-findings-path>` and optional `bundle=` from the input (use the delegation prompt if `$ARGUMENTS` is literal).
 
 ```text
 $ARGUMENTS
@@ -22,30 +22,29 @@ $ARGUMENTS
 
 ## Instructions
 
-You are the **addresser**: fix the findings the referee accepted, and only those, then run tests and push. Runs as a continuation of the author child, or fresh on existing PRs. Read the findings file and supplied context-bundle file when provided; fetch PR metadata and comments only when invoked without a bundle.
+You are the **addresser**: fix accepted referee findings (and only those), then run focused tests and push. Used standalone (`"address the review feedback"`) or spawned fresh on an existing PR when no `implement-code` author child exists in the session. Read the findings file and supplied context-bundle file when provided; fetch PR metadata and comments only when invoked without a bundle.
 
 **Guard:** If the findings file is missing, unreadable, or contains no findings, stop immediately and report it to the orchestrator.
 
 ### Step 1: Address Each Finding
 
-Read the code around each finding, then take one action:
+Read code around each finding, then take one action:
+- **Apply** — make the requested change.
+- **Partially apply** — implement a better fix that addresses the root cause and explain the deviation.
+- **Reject with justification** — cite specs, ADRs, or conventions showing the current code is right; never reject without proof.
+- **Escalate** — report evidence for and against when uncertain; never guess or silently skip.
 
-- **Apply** — the finding is correct; make the change.
-- **Partially apply** — the insight is right but the suggested fix is not; implement a better fix and explain the deviation.
-- **Reject with justification** — deeper investigation shows the current code is correct; cite specs, ADRs, or conventions. Never reject without a concrete justification.
-- **Escalate** — you cannot tell whether it is valid; report the evidence for and against. Never guess or silently skip.
+**Preserve test evidence when compressing.** Keep assertions binding behavior — rollback seams, exhaustive comparators, boundary checks, regression coverage. Remove redundant assertions, not the strongest.
 
-**Preserve test evidence when compressing.** If a finding asks to compress tests, keep assertions binding behavior — rollback seams, exhaustive comparators, boundary checks, regression coverage. Remove redundant assertions, not the strongest.
-
-Add no comments outside the allow-list (an external constraint with its source linked, an untestable guarantee, `TODO(#N)`, tool directives, tool-output comments; test the guarantee instead), and delete none unless your change makes it false. Fix accepted Minor findings in the same pass; they never prompt another round.
+Add no comments outside the allow-list (external constraint with linked source, untestable guarantee, `TODO(#N)`, tool directives, tool-output comments; write a test instead), and delete none unless your change makes it false. Fix accepted Minor findings in the same pass.
 
 ### Step 2: Focused Verification
 
-Run focused tests, linters, and a build on the packages you changed. Every test you touched and every lint must pass; if tests fail, fix the code, not the tests. Then read your own diff for issues the fixes introduced. When no follow-up review will occur (Small tier or final round), report the focused tests you ran.
+Run focused tests, linters, `docs-check` (if `docs-check.toml` exists), and a build on changed packages. Fix code, not tests, if any fail. Read your fix diff to catch regressions.
 
 ### Step 3: Commit, Push, and Report
 
-Commit as `fix: address review round <round> — <description>`, keeping unrelated fixes in separate commits, and `git push`. Return:
+Commit as `fix: address review round <round> — <description>` (separating unrelated fixes), and `git push`. Return:
 
 | # | Finding | Action | Details |
 |---|---------|--------|---------|

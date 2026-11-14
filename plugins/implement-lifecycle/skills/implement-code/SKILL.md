@@ -1,9 +1,9 @@
 ---
 name: implement-code
-description: Delegated implement-lifecycle worker: plan, test, implement, and open a PR.
+description: "Delegated implement-lifecycle worker: plan, test, implement, open a PR, and address review findings in continuation mode."
 license: MIT
 metadata:
-  version: "1.5.0"
+  version: "2.0.0"
   tags: ["implement", "code", "pr", "subagent"]
   author: benjamcalvin
 ---
@@ -12,9 +12,9 @@ metadata:
 
 <!-- lifecycle-suite-capability: focused-only -->
 
-**Suite capability: `focused-only`. Prefer fast package- or target-scoped checks during iteration (using the repository's default check only when fast and no narrower check exists); `verify` owns authoritative exact-head suite signoff.**
+**Suite capability: `focused-only`. Prefer fast package- or target-scoped checks during iteration; Phase 5 (`verify` or inline fast gate) owns authoritative exact-head suite signoff.**
 
-Implement the task supplied by the orchestrator. The first token is the linked issue number, or `0` if none. If the client leaves `$ARGUMENTS` literal, use the delegation prompt.
+Implement the task supplied by the orchestrator (use the delegation prompt if `$ARGUMENTS` is literal). First token is issue number, or `0` if none.
 
 ```text
 $ARGUMENTS
@@ -22,46 +22,40 @@ $ARGUMENTS
 
 ## Instructions
 
-You are the **implementer**: explore, plan, write code and tests, and open the PR. Inspect the branch, status, and referenced issue or spec first. Read `AGENTS.md`, `CLAUDE.md`, and relevant standards docs for invariants. Explicit user direction and the target repository's instructions override this skill's bundled fallbacks for branch names, commit format, PR structure, checks, and delivery.
+You are the **implementer**: explore, plan, write code and tests, open the PR, and address findings when resumed in Continuation Mode. Inspect branch, status, issue/spec, `AGENTS.md`, `CLAUDE.md`, and standards docs first. Target repo instructions and user direction override bundled fallbacks.
 
 ### Step 0: Plan (unless skipped)
 
-Skip to Step 1 when the task says "skip planning" or "just implement", or carries a detailed plan with acceptance criteria. Otherwise, without returning the plan: read referenced specs, ADRs, and issues; explore only the modules the task touches; write testable acceptance criteria; list test cases (happy path, edge, error, regression); and choose the minimum viable approach, noting risks.
+Skip to Step 1 if told "skip planning" / "just implement" or given a detailed plan. Otherwise, without returning the plan: read referenced specs/ADRs/issues, inspect touched modules, list testable acceptance criteria and test cases (happy, edge, error, regression), and pick the minimum viable approach.
 
 ### Step 1: Branch
 
-On a shared base branch (the default or a shared integration branch), create a feature branch; on a feature or stacked branch for this work, stay on it. Bundled fallback name: `<type>/<short-description>` (type `feat`, `fix`, `refactor`, `docs`, `test`, or `chore`), lowercase, hyphenated, no issue numbers.
+Create a feature branch on a shared base branch (or stay on a stacked/feature branch). Fallback name: `<type>/<short-description>` (`feat|fix|refactor|docs|test|chore`), lowercase, hyphenated, no issue numbers.
 
 ### Step 2: Automated Tests
 
-Cover new/changed behavior and bugfixes with automated tests that would fail without the change (writing tests first when practical, such as bug reproductions and clear contracts; skipping unit tests only for pure documentation or non-executable config changes). Follow nearby test conventions and helpers; use obviously synthetic data, never real personal data.
+Cover new/changed behavior and bugfixes with automated tests that fail without the change (TDD where practical; skip unit tests only for pure docs/non-executable config). Follow local conventions and use synthetic data.
 
 ### Step 3: Production Code
 
-Write the minimum code that makes the tests pass. Match existing style; every changed line traces to the task. Do not "improve" adjacent code or formatting or add unrequested features. Add no comments except a constraint imposed from outside the codebase (link its source), a guarantee that cannot be tested, `TODO(#N)`, tool directives, and comments a tool turns into output. If code must stay a certain way, write a test named after that guarantee instead of a comment. Leave existing comments alone unless your change makes them false.
+Write minimum code to pass tests; match existing style; trace every line to the task. Add no comments except a constraint imposed from outside the codebase (linked), an untestable guarantee, `TODO(#N)`, tool directives, or tool-output comments; write a test named after that guarantee instead of a comment. Leave existing comments alone unless your change makes them false.
 
 ### Step 4: Verify and Self-Review
 
-Run focused tests, linters, and a build for the packages you changed. Run `docs-check` with lint when the project has a `docs-check.toml`. Every touched test and every lint must pass; fix the code, not the tests. When the change has runnable artifacts, exercise them in a real environment (CLIs and scripts with representative inputs plus one error case; endpoints; configuration changes; migrations).
-
-Read your own diff to remove stray changes, unused symbols, style mismatches, missing error handling, and security concerns. Scan added comments and delete each one that is outside the allow-list, cites your tracker (`#N`), narrates a step, or records history ("previously", "no longer").
+Run focused tests, linters, and build for changed packages. Run `docs-check` with lint when the project has a `docs-check.toml`. Every touched test and lint must pass; fix code, not tests. Exercise runnable artifacts (CLIs, endpoints, config, migrations) with representative + error cases when changed. Read your diff to drop stray changes, unused symbols, and non-allow-listed comments (including tracker citations, step labels, or history prose).
 
 ### Step 5: Commit
 
-Follow the target repository's commit policy; when silent, use `<type>: <summary>` in imperative mood with no period, plus a body stating the reason when the diff does not make it evident. Stage specific files, separate logically distinct changes, and never commit "WIP" or "fixup".
+Follow target commit policy; fallback `<type>: <summary>` (imperative, no period, plus body when reason isn't obvious). Stage specific files; never commit WIP/fixup.
 
 ### Step 6: Sync, Push, and Create PR
 
-Rebase on the branch this work belongs on: the default branch (`gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name'`) for standalone work, or the parent feature branch for stacked work; never assume `main`. Resolve conflicts, rerun only affected focused checks, and push with `git push -u origin HEAD`.
-
-Use the target repository's PR template and formatting policy when present; otherwise read `references/pr-description.md` and use its fallback shape. Link the issue (when not `0`) with `Closes #N` only when this PR **fully completes** it, else `Part of #N`.
+Rebase on target base branch (default branch from `gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name'`, or parent branch if stacked), rerun affected focused checks, and push `-u origin HEAD`. Use target PR template or `references/pr-description.md`. Link issue with `Closes #N` only when fully complete, else `Part of #N`.
 
 ### Step 7: Return Result
 
-Return exactly:
+Return exact summary (`PR_NUMBER:`, `PR_TITLE:`, `SUMMARY:`) plus any risk/runtime-check note for the orchestrator.
 
-```
-PR_NUMBER: <number>
-PR_TITLE: <title>
-SUMMARY: <1-2 sentence summary of what was implemented>
-```
+### Step 8: Continuation Mode (Addressing Findings)
+
+When continued/resumed with `<pr-number> <round-or-verify-id> <resolved-findings-path> [bundle=<path>]`, read the findings file (and `bundle=` if updated; stop and report if findings file is missing or empty). For each finding, read the code and either **Apply**, **Partially apply** (explain better fix), **Reject with justification** (citing specs, ADRs, or conventions — never ungrounded), or **Escalate**. Preserve strong assertions when compressing tests, keep comments within the allow-list (delete none unless made false), run focused tests/linters and `docs-check` when `docs-check.toml` exists, inspect your fix diff, commit as `fix: address review round <round> — <description>`, `git push`, and return a `| # | Finding | Action | Details |` table with `**Tests:**` and `**Commits:**` lines.

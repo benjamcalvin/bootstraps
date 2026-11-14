@@ -6,20 +6,20 @@ Allow at most 2 FAIL → address → re-verify cycles; on a third FAIL, do not a
 
 ## Addressing Verification Failures
 
-`verify` only posts a PR comment, so write its failures to a findings file yourself (`# Verification Findings — Round <N>`, Step C's table, severity Action Required, with expected vs. actual and how to fix). No referee step: `verify` is self-vetting.
+`verify` only posts a PR comment, so write its failures to a findings file in the scratch directory (`# Verification Findings — Round <N>`, Step C's table, severity Action Required, with expected vs. actual and how to fix). No referee step: `verify` is self-vetting.
 
-Delegate the fixes through the active harness adapter without editing code yourself: continue the existing author child (or spawn a fresh `implement-address` child if no author child exists in the run):
+Delegate the fixes through the active harness adapter without editing code yourself: continue the existing author child from `state.json` (or spawn a fresh `implement-address` child if no author child exists in the run):
 
 ```text
 Payload: <pr-number> verify-<round-number> <resolved-verify-findings-path> bundle=<resolved-context-bundle-path>
 ```
 
-Verify rounds count from 1, independent of Phase 4.
+Verify rounds count from 1, independent of Phase 4. Record new fix commits in `state.json`.
 
 ## Scoped Re-verification
 
-After fixes are committed, continue the existing `verify` child (or spawn a fresh `verify` child on one-shot harnesses) with the failed scenarios, or without `failed-scenarios` when only the suite failed:
+After fixes are committed, continue the existing `verify` child from `state.json` (or spawn a fresh `verify` child if none exists / one-shot harness) with the failed scenarios, or without `failed-scenarios` when only the suite failed:
 
 ```text
-Payload: <pr-number> tier=<Small|Medium|Large> record=<resolved-verification-record-path> [failed-scenarios=<names>] bundle=<resolved-context-bundle-path>
+Payload: <pr-number> tier=<Small|Medium|Large> [failed-scenarios=<names>] bundle=<resolved-context-bundle-path>
 ```

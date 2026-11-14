@@ -5,9 +5,9 @@ Post this once per round. Reviewer findings and each referee decision stay visib
 ```markdown
 ## Review Round <N> — Consolidated Review & Referee Decisions
 
-**Reviewers run:** general<, specialists and `review-docs`, if any>
-**Tier:** <Small/Medium/Large + reason; round 1 only>
-**Specialist rationale:** <trigger per specialist and `review-docs`, or "none — tier/triggers did not call for one">
+**Reviewers run:** general<, triggered risk lenses, if any>
+**Tier:** <Small|Medium|Large> (<net changed lines> net lines)
+**Specialist rationale:** <trigger per selected lens (`review-security` / `review-correctness` / `review-docs`), or "none — triggers did not apply">
 
 ### Reviewer Findings
 #### General

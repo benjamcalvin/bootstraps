@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** `implement-lifecycle` 4.0.0 restructures the lifecycle around orthogonal LOC size tiers and targeted risk lenses:
+  - Decouples Size Tier (`Small` ≤400, `Medium` 401–1,500, `Large` >1,500 net LOC) from Risk Lenses (`review-security`, `review-correctness`, `review-docs`, capped at 2 lenses alongside `review-general` for max 3 reviewers in Round 1), caps reviews at 2 rounds across all tiers, and runs Round 2 only when Round 1 accepted at least one `Action Required` defect
+  - Folds continuation addressing directly into `implement-code` (Continuation Mode) so resumed author subagents do not reload a second skill mid-thread (`implement-address` stays available for standalone/existing-PR runs)
+  - Makes reviewers strictly read-only (no duplicate test/build suite execution in parallel worktrees)
+  - Replaces dual Markdown+JSON `record=<path>` and `#/suite-evidence` verification handoffs with a flat 9-line `verification-record: v2` header on the PR verification comment, adding an inline Phase 5 fast gate for docs-only PRs and non-runtime `Small` PRs
+  - Persists orchestrator `state.json` alongside scratch `bundle.md` so agent IDs, tier, rounds, and phase timestamps survive context compactions, and scopes `Part of #N` slices to their slice contract
+  - Tightens skill instruction byte budgets from 56 KB / 14 KB to 46 KB total across 10 skills / 12.5 KB for `implement`
+
+### Removed
+
+- Removes overlapping `review-architecture` and `review-testing` skills, `implement/references/large-tier.md`, and file-backed JSON verification pointer handoffs (`implement-lifecycle` 4.0.0)
+
+### Fixed
+
+- Fixes Codex adapter tool names (`spawn_agent`, `send_message`, `followup_task`, `wait_agent`) and pins balanced workers/reviewers/verifiers to `reasoning_effort: "medium"`; explicitly forbids omitting `model` on Claude Code reviewers/verifiers; quotes colons in `SKILL.md` YAML frontmatter so `claude plugin validate` parses all skill metadata cleanly (`implement-lifecycle` 4.0.0)
+
 ### Added
 
 - Subagent continuation support in `implement-lifecycle` 3.24.0 across Claude Code (`resume`), Codex (`send_input`), Antigravity (`send_message`), Pi (session resume), and generic adapters; reuses existing author, reviewer, and verifier subagents for follow-ups, feedback addressing, delta reviews, referee clarifications, and re-verification while spawning fresh isolated children for new tasks, distinct roles, and convergence resets

@@ -1,45 +1,40 @@
 ---
 name: review-general
-description: Delegated implement-lifecycle worker: holistic baseline review for code, tests, and style.
+description: "Delegated implement-lifecycle worker: holistic baseline review for correctness, boundaries, conventions, tests, and style."
 ---
 
 # General Review
 
 <!-- lifecycle-suite-capability: focused-only -->
 
-**Suite capability: `focused-only`. Prefer fast package- or target-scoped checks during iteration (using the repository's default check only when fast and no narrower check exists); `verify` owns authoritative exact-head suite signoff.**
+**Suite capability: `focused-only`. Prefer fast package- or target-scoped checks during iteration; Phase 5 (`verify` or inline fast gate) owns authoritative exact-head suite signoff.**
 
-You are the **general reviewer**: provide a cohesive, proportionate review owning the baseline so routine PRs need no overlapping specialists.
+You are the **general reviewer**: provide a cohesive, holistic review covering requirements, bugs, module boundaries, conventions, and test adequacy so routine PRs need no extra reviewers.
 
 **Do not modify the reviewed codebase.** Return findings to the orchestrator.
 
 ## Context
 
-Parse the PR number, round, delta range, and `bundle=` path. Read the supplied context-bundle file when provided; fetch `gh pr view <pr-number>`, its changed-file summary (`--json files`), and `--comments` only when invoked standalone without a bundle. Read changed files with surrounding context.
-
-Anchor every convention or pattern finding in a documented standard (`AGENTS.md`, `CLAUDE.md`, ADRs, specs) or clear local precedent, never personal taste.
+Parse the PR number, round, delta range, and `bundle=` path. Read the supplied context-bundle file when provided; fetch `gh pr view <pr-number>`, its changed-file summary (`--json files`), and `--comments` only when invoked standalone without a bundle. Respect `Deferred out-of-slice` in `bundle.md` on `Part of #N` slices; never flag deferred parent-issue work as missing. Read changed files with surrounding context. Anchor convention or design findings in documented standards (`AGENTS.md`, `CLAUDE.md`, ADRs, specs) or clear local precedent, never taste.
 
 ## Review
 
 Check the whole changed surface:
-- **Requirements and scope** — satisfies the issue and PR claims without unrequested expansion
-- **Correctness** — control flow, boundary cases, error handling, state changes, resources
-- **Conventions and patterns** — project standards and established local module design
-- **Maintainability and integration** — clear responsibilities, caller compatibility, interface fit
+- **Requirements and scope** — satisfies the PR/slice criteria without unrequested expansion
+- **Correctness** — control flow, boundaries, error handling, state changes, resources
+- **Conventions & boundaries** — project patterns, clean module/interface boundaries, minimal coupling, caller compatibility
 - **Comments** — an added comment outside the allow-list is Minor and never blocking unless the target repository declares the comment policy
-- **Tests** — important changed behavior is covered and assertions bind the claimed outcome
+- **Tests** — important behavior and edge cases are covered with assertions binding real outcomes, not fragile mocks
 
-Run the PR's focused acceptance commands, or state that you could not.
+Do not run test suites or builds when orchestrated or when `Author ran:` is recorded — inspect code, diffs, and test assertions statically so parallel reviewers never contend on worktree builds.
 
 ## Findings
 
-Every finding names a concrete failure or documented standard violation with file:line and the smallest correction within original scope. Never propose a new dependency, public interface, persistence mechanism, or architectural layer the issue does not require. **Recommended** is only for concrete, in-scope problems fixable without a new abstraction; Minor observations cannot keep the review loop open.
-
-**Later rounds.** Do not repeat addressed or rejected findings. **Delta mode:** when a delta range is given, review only that range (did fixes resolve accepted findings without regressions?). List out-of-range observations in Summary, not as findings.
+Name concrete failures or standard violations with `file:line` and the smallest in-scope fix. Never propose new dependencies, public interfaces, persistence layers, or abstractions the issue does not require. Minor observations never justify another round. Later rounds: never repeat addressed/rejected findings; in **Delta mode**, judge only the delta range and put out-of-range notes in Summary.
 
 ## Output
 
-**Do not post to GitHub.** The orchestrator is the sole publisher. Return exactly:
+**Do not post to GitHub.** Return all four headings cleanly (`None.` when empty):
 
 ### Action Required
 - **[General]** Description with file:line references and evidence
@@ -51,6 +46,6 @@ Every finding names a concrete failure or documented standard violation with fil
 - **[General]** Description with file:line references
 
 ### Summary
-<1-2 sentences: holistic assessment, standards checked, and any execution limitation>
+<1-2 sentences: holistic assessment and standards checked>
 
 Return all four headings. Write `None.` beneath every empty category.

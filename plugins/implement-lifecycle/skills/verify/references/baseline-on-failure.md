@@ -1,13 +1,11 @@
 # Failure Baselining on Merge-Base
 
-Read this reference when any authoritative verification command exits non-zero, before classifying the verdict as `FAIL` or `PARTIAL`.
+Read this reference when any authoritative verification command exits non-zero on the PR head, before classifying the verdict as `FAIL` or `PARTIAL`.
 
 ## Workflow
 
-When the head's suite fails, run each failing command once on the PR's merge-base (`git merge-base origin/<base> <head>`) in a separate checkout and record the results in `suite-baseline` with that SHA. This does not consume or reset the head's allowance; reuse a baseline already in the record.
+When the head's suite fails, run each failing command once on the PR's merge-base (`git merge-base origin/<base> <head>`) in a separate checkout (without changing or resetting the PR head execution count).
 
-Match failures by identity (test names or rule ids): a failure present at both SHAs is pre-existing; any other failure, or one you cannot match, is PR-introduced and produces FAIL. A setup, missing-command, or error-class mismatch between the SHAs is PR-introduced.
+Match failures by identity (test names or rule IDs): a failure present at both SHAs is pre-existing; any new failure, setup mismatch, missing-command error, or error-class mismatch is PR-introduced and produces **FAIL**.
 
-When every failure is pre-existing, return PARTIAL, list them under Issues Found, and name every plan command never run on the head because the plan stopped; the record keeps `suite-result: fail` and is not mergeable. Baseline results are never PR-head evidence.
-
-Baseline entries use pointers `#/suite-evidence/baseline-command-<N>` in `suite-evidence`.
+When every failure is pre-existing, return **PARTIAL** with `suite-result: fail`, `suite-source: executed`, `suite-exit-status: <non-zero>`, `live-check: skipped`, list the pre-existing failures under `### Issues Found` citing the merge-base SHA, and name any plan commands never run on the head because the plan stopped. A `PARTIAL` / `suite-result: fail` record is never mergeable.

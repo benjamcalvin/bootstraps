@@ -6,18 +6,18 @@ description: >-
   Triggers: /implement, $implement-lifecycle:implement, implement this, build this feature
 license: MIT
 metadata:
-  version: "3.5.0"
+  version: "4.0.0"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
 
 # Implement
 
-<!-- lifecycle-suite-capability: focused-only -->
+<!-- lifecycle-suite-capability: orchestrator -->
 
-**Suite capability: `focused-only`. Prefer fast package- or target-scoped checks during iteration (using the repository's default check only when fast and no narrower check exists); `verify` owns authoritative exact-head suite signoff.**
+**Suite capability: `orchestrator`. Use fast package- or target-scoped checks when refereeing in Phases 1–4; execute the authoritative suite at most once per head in Phase 5 when running the inline fast gate, otherwise delegate Phase 5 to `verify`.**
 
-Orchestrate the implementation lifecycle. If the harness leaves the payload literal, use the prompt.
+Orchestrate the implementation lifecycle (use the prompt if `$ARGUMENTS` is literal):
 
 ```text
 $ARGUMENTS
@@ -27,174 +27,115 @@ Inspect the branch and recent commits before delegating.
 
 ## Instructions
 
-You are a **lean orchestrator**: delegate and referee; do not implement. Every heavy phase runs in an isolated delegated child. **You MUST NOT use file-editing tools to modify source code, tests, or documentation.** Run git/gh commands and tests and read code for refereeing. Write orchestration files outside the codebase under review (scratch directory or temp file), passing resolved paths explicitly. **You are the sole publisher to the PR timeline.** Reviewers return findings to you and post nothing; post exactly **one consolidated comment per review round**. Drive forward autonomously without pausing between phases; stop only for genuine ambiguity, a blocking decision outside task scope, or escalation.
+You are a **lean orchestrator**: delegate and referee; do not implement. **Never edit source code, tests, or docs.** Run git/gh and focused checks for refereeing, read code to verify findings, and keep scratch files outside the repo (harness scratch or system-provided temporary directory). **You are the sole PR publisher** (except `verify`'s comment): post **one consolidated comment per review round**. Drive autonomously; pause only for genuine ambiguity or escalation.
 
 ### Harness-neutral delegation
 
-The lifecycle maps each heavy phase to one canonical worker skill:
-
 | Phase | Canonical skill | Model tier |
 |-------|-----------------|------------|
-| Implement | `implement-code` | `balanced`; `frontier` when pre-classified large or risky (Tier classification) |
+| Implement | `implement-code` | `balanced`; `frontier` if pre-classified `Large` (> 1,500 changed lines) |
 | Address | `implement-address` | `balanced` |
 | Review general | `review-general` | `balanced` |
 | Review correctness | `review-correctness` | `balanced` |
 | Review security | `review-security` | `balanced` |
-| Review architecture | `review-architecture` | `balanced` |
-| Review testing | `review-testing` | `balanced` |
 | Review docs | `review-docs` | `balanced` |
 | Verify | `verify` | `balanced` |
 
-Each delegation goes through the active adapter and requests its tier; adapters map tiers to concrete models. Never silently inherit the orchestrator model for a `balanced` role. Wait for child results; do not poll, sleep, or schedule wake-ups to check on children.
+Map tiers via the active adapter. **Never silently inherit the orchestrator model for a `balanced` role; pass the adapter's explicit `balanced` model on every `review-*`, `implement-address`, and `verify` call.** Wait for children; do not poll, sleep, or schedule wake-ups.
 
-**Subagents:**
-- **New tasks/roles:** Spawn a fresh isolated child (never inheriting orchestrator history) for initial `implement-code`, the first invocation of each selected `review-*` specialty (keeping reviewers independent), and initial `verify`.
-- **Continuations:** When supported, reuse that same subagent rather than spawning a new one: continue author child for feedback (`implement-address` on first fix pass) or verify fixes; continue each `review-<specialty>` child for follow-ups (Round N ≥ 2); message existing children for clarifications or format corrections; and continue `verify` for scoped re-verification. Spawn a fresh child only when none exists or harness is one-shot.
+- **New roles:** Spawn a fresh isolated child (never inheriting orchestrator history) for `implement-code`, each Round-1 `review-*`, and `verify`.
+- **Continuations:** When supported, reuse that same subagent rather than spawning a new one: continue the `implement-code` author child via its Continuation Mode for addressing/verify fixes (spawn `implement-address` fresh only when entering on an existing PR without an author child), continue `review-*` for Round 2 deltas, and continue `verify` for scoped re-verification. Spawn fresh only when none exists or the harness is one-shot.
 
-Identify the active harness from its delegation tools and read only that harness's adapter reference once at run start:
-- Claude Code → `references/adapter-claude.md`
-- Codex → `references/adapter-codex.md`
-- Antigravity (`agy`) → `references/adapter-agy.md`
-- Pi → `references/adapter-pi.md`
-- Other compatible harnesses → `references/adapter-generic.md`
+Read only your harness adapter once at start (`references/adapter-claude.md`, `references/adapter-codex.md`, `references/adapter-agy.md`, `references/adapter-pi.md`, or `references/adapter-generic.md`). Wait for all selected reviewers; if any result lacks all four canonical headings, read `references/reviewer-recovery.md` before refereeing.
 
-Wait for every selected reviewer before refereeing. A reviewer result is complete only when non-empty with all four canonical headings; never referee an incomplete one. When a reviewer child returns an empty, missing, or incomplete result, read `references/reviewer-recovery.md` and follow its recovery graph before refereeing.
-
-**Context bundle.** Launch fresh children with minimal context, never orchestrator history. Write one scratch context-bundle file per PR outside the codebase (issue, contract, PR body, changed files, prior accepted/rejected findings and referee decisions; for round N ≥ 2 delta `<head reviewed in round N-1>..<current head>`), refresh each round, and pass its resolved path (`bundle=<resolved-context-bundle-path>`) to every post-PR child. Children read the context bundle instead of re-fetching `gh pr view`.
+**Scratch state & context bundle.** Keep one scratch directory per PR outside the codebase:
+- **`state.json`**: `{ pr, issue, link_mode, size_tier, lenses, round, last_reviewed_head, fix_commits, phase_times, agents }`. Update on every spawn, round, and phase transition; re-read before delegating, continuing, or printing the Run Ledger so compactions never orphan subagents or lose timings.
+- **`bundle.md`** (`bundle=<resolved-context-bundle-path>`): task/issue summary, **effective acceptance contract**, PR body, changed files, prior referee decisions, and Round 2 delta `<prev-head>..<head>`. Refresh each round and pass `bundle=` to every post-PR worker to skip redundant `gh pr view` fetches.
+- **Slice contract (`Part of #N`):** For `Part of #N` slice PRs, scope `bundle.md`'s effective contract to **this PR's slice** and list remaining parent items under `Deferred out-of-slice` so reviewers and `verify` never penalize or return `PARTIAL` for unfinished sibling slices.
 
 ### Entry Point
 
-Target from leading token: `#N` → issue body/comments give task and criteria; bare number → open PR via `gh pr view <number> --json number,title,state`; else freeform task. Trailing text narrows the lifecycle:
+Leading token: `#N` → issue criteria; bare number → `gh pr view <n> --json number,title,state`; else freeform. Modifiers: *(none)* → full lifecycle (Phases 1–6, or 4–6 on PR); `"just review"` / `"review only"` → classify + Step A/C + ledger; `"address the review feedback"` → addresser + ledger; `"review and address"` → Phase 4 + ledger; `"skip planning"` / `"just implement"` → pass to `implement-code`.
 
-| Instructions | Effect |
-|-------------|--------|
-| *(none)* | Issue/freeform → Phases 1–6; PR number → Phases 4–6 |
-| "just review" / "review only" | Classify the tier, run Step A's selection, post the consolidated review (Step C), print the run ledger, stop |
-| "address the review feedback" | Run the addresser on existing findings only; print the run ledger |
-| "review and address" | Run the review loop without merging; print the run ledger |
-| "skip planning" / "just implement" | Pass "skip planning" to `implement-code` |
+### Phase 1–3: Implement & Create PR
 
-### Phase 1–3: Plan, Implement & Create PR
+**Never edit code or docs.** Delegate `implement-code`: `Payload: <issue-number-or-0> <task, criteria, instructions>`. Record PR number and author handle in `state.json`. If from an issue, comment: `## In Progress` / `Implementation PR created: #<pr-number> — <PR title>`.
 
-**CRITICAL: You MUST NOT write code or edit files yourself.** Delegate via adapter. `implement-code` plans internally; include "skip planning" only for clear, scoped tasks:
+### Size Tier & Risk Lenses
 
-```text
-Payload: <issue-number-or-0> <task description, acceptance criteria, and optional instructions>
-```
-
-Returns the PR number. If from an issue, comment: `## In Progress` / `Implementation PR created: #<pr-number> — <PR title>`.
-
-### Tier classification
-
-**Pre-classification:** judge if work is likely large or risky to select implementer tier.
-**Authoritative classification** (once the PR exists): count changed lines (additions + deletions in added, modified, or renamed files, excluding whole-file deletions, lockfiles, and generated files) and inspect all changed paths (including deleted files):
+Pre-classify `frontier` only if likely > 1,500 net lines. Once PR exists, count additions + deletions in added/modified/renamed files (excluding whole-file deletions, lockfiles, generated files) and inspect all changed paths (including deletions):
 
 | Tier | Trigger |
 |------|---------|
-| Small | ≤ 400 changed lines and no risk surface |
-| Large | > 1,500 changed lines, or any risk surface |
-| Medium | Neither Small nor Large |
+| Small | ≤ 400 changed lines |
+| Medium | 401–1,500 changed lines |
+| Large | > 1,500 changed lines |
 
-**Risk surface:** declared list when present; otherwise auth, secrets/crypto, schema/migrations, CI/deploy, sandbox boundaries. Start from measured tier; implementer report may escalate; nothing may lower it.
+**Size tier is determined strictly by net changed lines; risk paths select specialist lenses without escalating the size tier.** Save `size_tier` and `lenses` in `state.json`.
 
 ### Phase 4: Review/Address Loop {#review-loop}
 
-A bounded loop of Steps A → E per round, capped by tier:
+Bounded Steps A → E capped at 2 rounds:
 
 | Tier | Max review rounds | Follow-up rounds |
 |------|-------------------|------------------|
-| Small | 1 | None: the addresser fixes and runs focused tests; no re-review |
-| Medium | 2 | Round 2 only if round 1 accepted ≥ 1 Action Required or Recommended finding |
-| Large | 3 | Delta-only; the convergence audit after round 2 applies |
+| Small | 1 | None: the addresser fixes accepted findings and runs focused tests; no re-review |
+| Medium | 2 | Delta-only; Round 2 runs only if Round 1 accepted ≥ 1 Action Required finding |
+| Large | 2 | Delta-only; Round 2 runs only if Round 1 accepted ≥ 1 Action Required finding |
 
-Exits: (1) **Clean exit (Step B):** no accepted findings, or only accepted Minor findings (one batch pass, no new round) → Phase 5; (2) **Cap exit:** at the tier cap the addresser fixes the final round's accepted findings and runs focused tests; any unresolved Action Required → escalation exit; otherwise → Phase 5; (3) **Escalation exit (Step E):** scope guard fires, Large convergence stalls, or cap exit reports unresolved Action Required → convergence-recovery decision.
-Convergence: fewer accepted findings each round, no open defect, no churn. Never exceed the tier cap without user authorization.
+Exits: (1) **Clean or non-blocking (Step B):** zero findings, OR `Small`, OR Round 1 accepted only `Recommended`/`Minor` findings (`only accepted Minor` / non-blocking fixes, zero `Action Required`) → addresser fixes + focused tests → Phase 5; (2) **Cap exit:** after Round 2, the addresser fixes the final round's accepted findings and runs focused tests → unresolved `Action Required` escalates, else Phase 5; (3) **Escalation:** `references/convergence-recovery.md`. Never exceed the cap without user authorization.
 
 #### Before Round 1
 
-Rebase on base branch only when entering at Phase 4 on an existing PR or when branch is behind/conflicting:
-
-```bash
-BASE_BRANCH=$(gh pr view --json baseRefName --jq '.baseRefName')
-git fetch origin "$BASE_BRANCH" && git rebase "origin/$BASE_BRANCH"
-```
-
-Resolving conflicts is a **permitted git-mechanical carve-out** to the no-edit contract: keep it mechanical, run tests, then `git push --force-with-lease`. Discover pinned toolchain from instructions. Fetch only `gh pr view <number>`, changed-file summary (`--json files`), and `--comments`; do **not** fetch the full diff. Read specific files when refereeing.
+Rebase on base branch only when entering at Phase 4 or conflicting (`gh pr view` base, `git fetch`, `git rebase`). Mechanical conflict resolution is permitted: fix, run focused tests, `git push --force-with-lease`. Fetch only `gh pr view`, `--json files`, and `--comments`; read specific files when refereeing.
 
 #### Step A: Invoke Reviewers
 
-Invoke **`review-general` in every round**; it owns the baseline review. Specialists are selected mechanically by tier and path trigger, not by discretion:
+Invoke **`review-general` in Round 1 on every tier** (holistic baseline: bugs, boundaries, conventions, test assertions). Attach up to **2 specialist lenses** by path/change trigger (**max 3 reviewers total**):
+- `review-security`: auth, secrets, crypto, permissions, sandbox, or network/service exposure.
+- `review-correctness`: schema/data migrations, concurrency/locking, or multi-step state/retry protocols.
+- `review-docs`: docs, specs, READMEs, or public interfaces (CLI/API/config) change, or behavior described in `AGENTS.md`, ADRs, or covered specs changes.
 
-- **Any tier:** `review-docs` when docs, specs, READMEs, or user-facing interfaces (CLI flags, public APIs, config keys) change, when the change alters architecture, conventions, or behavior described in AGENTS.md, ADRs, or other project docs, or when the tier is Large.
-- **Small/Medium:** `review-general` only, plus `review-docs` per the trigger above.
-- **Large:** for Large tier, read `references/large-tier.md` to select triggered specialists (and after round 2 on Large, apply its convergence audit).
-- **Follow-up rounds (N ≥ 2):** when the prior round accepted only `review-docs` findings and the fix delta touches only documentation files, run `review-docs` only; otherwise run `review-general`, plus any specialist or `review-docs` whose own accepted finding is unresolved (and `review-docs` when the fix delta changes documented behavior).
+If all 3 trigger, keep `review-security` + `review-correctness` (or keep `review-docs` over the weaker code trigger if `docs-check.toml` or `Covers:` specs changed) and note the third for `review-general`.
 
-Invoke selected reviewers in parallel:
+**Follow-up Round 2:** when Round 1 accepted `Action Required` solely from `review-docs` and the delta touches docs only, continue `review-docs` only; otherwise continue `review-general` plus specialists with accepted `Action Required` findings (and `review-docs` if the delta changes documented behavior).
 
-```text
-Payload: Review PR #<pr-number>, round <round-number>[, delta <prev-reviewed-head>..<current-head>] bundle=<resolved-context-bundle-path>
-```
-
-Reviewers return findings and do **not** post to GitHub. Follow-up reviewers judge only that range: did fixes resolve accepted findings without regressions? Do not reopen rejected findings or review code outside the delta. Reviewers run focused acceptance commands when feasible.
+Run in parallel (`Payload: Review PR #<pr-number>, round <N>[, delta <prev>..<head>] bundle=<resolved-context-bundle-path>`). Reviewers are read-only and never post to GitHub or run suites. Follow-up reviewers judge only that range.
 
 #### Step B: Referee Evaluation
 
-Independently evaluate every finding by reading relevant code yourself. First collapse duplicates across reviewers so each concern is evaluated and forwarded once. For an ambiguous finding, you may message that reviewer child for a quick clarification before deciding.
+Verify every finding against code, collapsing duplicates first (message reviewer if ambiguous). Accept verified violations of criteria/invariants (respecting `Deferred out-of-slice`) with the smallest fix. Reject unproven items and reject findings outside the delta as "out of delta" (record as follow-ups; never open a round). **Scope controls:** reject unrequested dependencies, subsystems, public interfaces, or layers; simplify over-engineered code instead of hardening it. Zero survivors → Step C clean comment → Phase 5.
 
-Judge separately: (1) **validity** — failure violating an acceptance criterion, documented invariant, or existing behavior; (2) **proportionality** — smallest in-scope change resolving it.
-- **Accept** (default, once verified): forward only the smallest proportional correction.
-- **Reject**: unproven, out of scope, unbacked preference, vague "consider", or disproportionate. Reject findings about code outside the round's delta as "out of delta" and record them as follow-ups; they never open a round.
-- **Minor:** never opens a round. Accepted Minors go to the addresser with other accepted findings, or alone in one batch pass.
+#### Step C: Post Consolidated Review
 
-**Scope controls.** Tie remedies to original task. Never forward a remedy adding an unrequested dependency, executable subsystem, public interface, persistence mechanism, or architectural layer; escalate or record follow-ups. Simplify or remove architecture that repeatedly draws review findings rather than hardening it.
-
-If zero findings survive, post the Step C comment (`**Result:** no actionable findings — review loop complete.`) and go to Phase 5.
-
-#### Step C: Post the Consolidated Review
-
-Post **one** comment per round by reading `references/consolidated-review.md` and following its template. Write only accepted findings to a resolved findings path: `# Filtered Findings — Round <N>` and a `| # | Finding | Severity | Details |` table with file:line and what to fix.
+Post **one** comment via `references/consolidated-review.md`. Write accepted findings only to a scratch findings file (`# Filtered Findings — Round <N>` + `| # | Finding | Severity | Details |` with `file:line` and fix).
 
 #### Step D: Invoke Addresser
 
-Continue the author child (loading `implement-address` on first fix pass) or spawn fresh on existing PRs:
-
-```text
-Payload: <pr-number> <round-number> <resolved-findings-path> bundle=<resolved-context-bundle-path>
-```
+Continue the author child (`implement-code` Continuation Mode), or spawn fresh `implement-address` if none exists (`Payload: <pr-number> <round-number> <resolved-findings-path> bundle=<resolved-context-bundle-path>`). Record fix commits in `state.json`.
 
 #### Step E: Next Round
 
-Never run a redundant clean-confirmation round after a clean round with trivial follow-up changes.
-0. **Rejected-only rounds do not advance the loop.** If zero findings accepted, treat loop as converged (→ Phase 5), or escalate if rejections were close.
-1. **Convergence audit after round 2 (Large):** apply the convergence audit in `references/large-tier.md`.
-2. **Convergence-recovery decision.** When escalation exit fires, read `references/convergence-recovery.md`.
-3. **Continue** only if tier cap allows: record delta range `<reviewed head>..<new head>`, increment round, and return to Step A autonomously.
+Never run a clean-confirmation round. Rejected-only or non-blocking Round 1 exits to Phase 5 after Step D. If cap exit leaves unresolved `Action Required`, read `references/convergence-recovery.md`. Otherwise update `state.json` (`round: 2`, `<reviewed head>..<new head>`), refresh `bundle.md`, and return to Step A.
 
-### Phase 5: Manual Verification Gate
+### Phase 5: Verification Gate
 
-Invoke `verify`:
+**Inline Fast Gate (no `verify` child):** Run Phase 5 inline per `verify/SKILL.md`, posting the flat `verification-record: v2` comment and logging `verify: inline (fast-gate)` in `state.json`, when **no live check is needed**:
+1. Docs/comments only (`Verdict: N/A`, `suite-result: not-required`, `live-check: skipped`), OR
+2. `Small` tier with **no runtime behavior, UI, CLI, API, migration, or deploy change**, where exact-head CI satisfies `verify`'s CI-evidence rules (`suite-source: ci`) or the authoritative command passes once inline on `verification-head` (`suite-source: executed`). On inline suite failure, spawn `verify` for merge-base baselining.
 
-```text
-Payload: <pr-number> tier=<Small|Medium|Large> record=<resolved-verification-record-path> [failed-scenarios=<names>] bundle=<resolved-context-bundle-path>
-```
+**Delegated `verify` (`balanced`):** Spawn `verify` when runtime behavior changed (`Small` runtime changes; all executable `Medium`/`Large`) or baselining is needed: `Payload: <pr-number> tier=<Small|Medium|Large> [failed-scenarios=<names>] bundle=<resolved-context-bundle-path>` (`tier=` from `state.json`; never re-classify).
 
-`tier=` is the tier recorded at classification; never re-classify it.
-
-**PASS** or **N/A** → confirm the verification record file at `<resolved-verification-record-path>` exists and its `#/suite-evidence/command-<N>` pointers resolve, correct any Claim Mismatches it lists in the PR description (`gh pr edit <pr-number> --body-file <path>`), then Phase 6.
-
-**FAIL** → on FAIL (capped at 2 fix cycles), read `references/verify-fail-loop.md` and delegate fixes without editing code yourself.
-
-**PARTIAL** (no contract or pre-existing failures) → stop, print run ledger, and report missing contract or pre-existing failures; do not address, merge, or invent a substitute.
+**PASS** / **N/A** → confirm latest comment has valid `verification-record: v2` matching `headRefOid`, fix any `Claim Mismatches` via `gh pr edit --body-file`, then Phase 6. **FAIL** → capped at 2 cycles via `references/verify-fail-loop.md`. **PARTIAL** (missing contract, human-only check, pre-existing failures) → stop and print run ledger; never address or merge.
 
 ### Phase 6: Merge & Finalize
 
-Evaluate and execute the canonical `merge-pr` skill inline against `<pr-number> <resolved-verification-record-path>`; do not spawn a child for it. Print the run ledger and report the result.
+Evaluate and execute the canonical `merge-pr` skill inline against `<pr-number>`; do not spawn a child for it. Update `state.json`, print the run ledger, and report the result.
 
 ## Run ledger
 
-Track phase start and end times. On every terminal path, read `references/run-ledger.md` and print the collapsed run ledger.
+Track phase times, spawns/continuations, and fix commits in `state.json`. On every terminal path, re-read `state.json` and `references/run-ledger.md` and print the collapsed run ledger.
 
 ## Escalation
 
-After considering autonomous recovery (`references/convergence-recovery.md`), flag the human for: ambiguous requirements, architectural decisions beyond scope, new third-party dependencies, auth/crypto/PII changes beyond patterns, or unrelated test failures. Provide options, recommendations, and the run ledger.
+After `references/convergence-recovery.md`, escalate to human for ambiguous requirements, out-of-scope architecture, new dependencies, non-pattern auth/crypto/PII, human-only checks, or unrelated test failures, with options and the run ledger.

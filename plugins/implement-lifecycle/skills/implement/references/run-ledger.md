@@ -1,6 +1,6 @@
 # Run ledger
 
-Track phase durations and tally execution metrics as you go: spawned children and continuations per role and tier, addresser commits (from each Commits list, including verify fixes), and out-of-delta follow-ups.
+Persist phase timestamps (`phase_times`), spawns/continuations (`agents`), size tier, risk lenses, rounds, and `fix_commits` in `state.json` as you go. Always re-read `state.json` before printing so ledger metrics survive context compactions; if Phase 5 ran via the inline fast gate, record `verify: inline (fast-gate)` under `- Children:`.
 
 On every terminal path (merge, escalation, cap or stall exit, third verify FAIL, PARTIAL, or any other stop), print the ledger to the user, collapsed under `<details>`. When a PR exists and the path posts a PR comment or merge summary, append it there too. Keep the blank line after `</summary>` so Markdown renders properly.
 
@@ -8,8 +8,8 @@ On every terminal path (merge, escalation, cap or stall exit, third verify FAIL,
 <summary>Run ledger · <outcome> · <tier></summary>
 
 ## Run Ledger
-- Tier: <Small|Medium|Large> — <reason>
-- Children: <role>: <spawned> [+ <n> continuations] (<balanced|frontier>), ...
+- Tier: <Small|Medium|Large> (<net lines>) + lenses [<none|security|correctness|docs>] — <reason>
+- Children: <role>: <spawned> [+ <n> continuations] (<balanced|frontier|inline>), ...
 - Rounds: review <n>, verification <n>
 - Fix commits: <count of addresser commits>
 - Wall-clock: plan/implement <m>, review <m>, verify <m>, merge <m>
