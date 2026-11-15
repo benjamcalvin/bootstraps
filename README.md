@@ -147,53 +147,40 @@ $issue-management:refine-issue #42
 | Plugin | Claude Code | Codex | Antigravity | Pi | Description |
 |--------|-------------|-------|-------------|----|-------------|
 | **bootstrap-docs** | Yes | Yes | Yes | No | Set up a comprehensive, AI-readable documentation strategy in any project. Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates. |
-| **implement-lifecycle** | Yes | Yes | Yes | Yes | Full implementation lifecycle with adversarial PR review — plan, implement, PR, review/address loop (docs reviewed in round 1), verify, merge. Pi delegation requires `pi-subagents`. |
+| **implement-lifecycle** | Yes | Yes | Yes | Yes | Streamlined implementation lifecycle scaled by risk and complexity — plan, implement, PR, bounded general review, parallel verify + docs review, and inline rule-guided merge. Pi delegation requires `pi-subagents`. |
 | **issue-management** | Yes | Yes | Yes | No | Draft, clean up, and refine GitHub issues — optimized for AI agent consumption. |
 
 ### implement-lifecycle
 
-Provides a shared lifecycle orchestrator, two utility skills, three delegated worker roles, a baseline general reviewer, four optional targeted specialists, and a conditional docs reviewer across Claude Code, Codex, Antigravity (agy), Pi, and other compatible harnesses:
+Provides a shared lifecycle orchestrator, a rule-guided merge skill, two coding/addressing workers, a unified general reviewer, a docs reviewer, and an end-to-end verification worker across Claude Code, Codex, Antigravity (agy), Pi, and other compatible harnesses:
 
 **Skills:**
 
 | Skill | Description |
 |-------|-------------|
-| `/implement` / `$implement-lifecycle:implement` | Lean orchestrator — lifecycle of plan → implement → PR → review loop → verify → merge. Accepts `#issue`, PR number, or freeform task. Supports trailing instructions like "just review" or "skip planning". |
-| `/merge-pr <pr-number> [verification-record-path]` / `$implement-lifecycle:merge-pr <pr-number> [verification-record-path]` | Merge a verified PR following repository policy and post issue updates; validates exact-head verification record from comment or optional record path. Evaluated inline by the orchestrator in Phase 6 or executed standalone. |
-| `/pr-check` / `$implement-lifecycle:pr-check` | Pre-flight PR validation — branch naming, title, description, commits, references, plus an advisory scope note. |
+| `/implement` / `$implement-lifecycle:implement` | Lean orchestrator — lifecycle of plan → implement → PR → code review loop → parallel verify + docs review → inline merge. Accepts `#issue`, PR number, or freeform task. Supports trailing instructions like "just review" or "skip planning". |
+| `/merge-pr <pr-number>` / `$implement-lifecycle:merge-pr <pr-number>` | Inline Phase 6 / standalone merge following the target project's rules, guarding `Verified-Head` / `--match-head-commit`, and updating linked issues. |
 
 **Delegated worker roles** (invoked by the orchestrator, not directly):
 
 | Role | Description |
 |-------|-------------|
-| `implement-code` | Explore codebase, plan, write outcome-based tests covering new/changed behavior, implement, self-review, commit, and create PR. |
-| `implement-address` | Address filtered review findings from the referee's action plan. |
-| `verify` | End-to-end verification and sole authoritative-suite owner — scales live scenarios by tier, records one execution or exact-head required-CI evidence, baselines suite failures on the merge-base, and writes structured verification artifacts directly to the requested record path. |
+| `implement-code` | Explore codebase, plan, write outcome-based tests covering new/changed behavior, implement, self-review, commit, create PR, and address review findings in Continuation Mode. |
+| `implement-address` | Standalone or fresh addresser for pre-existing PRs where no `implement-code` author child exists in the session. |
+| `verify` | Real-world verification worker that inspects and exercises the actual built work (data outputs/shapes, CLI execution, frontend navigation & screenshots, live services) in parallel with `review-docs` when a live/observable surface changed. |
 
 **Review roles:**
 
 | Role | Focus |
 |-------|-------|
-| `review-general` | Baseline holistic reviewer for requirements, project conventions, established patterns, scope, integration, and test adequacy. |
-| `review-correctness` | Optional targeted specialist for logic bugs, edge cases, error handling, and race conditions. |
-| `review-security` | Optional targeted specialist for AuthZ, injection risks, and PII handling. |
-| `review-architecture` | Optional targeted specialist for module boundaries, coupling, and forward-looking design. |
-| `review-testing` | Optional targeted specialist for test coverage, assertion quality, edge cases, and test anti-patterns. |
-| `review-docs` | Round-1 reviewer, triggered when docs or user-facing interfaces change (or the tier is Large), for missing docs, stale docs, and frontmatter/cross-link correctness. |
+| `review-general` | Unified holistic reviewer covering **security**, **simplicity**, and **quality**. Defaults to 1 instance; scales to 2–3 parallel instances splitting surface area or focus only for very large/complex changes. |
+| `review-docs` | Documentation and spec compliance reviewer, triggered in Phase 5 **in parallel with verification** when docs, specs, READMEs, or public interfaces change. |
 
-The orchestrator spawns fresh generic isolated delegated children for each new task and distinct role, while continuing existing subagents across follow-ups, feedback addressing, delta reviews, clarifications, and re-verification (falling back to fresh spawns on convergence resets or one-shot harnesses); Phase 6 `merge-pr` is evaluated inline without spawning a child. Delegation instructions use progressive disclosure through skill-local `references/adapter-*.md` files (Claude Code, Codex, Antigravity `agy`, Pi, and generic adapters). Authoritative tier classification discounts whole-file deletions in line counts while inspecting all changed paths for risk surfaces. The orchestrator maintains a scratch context-bundle file per PR outside the codebase, refreshed each round, and passes `bundle=<path>` to post-PR children to eliminate redundant `gh pr view` fetches. Follow-up review rounds run `review-docs` only when the prior round accepted only documentation findings and the delta touches documentation files only; empty or structurally incomplete reviewer results are recovered or retried before refereeing.
+The orchestrator spawns fresh generic isolated children for each new role while reusing existing children via continuations across addressing (`implement-code` Continuation Mode), Round 2 delta reviews, clarifications, and Phase-5 re-checks; Phase 6 `merge-pr` runs completely inline without spawning a subagent. Delegation uses progressive disclosure through `references/adapter-*.md` files (Claude Code, Codex, Antigravity `agy`, Pi, generic), explicitly pinning balanced models (`sonnet` in Claude Code, `medium` reasoning effort in Codex, `flash` in Antigravity). Effort is scaled by **risk and complexity** (`Low` / `Moderate` / `High`) rather than LOC line counts, with explicit instructions across every role to stay focused on the task at hand and not overthink things (`Low`: 1 round max; `Moderate`/`High`: 2 rounds max, with Round 2 running only when Round 1 accepted at least one `Action Required` defect).
 
-Every lifecycle skill declares a machine-checkable, command-neutral suite capability. `verify` is the sole `full-suite-owner`; it discovers the target repository's authoritative verification command or ordered command plan from repository instructions, CI, development documentation, and build/test configuration. The orchestrator, implementers, addressers, reviewers, PR checker, and merger are `focused-only` and may run focused checks without executing or consuming that plan. Verification evidence records the exact command or ordered plan once for the exact PR head (or a successful required-CI run attempt whose steps ran that plan on the same head in the target repository, which merge independently re-confirms), and merge uses that verified SHA as an atomic precondition. When every suite failure is also present on the merge-base, verification returns PARTIAL: the run stops for a human, the record is not mergeable, and nothing is sent back for fixes; verification fix cycles are capped at 2.
+The lifecycle runs with zero sidecar scratch or temp files: the PR description (including `Part of #N` slice boundaries), consolidated review comments, and inline delegation prompts serve as the sole source of truth across parallel sessions, while reviewers stay strictly read-only without running duplicate test suites. `implement-code` and `implement-address` own making automated tests, linters, and builds pass before Phase 5; Phase 5 skips `verify` when no live or observable surface changed (such as docs-only or pure internal refactors), or delegates real-world `verify` **in parallel with `review-docs`** when a runnable/visual/data surface changed, posting concise `### Verdict:` + `Verified-Head:` lines outside `<details>`. Phase 6 runs `merge-pr` inline following the target project's rules.
 
-Enforced target-repository constraints are binding; explicit user direction selects only among permitted choices, and unresolved conflicts stop the merge. Bundled conventions are fallbacks only when both sources are silent about toolchains, branch names, commits, PR formatting, required checks, approvals, merge method, or branch retention. Findings handoffs use harness-provided or system-created temporary paths passed explicitly between workers, and verification writes a structured verification artifact directly to the requested record path for inline or standalone merge.
-
-The skill-local `agents/openai.yaml` files are optional OpenAI skill metadata that supplies presentation and invocation policy. They are not subagent definitions, are retained for Codex compatibility, and do not change the harness-neutral worker behavior. No custom Pi agent templates are distributed.
-
-Skill instructions are held to a byte budget (56 KB across all lifecycle skills, 14 KB for `implement`) enforced by `validate-all.sh`, because every child re-reads them. Material needed only on a named path (Large-tier triggers and convergence audits, verification failure loops, reviewer-result recovery, baseline-on-failure workflow, special-verdict records, CI source validation, linked issue update templates, and the PR-description, review-comment, and run-ledger templates) lives in skill-local `references/` files that the skill reads only on that path.
-
-Reviewers return their findings to the orchestrator and post nothing themselves. The orchestrator is the sole publisher to the PR timeline: it publishes one consolidated comment per round carrying every reviewer's findings plus its referee decisions, with the referee reasoning collapsed under `<details>`.
-
-PR descriptions, review comments, and run ledgers show only what the reader must act on and collapse the rest of the agent's detail under `<details>`. Verification flags any change the PR description claims that the diff does not contain, and the orchestrator corrects the description before merge.
+Enforced target-repository constraints bind policy over bundled fallbacks. Optional OpenAI `agents/openai.yaml` metadata supplies Codex presentation and invocation policy (no custom Pi agent templates). Skill instructions are bounded to `34 KB` total across all 7 skills (`11.5 KB` for `implement`) enforced by `validate-all.sh`; rare-path guidance lives in skill-local `references/` files. Reviewers return findings cleanly (`Action Required`, `Recommended`, `Minor`, `Summary`) and post nothing themselves; the orchestrator publishes one consolidated comment per code-review round with referee reasoning collapsed under `<details>`. PR descriptions, review comments, verification evidence, and run ledgers keep only actionable summaries visible and collapse detail under `<details>`. Verification flags claimed changes absent from the diff so the orchestrator corrects them before merge.
 
 Codex CLI 0.145.0 note: full lifecycle delegation works in a standard Codex session; headless `codex exec --ephemeral` sessions fail to initialize spawned subagents.
 

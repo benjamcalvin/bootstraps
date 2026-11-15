@@ -193,6 +193,66 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
     if [ -f "$skill_dir/SKILL.md" ]; then
       if head -1 "$skill_dir/SKILL.md" | grep -q "^---$"; then
         echo "  OK: skills/$skill_name/SKILL.md has frontmatter"
+        if ! python3 - "$skill_dir/SKILL.md" <<'PYEOF'
+import re, sys
+
+path = sys.argv[1]
+lines = open(path, encoding="utf-8").read().splitlines()
+if not lines or lines[0].strip() != "---":
+    raise SystemExit("missing opening ---")
+end_idx = None
+for i in range(1, len(lines)):
+    if lines[i].strip() == "---":
+        end_idx = i
+        break
+if end_idx is None:
+    raise SystemExit("missing closing ---")
+fm_lines = lines[1:end_idx]
+fm_text = "\n".join(fm_lines)
+if not fm_text.strip():
+    raise SystemExit("empty frontmatter")
+
+try:
+    import yaml  # type: ignore
+    parsed = yaml.safe_load(fm_text)
+    if not isinstance(parsed, dict) or not parsed.get("name"):
+        raise SystemExit("frontmatter missing name")
+except ModuleNotFoundError:
+    pass
+
+block_indent = None
+has_name = False
+for lineno, raw in enumerate(fm_lines, 2):
+    if not raw.strip() or raw.lstrip().startswith("#"):
+        continue
+    indent = len(raw) - len(raw.lstrip(" "))
+    if block_indent is not None:
+        if indent > block_indent:
+            continue
+        block_indent = None
+    stripped = raw.lstrip()
+    if stripped.startswith("- "):
+        continue
+    m = re.match(r'^([A-Za-z0-9_.-]+):(.*)$', stripped)
+    if not m:
+        raise SystemExit(f"line {lineno}: invalid YAML line: {raw}")
+    key, val = m.group(1), m.group(2).strip()
+    if key == "name" and indent == 0:
+        has_name = True
+    if val in (">", ">-", ">+", "|", "|-", "|+"):
+        block_indent = indent
+        continue
+    if val == "" or (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")) or (val.startswith("[") and val.endswith("]")):
+        continue
+    if ": " in val or val.endswith(":"):
+        raise SystemExit(f"line {lineno}: unquoted colon in YAML scalar value for '{key}'")
+if not has_name:
+    raise SystemExit("frontmatter missing top-level 'name'")
+PYEOF
+        then
+          echo "  ERROR: skills/$skill_name/SKILL.md has invalid YAML frontmatter"
+          ERRORS=$((ERRORS + 1))
+        fi
       else
         echo "  WARN: skills/$skill_name/SKILL.md missing frontmatter delimiter"
         WARNINGS=$((WARNINGS + 1))
@@ -249,8 +309,8 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
     fi
 
     # Instruction byte budget: every child re-reads these files, so growth is a cost regression.
-    lifecycle_budget_total=56000
-    lifecycle_budget_implement=14000
+    lifecycle_budget_total=34000
+    lifecycle_budget_implement=11500
     lifecycle_bytes_total=$(cat "$plugin_dir"/skills/*/SKILL.md | wc -c | tr -d ' ')
     lifecycle_bytes_implement=$(wc -c < "$plugin_dir/skills/implement/SKILL.md" | tr -d ' ')
     if [ "$lifecycle_bytes_total" -gt "$lifecycle_budget_total" ] || [ "$lifecycle_bytes_implement" -gt "$lifecycle_budget_implement" ]; then
@@ -258,6 +318,13 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
       ERRORS=$((ERRORS + 1))
     else
       echo "  OK: implement-lifecycle instructions within byte budget (skills $lifecycle_bytes_total/$lifecycle_budget_total, implement $lifecycle_bytes_implement/$lifecycle_budget_implement)"
+    fi
+
+    if [ -e "$plugin_dir/skills/review-architecture" ] ||       [ -e "$plugin_dir/skills/review-testing" ] ||       [ -e "$plugin_dir/skills/review-security" ] ||       [ -e "$plugin_dir/skills/review-correctness" ] ||       [ -e "$plugin_dir/skills/pr-check" ] ||       [ -e "$plugin_dir/skills/implement/references/large-tier.md" ] ||       [ -e "$plugin_dir/skills/merge-pr/references/ci-source.md" ] ||       [ -e "$plugin_dir/skills/verify/references" ]; then
+      echo "  ERROR: Retired skills or references (review-architecture, review-testing, review-security, review-correctness, pr-check, large-tier.md, ci-source.md, verify/references) must remain removed"
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "  OK: Retired skills and references remain removed"
     fi
 
     # On-demand references are skill-local; every one a SKILL.md names must ship with that skill.
@@ -279,10 +346,15 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
     lifecycle_interface_section_missing=false
     lifecycle_explicit_invocation_missing=false
     lifecycle_skills=(
-      implement-code implement-address review-general review-correctness review-security
-      review-architecture review-testing review-docs verify
-      implement merge-pr pr-check
+      implement-code implement-address review-general
+      review-docs verify implement merge-pr
     )
+    lifecycle_skill_dir_count=$(find "$plugin_dir/skills" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')
+    if [ "$lifecycle_skill_dir_count" -ne 7 ]; then
+      echo "  ERROR: implement-lifecycle must have exactly 7 canonical skills (found $lifecycle_skill_dir_count)"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_metadata_missing=true
+    fi
     for lifecycle_skill in "${lifecycle_skills[@]}"; do
       lifecycle_skill_dir="$plugin_dir/skills/$lifecycle_skill"
       lifecycle_metadata="$lifecycle_skill_dir/agents/openai.yaml"
@@ -324,7 +396,7 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
     lifecycle_implement_skill="$plugin_dir/skills/implement/SKILL.md"
     lifecycle_mapping=$(awk '/^\| Phase \| Canonical skill \| Model tier \|$/,/^$/' "$lifecycle_implement_skill")
     lifecycle_mapping_invalid=false
-    for lifecycle_worker in implement-code implement-address review-general review-correctness review-security review-architecture review-testing review-docs verify; do
+    for lifecycle_worker in implement-code implement-address review-general review-docs verify; do
       mapping_count=$(printf '%s\n' "$lifecycle_mapping" | rg -Fc "\`$lifecycle_worker\`")
       if [ "$mapping_count" -ne 1 ]; then
         echo "  ERROR: Canonical lifecycle mapping must contain $lifecycle_worker exactly once (found $mapping_count)"
@@ -332,9 +404,9 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
         lifecycle_mapping_invalid=true
       fi
     done
-    mapping_rows=$(printf '%s\n' "$lifecycle_mapping" | rg -c '^\| (Implement|Address|Review (general|correctness|security|architecture|testing|docs)|Verify) \|')
-    if [ "$mapping_rows" -ne 9 ]; then
-      echo "  ERROR: Canonical lifecycle mapping must contain exactly nine worker rows (found $mapping_rows)"
+    mapping_rows=$(printf '%s\n' "$lifecycle_mapping" | rg -c '^\| (Implement|Address|Review|Review docs|Verify) \|')
+    if [ "$mapping_rows" -ne 5 ]; then
+      echo "  ERROR: Canonical lifecycle mapping must contain exactly five worker rows (found $mapping_rows)"
       ERRORS=$((ERRORS + 1))
       lifecycle_mapping_invalid=true
     fi
@@ -365,14 +437,21 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
     if ! rg -Fq 'Use the implement-lifecycle:<skill> plugin skill' "$claude_adapter_file" || \
       ! rg -Fq '`model`' "$claude_adapter_file" || \
       ! rg -Fq '`"sonnet"` for `balanced`' "$claude_adapter_file" || \
-      ! rg -q 'omit it \(inherit\) for `frontier`' "$claude_adapter_file"; then
-      echo "  ERROR: Claude Code adapter must map tiers explicitly (\`model\`, \"sonnet\" for balanced, omit/inherit for frontier)"
+      ! rg -q 'omit it \(inherit\) for `frontier`' "$claude_adapter_file" || \
+      ! rg -Fq 'Never omit `model` on any `review-*`' "$claude_adapter_file"; then
+      echo "  ERROR: Claude Code adapter must map tiers explicitly (sonnet for balanced, omit/inherit for frontier, forbid omitting model on reviewers/verify)"
       ERRORS=$((ERRORS + 1))
       lifecycle_mapping_invalid=true
     fi
     codex_adapter_file="$plugin_dir/skills/implement/references/adapter-codex.md"
-    if ! rg -Fq 'Use $implement-lifecycle:<skill>' "$codex_adapter_file"; then
-      echo "  ERROR: Codex adapter must use plugin-qualified skill prefix"
+    if ! rg -Fq 'Use $implement-lifecycle:<skill>' "$codex_adapter_file" || \
+      ! rg -Fq 'spawn_agent' "$codex_adapter_file" || \
+      ! rg -Fq 'send_message' "$codex_adapter_file" || \
+      ! rg -Fq 'followup_task' "$codex_adapter_file" || \
+      ! rg -Fq 'wait_agent' "$codex_adapter_file" || \
+      ! rg -Fq 'reasoning_effort: "medium"' "$codex_adapter_file" || \
+      rg -Fq 'send_input' "$codex_adapter_file"; then
+      echo "  ERROR: Codex adapter must use spawn_agent/send_message/followup_task/wait_agent (no send_input) and pin balanced to reasoning_effort medium"
       ERRORS=$((ERRORS + 1))
       lifecycle_mapping_invalid=true
     fi
@@ -398,8 +477,13 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
       ERRORS=$((ERRORS + 1))
       lifecycle_mapping_invalid=true
     fi
+    if ! rg -Fq 'Continuation Mode' "$plugin_dir/skills/implement-code/SKILL.md"; then
+      echo "  ERROR: implement-code must document Continuation Mode"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_mapping_invalid=true
+    fi
     if [ "$lifecycle_mapping_invalid" = false ]; then
-      echo "  OK: Canonical lifecycle mapping contains each worker once and progressive-disclosure adapters are valid"
+      echo "  OK: Canonical lifecycle mapping (5 workers), Continuation Mode, and progressive-disclosure adapters are valid"
     fi
 
     lifecycle_continuation_invalid=false
@@ -411,9 +495,9 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
       lifecycle_continuation_invalid=true
     fi
     if ! rg -Fq 'resume' "$claude_adapter_file" || \
-      ! rg -Fq 'send_input' "$codex_adapter_file" || \
+      ! rg -Fq 'send_message' "$codex_adapter_file" || \
       ! rg -Fq 'send_message' "$agy_adapter_file"; then
-      echo "  ERROR: Progressive-disclosure adapters must specify continuation mechanisms (resume, send_input, send_message)"
+      echo "  ERROR: Progressive-disclosure adapters must specify continuation mechanisms (resume, send_message/followup_task)"
       ERRORS=$((ERRORS + 1))
       lifecycle_continuation_invalid=true
     fi
@@ -446,36 +530,28 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
     fi
 
     lifecycle_reviewer_contract_missing=false
-    for lifecycle_reviewer in review-general review-correctness review-security review-architecture review-testing review-docs; do
+    for lifecycle_reviewer in review-general review-docs; do
       if ! rg -Fq 'Do not modify the reviewed codebase.' "$plugin_dir/skills/$lifecycle_reviewer/SKILL.md" || \
-        ! rg -Fq 'Do not post to GitHub.' "$plugin_dir/skills/$lifecycle_reviewer/SKILL.md"; then
-        echo "  ERROR: $lifecycle_reviewer must prohibit modifying reviewed code and posting to GitHub"
+        ! rg -Fq 'Do not post to GitHub.' "$plugin_dir/skills/$lifecycle_reviewer/SKILL.md" || \
+        rg -Fq "Run the PR's focused acceptance commands" "$plugin_dir/skills/$lifecycle_reviewer/SKILL.md"; then
+        echo "  ERROR: $lifecycle_reviewer must be read-only (no code edits, no GitHub posts, no duplicate suite runs)"
         ERRORS=$((ERRORS + 1))
         lifecycle_reviewer_contract_missing=true
       fi
     done
     if [ "$lifecycle_reviewer_contract_missing" = false ]; then
-      echo "  OK: Lifecycle reviewer skills prohibit modifying reviewed code and posting to GitHub"
+      echo "  OK: Lifecycle reviewer skills are strictly read-only and do not post to GitHub or duplicate test runs"
     fi
 
-    lifecycle_focused_contract="**Suite capability: \`focused-only\`. Prefer fast package- or target-scoped checks during iteration (using the repository's default check only when fast and no narrower check exists); \`verify\` owns authoritative exact-head suite signoff.**"
-    lifecycle_owner_contract="**Suite capability: \`full-suite-owner\`. Sole phase authorized to produce authoritative exact-head suite signoff (at most one full execution per PR head).**"
-    lifecycle_focused_skills=(
-      implement implement-code implement-address review-general review-correctness
-      review-security review-architecture review-testing review-docs merge-pr pr-check
-    )
+    lifecycle_verify_file="$plugin_dir/skills/verify/SKILL.md"
     lifecycle_prohibited_runtime_pattern='((^|[^[:alnum:]_.-])(\./)?validate-all\.sh([^[:alnum:]_.-]|$)|(^|[^[:alnum:]_])(go\.mod|go\.work|mise|golangci-lint|pinned[[:space:]]+go|go[[:space:]-]+toolchain|go[[:space:]]+1\.[0-9]+)([^[:alnum:]_]|$)|(^|[^[:alnum:]_])go[[:space:]]+test([^[:alnum:]_-]|$)|(^|[^[:alnum:]_])/tmp(/|[^[:alnum:]_]|$))'
     lifecycle_suite_contract_invalid=false
-    for lifecycle_skill in "${lifecycle_focused_skills[@]}"; do
-      lifecycle_skill_file="$plugin_dir/skills/$lifecycle_skill/SKILL.md"
-      if [ "$(rg -Fc '<!-- lifecycle-suite-capability: focused-only -->' "$lifecycle_skill_file")" -ne 1 ] || \
-        [ "$(rg -Fc "$lifecycle_focused_contract" "$lifecycle_skill_file")" -ne 1 ]; then
-        echo "  ERROR: $lifecycle_skill must declare focused-only exactly once with the canonical contract"
-        ERRORS=$((ERRORS + 1))
-        lifecycle_suite_contract_invalid=true
-      fi
 
-    done
+    while IFS= read -r lifecycle_v1_reference; do
+      echo "  ERROR: implement-lifecycle skill or reference retains retired v1 evidence, suite-capability, or sidecar scratch-file contract: $lifecycle_v1_reference"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_suite_contract_invalid=true
+    done < <(rg -n 'verification-record:|suite-evidence|\brecord=|state\.json|\bbundle=|bundle\.md|resolved-findings-path|resolved-verify-findings-path|pr-check|review-security|review-correctness|lifecycle-suite-capability|full-suite-owner|focused-only|fast-gate' "$plugin_dir/skills" -g 'SKILL.md' -g '**/references/*.md' || true)
 
     while IFS= read -r lifecycle_prohibited_reference; do
       echo "  ERROR: Distributed lifecycle skill contains a source-repository or language-specific runtime assumption: $lifecycle_prohibited_reference"
@@ -517,220 +593,24 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
       fi
     done
 
-    lifecycle_capability_allows_command() {
-      local capability="$1"
-      local candidate_plan="$2"
-      local authoritative_plan="$3"
-      if [ "$capability" = full-suite-owner ]; then
-        return 0
-      fi
-      ! jq -e -n --argjson candidate "$candidate_plan" --argjson authoritative "$authoritative_plan" \
-        '$candidate == $authoritative' > /dev/null 2>&1
-    }
-    lifecycle_capability_fixtures=(
-      'focused-authoritative-plan|focused-only|["npm run lint","npm test"]|["npm run lint","npm test"]|reject'
-      'focused-equivalent-json-plan|focused-only|["npm run lint", "npm test"]|["npm run lint","npm test"]|reject'
-      'focused-nonauthoritative-command|focused-only|["npm run lint -- --changed"]|["npm run lint","npm test"]|accept'
-      'owner-authoritative-plan|full-suite-owner|["npm run lint","npm test"]|["npm run lint","npm test"]|accept'
-    )
-    for lifecycle_fixture in "${lifecycle_capability_fixtures[@]}"; do
-      IFS='|' read -r lifecycle_fixture_name lifecycle_capability lifecycle_candidate_plan lifecycle_authoritative_plan lifecycle_expected_outcome <<< "$lifecycle_fixture"
-      lifecycle_actual_outcome='reject'
-      if lifecycle_capability_allows_command "$lifecycle_capability" "$lifecycle_candidate_plan" "$lifecycle_authoritative_plan"; then
-        lifecycle_actual_outcome='accept'
-      fi
-      if [ "$lifecycle_actual_outcome" != "$lifecycle_expected_outcome" ]; then
-        echo "  ERROR: Suite capability fixture $lifecycle_fixture_name expected $lifecycle_expected_outcome, got $lifecycle_actual_outcome"
-        ERRORS=$((ERRORS + 1))
-        lifecycle_suite_contract_invalid=true
-      fi
-    done
-
-    lifecycle_evidence_is_mergeable() {
-      local expected_sha="$1"
-      local expected_plan_json="$2"
-      local change_scope="$3"
-      local serialized_record="$4"
-      local observed_ci_run_json="${5:-null}"
-      jq -e --arg expected_sha "$expected_sha" --argjson expected_plan "$expected_plan_json" --arg change_scope "$change_scope" --argjson ci_run "$observed_ci_run_json" --arg target_repo "$lifecycle_expected_repo" '
-        def absent($key): (has($key) | not) or .[$key] == null;
-        def run_url: "^https://github\\.com/(?<repo>[^/]+/[^/]+)/actions/runs/(?<id>[0-9]+)$";
-        . as $record |
-        (if $record | has("suite-source") then $record["suite-source"] else "executed" end) as $source |
-        $record["verification-record"] == "v1" and
-        $record["verification-head"] == $expected_sha and
-        ($record | absent("suite-baseline")) and
-        if $change_scope == "documentation-only" then
-          $source == "executed" and
-          ($record | absent("suite-ci-run")) and
-          ($record | absent("suite-ci-attempt")) and
-          $record["suite-result"] == "not-required" and
-          $record["suite-command"] == null and
-          $record["suite-executions"] == 0 and
-          $record["suite-exit-status"] == null and
-          $record["suite-command-results"] == [] and
-          $record["suite-evidence"] == {}
-        else
-          ((($expected_plan | type) == "string" and ($expected_plan | test("\\S"))) or
-            (($expected_plan | type) == "array" and ($expected_plan | length) > 0 and
-              all($expected_plan[]; type == "string" and test("\\S")))) and
-          (if ($expected_plan | type) == "array" then $expected_plan else [$expected_plan] end) as $expected_commands |
-          $record["suite-result"] == "pass" and
-          $record["suite-command"] == $expected_plan and
-          (if $source == "executed" then
-            $record["suite-executions"] == 1 and
-            ($record | absent("suite-ci-run")) and
-            ($record | absent("suite-ci-attempt"))
-          elif $source == "ci" then
-            $record["suite-executions"] == 0 and
-            ($ci_run | type) == "object" and
-            ($record["suite-ci-run"] | type == "string" and test(run_url)) and
-            (($record["suite-ci-run"] | capture(run_url)) as $url |
-              $url.repo == $target_repo and
-              $ci_run["repository"] == $target_repo and
-              ($ci_run["id"] | tostring) == $url.id) and
-            ($record["suite-ci-attempt"] | type == "number" and . >= 1 and . == floor) and
-            ($ci_run["attempt"] | type == "number") and
-            $ci_run["attempt"] == $record["suite-ci-attempt"] and
-            $ci_run["headSha"] == $expected_sha and
-            $ci_run["conclusion"] == "success" and
-            ([$ci_run["jobs"][]? | select(any(.steps[]?; .command as $command | any($expected_commands[]; . == $command)))] as $plan_jobs |
-              ($plan_jobs | length) > 0 and
-              all($plan_jobs[];
-                ([.steps[]? | select(.command as $command | any($expected_commands[]; . == $command))] as $plan_steps |
-                  ($plan_steps | map(.command)) == $expected_commands and
-                  all($plan_steps[]; .conclusion == "success" and .conditional == false and .continueOnError == false))))
-          else false end) and
-          $record["suite-exit-status"] == 0 and
-          ($record["suite-command-results"] | type == "array") and
-          ($record["suite-command-results"] | length) == ($expected_commands | length) and
-          ($record["suite-evidence"] | type == "object") and
-          all(range(0; $expected_commands | length); . as $index |
-            ($record["suite-command-results"][$index]["evidence-pointer"] == "#/suite-evidence/command-\($index + 1)") and
-            $record["suite-command-results"][$index]["command"] == $expected_commands[$index] and
-            $record["suite-command-results"][$index]["result"] == "pass" and
-            $record["suite-command-results"][$index]["exit-status"] == 0 and
-            $record["suite-evidence"]["command-\($index + 1)"]["command"] == $expected_commands[$index] and
-            ($record["suite-evidence"]["command-\($index + 1)"]["output"] | type == "string" and length > 0)
-          )
-        end
-      ' <<< "$serialized_record" > /dev/null 2>&1
-    }
-
-    lifecycle_expected_sha='0123456789abcdef0123456789abcdef01234567'
-    lifecycle_expected_repo='example/repo'
-    lifecycle_evidence_fixtures=(
-      'exact|["npm run lint","npm test"]|executable|accept|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test","output":"tests passed"}}}'
-      'equivalent-array-json|["npm run lint", "npm test"]|accept|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test","output":"tests passed"}}}'
-      'scalar-command|"npm test"|accept|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":"npm test","suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"}],"suite-evidence":{"command-1":{"command":"npm test","output":"tests passed"}}}'
-      'null-plan|null|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":null,"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":null,"result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"}],"suite-evidence":{"command-1":{"command":null,"output":"invalid plan"}}}'
-      'empty-scalar|""|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":"","suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"}],"suite-evidence":{"command-1":{"command":"","output":"invalid plan"}}}'
-      'whitespace-scalar|"   "|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":"   ","suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"   ","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"}],"suite-evidence":{"command-1":{"command":"   ","output":"invalid plan"}}}'
-      'empty-array|[]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":[],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[],"suite-evidence":{}}'
-      'empty-array-element|["npm test",""]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm test",""],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm test","output":"tests passed"},"command-2":{"command":"","output":"invalid plan"}}}'
-      'whitespace-array-element|["npm test","   "]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm test","   "],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"   ","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm test","output":"tests passed"},"command-2":{"command":"   ","output":"invalid plan"}}}'
-      'nonstring-array-element|["npm test",1]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm test",1],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":1,"result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm test","output":"tests passed"},"command-2":{"command":1,"output":"invalid plan"}}}'
-      'documentation-only-with-plan|"npm test"|documentation-only|accept|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"not-required","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}'
-      'executable-not-required|"npm test"|executable|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"not-required","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}'
-      'missing-contract|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"missing-contract","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}'
-      'reordered|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm test","npm run lint"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm test","output":"tests passed"},"command-2":{"command":"npm run lint","output":"lint passed"}}}'
-      'altered-arguments|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test -- --quick"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test -- --quick","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test -- --quick","output":"tests passed"}}}'
-      'wrong-sha|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"ffffffffffffffffffffffffffffffffffffffff","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test","output":"tests passed"}}}'
-      'incomplete-results|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"}}}'
-      'wrong-execution-count|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":2,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test","output":"tests passed"}}}'
-      'wrong-status|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"fail","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":1,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"fail","exit-status":1,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test","output":"tests failed"}}}'
-      'dangling-evidence|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"}}}'
-      'mismatched-evidence|["npm run lint","npm test"]|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"lint passed"},"command-2":{"command":"npm test -- --quick","output":"quick tests passed"}}}'
-    )
-    for lifecycle_fixture in "${lifecycle_evidence_fixtures[@]}"; do
-      IFS='|' read -r lifecycle_fixture_name lifecycle_fixture_plan lifecycle_fixture_field_3 lifecycle_fixture_field_4 lifecycle_fixture_field_5 <<< "$lifecycle_fixture"
-      lifecycle_change_scope='executable'
-      lifecycle_expected_outcome="$lifecycle_fixture_field_3"
-      lifecycle_serialized_record="$lifecycle_fixture_field_4"
-      if [ "$lifecycle_fixture_field_3" = executable ] || [ "$lifecycle_fixture_field_3" = documentation-only ]; then
-        lifecycle_change_scope="$lifecycle_fixture_field_3"
-        lifecycle_expected_outcome="$lifecycle_fixture_field_4"
-        lifecycle_serialized_record="$lifecycle_fixture_field_5"
-      fi
-      lifecycle_actual_outcome='reject'
-      if lifecycle_evidence_is_mergeable "$lifecycle_expected_sha" "$lifecycle_fixture_plan" "$lifecycle_change_scope" "$lifecycle_serialized_record"; then
-        lifecycle_actual_outcome='accept'
-      fi
-      if [ "$lifecycle_actual_outcome" != "$lifecycle_expected_outcome" ]; then
-        echo "  ERROR: Serialized verification fixture $lifecycle_fixture_name expected $lifecycle_expected_outcome, got $lifecycle_actual_outcome"
-        ERRORS=$((ERRORS + 1))
-        lifecycle_suite_contract_invalid=true
-      fi
-    done
-    lifecycle_ci_baseline_fixtures=(
-      'ci-exact|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|accept|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-run-other-sha|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"ffffffffffffffffffffffffffffffffffffffff","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-record-other-sha|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"ffffffffffffffffffffffffffffffffffffffff","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"ffffffffffffffffffffffffffffffffffffffff","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-run-failed|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"failure","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-run-other-repo|["npm run lint","npm test"]|executable|{"repository":"fork/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-run-url-other-repo|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/fork/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-run-id-mismatch|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":102,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-attempt-mismatch|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":2,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-missing-attempt|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-run-unconfirmed|["npm run lint","npm test"]|executable|null|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-missing-run-url|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-step-skipped|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"skipped","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-step-conditional|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":true,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-step-continue-on-error|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":true},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-matrix-leg-missing-plan|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-steps-reordered|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-no-plan-job|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-with-execution|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-fail-result|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"fail","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":1,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"fail","exit-status":1,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-with-baseline|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}},"suite-baseline":{"head":"89abcdef0123456789abcdef0123456789abcdef","command-results":[]}}'
-      'executed-explicit|["npm run lint","npm test"]|executable|null|accept|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"executed","suite-ci-run":null,"suite-ci-attempt":null,"suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}},"suite-baseline":null}'
-      'executed-with-ci-attempt|["npm run lint","npm test"]|executable|null|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"executed","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'docs-only-with-ci-attempt|"npm test"|documentation-only|null|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"not-required","suite-ci-attempt":1,"suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}'
-      'executed-zero-executions|["npm run lint","npm test"]|executable|null|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"executed","suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'executed-with-ci-run|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"executed","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'unknown-source|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"cache","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'source-false|["npm run lint","npm test"]|executable|null|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":false,"suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'docs-only-ci-source|"npm test"|documentation-only|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"not-required","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}'
-      'baseline-on-pass|["npm run lint","npm test"]|executable|null|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}},"suite-baseline":{"head":"89abcdef0123456789abcdef0123456789abcdef","command-results":[]}}'
-      'baseline-false|["npm run lint","npm test"]|executable|null|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}},"suite-baseline":false}'
-      'preexisting-only-failure|"npm test"|executable|null|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"fail","suite-source":"executed","suite-ci-run":null,"suite-ci-attempt":null,"suite-command":"npm test","suite-executions":1,"suite-exit-status":1,"suite-command-results":[{"command":"npm test","result":"fail","exit-status":1,"evidence-pointer":"#/suite-evidence/command-1"}],"suite-baseline":{"head":"89abcdef0123456789abcdef0123456789abcdef","command-results":[{"command":"npm test","result":"fail","exit-status":1,"evidence-pointer":"#/suite-evidence/baseline-command-1"}]},"suite-evidence":{"command-1":{"command":"npm test","output":"FAIL test/legacy.test.js"},"baseline-command-1":{"command":"npm test","output":"FAIL test/legacy.test.js"}}}'
-      'baseline-as-head-evidence|["npm run lint","npm test"]|executable|null|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-command":["npm run lint","npm test"],"suite-executions":1,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-baseline":{"head":"0123456789abcdef0123456789abcdef01234567","command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/baseline-command-1"}]},"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"},"baseline-command-1":{"command":"npm run lint","output":"pass"}}}'
-      'ci-attempt-absent|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-      'ci-attempt-fractional|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]}],"attempt":1.5}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}},"suite-ci-attempt":1.5}'
-      'unflagged-leg|["npm run lint","npm test"]|executable|{"repository":"example/repo","id":101,"attempt":1,"url":"https://github.com/example/repo/actions/runs/101","headSha":"0123456789abcdef0123456789abcdef01234567","conclusion":"success","jobs":[{"name":"test (node-20)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"test (node-22)","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm run lint","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"docs","steps":[{"command":"npm run docs","conclusion":"success","conditional":false,"continueOnError":false}]},{"name":"integration","steps":[{"command":"actions/checkout","conclusion":"success","conditional":false,"continueOnError":false},{"command":"npm test","conclusion":"failure","conditional":false,"continueOnError":false}]}]}|reject|{"verification-record":"v1","verification-head":"0123456789abcdef0123456789abcdef01234567","suite-result":"pass","suite-source":"ci","suite-ci-run":"https://github.com/example/repo/actions/runs/101","suite-ci-attempt":1,"suite-command":["npm run lint","npm test"],"suite-executions":0,"suite-exit-status":0,"suite-command-results":[{"command":"npm run lint","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-1"},{"command":"npm test","result":"pass","exit-status":0,"evidence-pointer":"#/suite-evidence/command-2"}],"suite-evidence":{"command-1":{"command":"npm run lint","output":"npm run lint output"},"command-2":{"command":"npm test","output":"npm test output"}}}'
-    )
-    for lifecycle_fixture in "${lifecycle_ci_baseline_fixtures[@]}"; do
-      IFS='|' read -r lifecycle_fixture_name lifecycle_fixture_plan lifecycle_change_scope lifecycle_observed_ci_run lifecycle_expected_outcome lifecycle_serialized_record <<< "$lifecycle_fixture"
-      lifecycle_actual_outcome='reject'
-      if lifecycle_evidence_is_mergeable "$lifecycle_expected_sha" "$lifecycle_fixture_plan" "$lifecycle_change_scope" "$lifecycle_serialized_record" "$lifecycle_observed_ci_run"; then
-        lifecycle_actual_outcome='accept'
-      fi
-      if [ "$lifecycle_actual_outcome" != "$lifecycle_expected_outcome" ]; then
-        echo "  ERROR: CI/baseline verification fixture $lifecycle_fixture_name expected $lifecycle_expected_outcome, got $lifecycle_actual_outcome"
-        ERRORS=$((ERRORS + 1))
-        lifecycle_suite_contract_invalid=true
-      fi
-    done
-    lifecycle_verify_file="$plugin_dir/skills/verify/SKILL.md"
-    if [ "$(rg -Fc '<!-- lifecycle-suite-capability: full-suite-owner -->' "$lifecycle_verify_file")" -ne 1 ] || \
-      [ "$(rg -Fc "$lifecycle_owner_contract" "$lifecycle_verify_file")" -ne 1 ] || \
-      [ "$(rg -l '<!-- lifecycle-suite-capability: full-suite-owner -->' "$plugin_dir/skills"/*/SKILL.md | wc -l | tr -d ' ')" -ne 1 ]; then
-      echo "  ERROR: verify must be the sole full-suite-owner with the canonical contract"
+    if ! sed -n '/^### Step 4: Verify and Self-Review$/,/^### Step 5: /p' "$plugin_dir/skills/implement-code/SKILL.md" | rg -Fq 'automated tests, linters, and build before opening the PR' || \
+      ! rg -Fq 'Automated test suites are not your job.' "$lifecycle_verify_file"; then
+      echo "  ERROR: implement-code must own automated tests/linters/build while verify focuses strictly on real-world checks"
       ERRORS=$((ERRORS + 1))
       lifecycle_suite_contract_invalid=true
     fi
     if [ "$lifecycle_suite_contract_invalid" = false ]; then
-      echo "  OK: Lifecycle suite capabilities reserve the authoritative suite for verify"
+      echo "  OK: Coders own automated tests/builds, verify owns real-world checks, and retired contracts remain absent"
     fi
 
-    if rg -q 'Phase 4\.5|Docs Compliance Gate|lifecycle-docs-gate' "$lifecycle_implement_skill"; then
-      echo "  ERROR: implement must not retain the standalone docs gate (Phase 4.5)"
+    if rg -q 'Phase 4\.5|Docs Compliance Gate|lifecycle-docs-gate' "$lifecycle_implement_skill" ||       sed -n '/^#### Step A/,/^#### Step B/p' "$lifecycle_implement_skill" | rg -Fq 'review-docs'; then
+      echo "  ERROR: implement must not retain Phase 4.5 or place review-docs inside Phase 4 Step A"
       ERRORS=$((ERRORS + 1))
-    elif ! sed -n '/^#### Step A/,/^#### Step B/p' "$lifecycle_implement_skill" | rg -Fq -- '`review-docs` when docs, specs, READMEs, or user-facing interfaces (CLI flags, public APIs, config keys) change, when the change alters architecture, conventions, or behavior described in AGENTS.md, ADRs, or other project docs'; then
-      echo "  ERROR: Step A must list review-docs with its docs-change trigger"
+    elif ! sed -n '/^### Phase 5/,/^### Phase 6/p' "$lifecycle_implement_skill" | rg -Fq 'Run **Verification** and **Docs Review** **in parallel**' ||       ! sed -n '/^### Phase 5/,/^### Phase 6/p' "$lifecycle_implement_skill" | rg -Fq 'review-docs'; then
+      echo "  ERROR: implement Phase 5 must run review-docs in parallel with verification"
       ERRORS=$((ERRORS + 1))
     else
-      echo "  OK: Docs review is a triggered round-1 reviewer; no standalone docs gate"
+      echo "  OK: Docs review runs in Phase 5 in parallel with verification; no standalone docs gate"
     fi
 
     # The recovery graph lives in a skill-local reference read on the incomplete-result path.
@@ -739,7 +619,7 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
       [ "$(rg -Fc 'context: "fresh"' "$lifecycle_recovery_ref")" -lt 2 ]; then
       echo '  ERROR: Pi delegation and recovery must set context: "fresh" explicitly'
       ERRORS=$((ERRORS + 1))
-    elif ! rg -Fq 'When a reviewer child returns an empty, missing, or incomplete result, read `references/reviewer-recovery.md`' "$lifecycle_implement_skill"; then
+    elif ! rg -Fq 'read `references/reviewer-recovery.md` before refereeing' "$lifecycle_implement_skill"; then
       echo "  ERROR: implement must point to references/reviewer-recovery.md on the incomplete-reviewer-result path"
       ERRORS=$((ERRORS + 1))
     else
@@ -747,7 +627,7 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
     fi
 
     lifecycle_reviewer_output_invalid=false
-    for lifecycle_reviewer in review-general review-correctness review-security review-architecture review-testing review-docs; do
+    for lifecycle_reviewer in review-general review-docs; do
       lifecycle_reviewer_file="$plugin_dir/skills/$lifecycle_reviewer/SKILL.md"
       for lifecycle_heading in '### Action Required' '### Recommended' '### Minor' '### Summary'; do
         if [ "$(rg -Fc "$lifecycle_heading" "$lifecycle_reviewer_file")" -ne 1 ]; then
@@ -802,203 +682,43 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
     fi
 
     lifecycle_merge_file="$plugin_dir/skills/merge-pr/SKILL.md"
-    # CI-evidence acceptance rules live in a verify-local reference read before recording suite-source: ci.
-    lifecycle_verify_ci_ref="$plugin_dir/skills/verify/references/ci-evidence.md"
-    lifecycle_special_verdicts_ref="$plugin_dir/skills/verify/references/special-verdicts.md"
-    lifecycle_merge_ci_ref="$plugin_dir/skills/merge-pr/references/ci-source.md"
-    lifecycle_verify_baseline_ref="$plugin_dir/skills/verify/references/baseline-on-failure.md"
     lifecycle_verify_loop_ref="$plugin_dir/skills/implement/references/verify-fail-loop.md"
-    if ! rg -Fq 'Before relying on one, read `references/ci-evidence.md` and satisfy every condition there' "$lifecycle_verify_file" || \
-      ! rg -Fq "Apply repository instructions first, then CI configuration, documented development commands, and build or test configuration." "$lifecycle_verify_file" || \
-      ! rg -Fq 'When it declares several required commands, preserve their order as one authoritative plan; do not select a subset or reorder them.' "$lifecycle_verify_file" || \
-      ! rg -Fq 'If these sources do not establish an authoritative command or plan, report the missing contract explicitly and return PARTIAL without executing a guessed substitute.' "$lifecycle_verify_file" || \
-      ! rg -Fq 'Any complete authoritative evidence record for that identical SHA consumes its one-execution allowance, whether the recorded result passed or failed.' "$lifecycle_verify_file" || \
-      ! rg -Fq 'For a complete failing record, return FAIL and require addressing that produces a new head before another authoritative execution.' "$lifecycle_verify_file" || \
-      ! rg -Fq 'gh pr merge <pr-number> <merge-method-flag> <optional-delete-branch-flag> --match-head-commit "$VERIFIED_SHA"' "$lifecycle_merge_file" || \
-      ! rg -Fq 'verification-head: <full-head-sha>' "$lifecycle_verify_file" || \
-      ! rg -Fq 'verification-record: v1' "$lifecycle_verify_file" || \
-      ! rg -Fq 'suite-executions: 0 | 1' "$lifecycle_verify_file" || \
-      ! rg -Fq 'suite-exit-status: <integer> | n/a' "$lifecycle_verify_file" || \
-      ! rg -Fq 'suite-result: pass | fail | missing-contract | not-required' "$lifecycle_verify_file" || \
-      ! rg -Fq 'suite-command: <exact-command-or-ordered-JSON-command-array> | none' "$lifecycle_verify_file" || \
-      ! rg -Fq 'suite-command-results:' "$lifecycle_verify_file" || \
-      ! rg -Fq 'The missing-contract/PARTIAL record is canonical:' "$lifecycle_special_verdicts_ref" || \
-      ! rg -Fq '{"verification-record":"v1","verification-head":"<full-head-sha>","suite-result":"not-required","suite-command":null,"suite-executions":0,"suite-exit-status":null,"suite-command-results":[],"suite-evidence":{}}' "$lifecycle_special_verdicts_ref" || \
-      ! rg -Fq 'If the path is absent, unreadable, or does not contain a complete `verification-record:v1` plus its referenced `suite-evidence`, stop rather than reconstructing evidence from an inaccessible parent transcript.' "$lifecycle_merge_file" || \
-      ! rg -Fq 'For every result, require its `#/suite-evidence/command-<N>` pointer to resolve inside the handed-off object' "$lifecycle_merge_file" || \
-      ! rg -Fq 'Accept `not-required` only after independently inspecting the changed files and confirming that every change is documentation or comments only' "$lifecycle_merge_file" || \
-      ! rg -Fq 'confirm the verification record file at `<resolved-verification-record-path>` exists and its `#/suite-evidence/command-<N>` pointers resolve' "$lifecycle_implement_skill" || \
-      ! rg -Fq 'Evaluate and execute the canonical `merge-pr` skill inline against `<pr-number> <resolved-verification-record-path>`; do not spawn a child for it.' "$lifecycle_implement_skill" || \
-      ! rg -Fq 'suite-source: executed | ci' "$lifecycle_verify_file" || \
-      ! rg -Fq 'a failing, other-SHA, other-repository, or unconfirmable run is not evidence, so execute instead.' "$lifecycle_verify_file" || \
-      ! rg -Fq 'Require: the repository is the target repository; `headSha` equals `verification-head`; that attempt'"'"'s `conclusion` is `success`; and in every job or matrix leg with a step running a plan command, each established command maps, in order, to a step whose conclusion is `success`, never `skipped`.' "$lifecycle_verify_ci_ref" || \
-      ! rg -Fq 'Reject the run if a plan step is conditional or `continue-on-error` in the workflow definition the run executed' "$lifecycle_verify_ci_ref" || \
-      ! rg -Fq 'suite-ci-attempt: <n> | none' "$lifecycle_verify_file" || \
-      ! rg -Fq '(an integer ≥ 1; a CI record without one is rejected)' "$lifecycle_verify_ci_ref" || \
-      ! rg -Fq 'Reject a record whose `suite-ci-attempt` is none or not an integer ≥ 1' "$lifecycle_merge_ci_ref" || \
-      ! rg -Fq 'complete log from the same attempt' "$lifecycle_verify_ci_ref" || \
-      ! rg -Fq 'Never use a run for any other SHA.' "$lifecycle_verify_ci_ref" || \
-      ! rg -Fq '`suite-source: executed` with `suite-executions: 1` (or `suite-source: ci` with `suite-executions: 0`)' "$lifecycle_merge_file" || \
-      ! rg -Fq -- '--attempt <suite-ci-attempt>' "$lifecycle_merge_ci_ref" || \
-      ! rg -Fq 'Require the repository to be the target repository, its `headSha` to equal `verification-head`, that attempt'"'"'s `conclusion` to be `success`, and, in every job or matrix leg with a step running a plan command, each established command to map in order to a `success` step, none `skipped`' "$lifecycle_merge_ci_ref" || \
-      ! rg -Fq 'reject a conditional or `continue-on-error` plan step in the workflow definition the run executed' "$lifecycle_merge_ci_ref" || \
-      ! rg -Fq 'Reject a run for any other SHA, repository, or attempt.' "$lifecycle_merge_ci_ref"; then
-      echo "  ERROR: Verification evidence and merge must remain bound to the exact PR head"
-      ERRORS=$((ERRORS + 1))
-    else
-      echo "  OK: Verification evidence is exact-head and merge uses an atomic head guard"
-    fi
+    lifecycle_general_file="$plugin_dir/skills/review-general/SKILL.md"
 
-    lifecycle_verify_scope_ok=true
-    for lifecycle_scope_check in \
-      "$lifecycle_verify_loop_ref|Allow at most 2 FAIL → address → re-verify cycles; on a third FAIL, do not address again" \
-      "$lifecycle_implement_skill|Payload: <pr-number> tier=<Small|Medium|Large> record=<resolved-verification-record-path> [failed-scenarios=<names>] bundle=<resolved-context-bundle-path>" \
-      "$lifecycle_verify_file|**Small** — suite evidence, plus one live check only when runtime behavior changed" \
-      "$lifecycle_verify_file|re-run only those scenarios plus suite evidence for the new head" \
-      "$lifecycle_verify_baseline_ref|When the head's suite fails, run each failing command once on the PR's merge-base" \
-      "$lifecycle_verify_baseline_ref|a failure present at both SHAs is pre-existing; any other failure, or one you cannot match, is PR-introduced and produces FAIL." \
-      "$lifecycle_verify_baseline_ref|the record keeps \`suite-result: fail\` and is not mergeable. Baseline results are never PR-head evidence." \
-      "$lifecycle_merge_file|Never treat \`suite-baseline\` results as PR-head evidence" \
-      "$lifecycle_implement_skill|\`tier=\` is the tier recorded at classification; never re-classify it." \
-      "$lifecycle_verify_loop_ref|without \`failed-scenarios\` when only the suite failed" \
-      "$lifecycle_verify_file|\`live check skipped (Small, no runtime change)\`" \
-      "$lifecycle_verify_file|without \`failed-scenarios\`, re-run suite evidence only" \
-      "$lifecycle_verify_ci_ref|at most the suite's own typical runtime, and never more than 30 minutes" \
-      "$lifecycle_verify_baseline_ref|A setup, missing-command, or error-class mismatch between the SHAs is PR-introduced." \
-      "$lifecycle_verify_baseline_ref|name every plan command never run on the head because the plan stopped"; do
-      if ! rg -Fq -- "${lifecycle_scope_check#*|}" "${lifecycle_scope_check%%|*}"; then
-        echo "  ERROR: Verification scope invariant missing from $(basename "$(dirname "${lifecycle_scope_check%%|*}")"): ${lifecycle_scope_check#*|}"
+    lifecycle_risk_ok=true
+    for risk_check in       "$lifecycle_implement_skill|do not overthink"       "$lifecycle_implement_skill|Stay focused on the task at hand"       "$lifecycle_general_file|Stay focused on the task at hand; do not overthink."       "$lifecycle_implement_skill|\`Low\`"       "$lifecycle_implement_skill|\`Moderate\`"       "$lifecycle_implement_skill|\`High\`"       "$lifecycle_implement_skill|never by line-count thresholds"       "$lifecycle_implement_skill|Round 2 only if Round 1 accepted ≥ 1 \`Action Required\` finding"       "$lifecycle_implement_skill|only accepted Minor"       "$lifecycle_implement_skill|out of delta"       "$lifecycle_implement_skill|Follow-up reviewers judge only that range"       "$lifecycle_implement_skill|do not poll, sleep, or schedule wake-ups"       "$lifecycle_implement_skill|2–3 parallel \`review-general\`"       "$lifecycle_general_file|**Simplicity & scope**"       "$lifecycle_general_file|**Security**"       "$lifecycle_general_file|**Quality & correctness**"; do
+      if ! rg -Fq -- "${risk_check#*|}" "${risk_check%%|*}"; then
+        echo "  ERROR: Risk/complexity or general-review invariant missing from $(basename "$(dirname "${risk_check%%|*}")"): ${risk_check#*|}"
         ERRORS=$((ERRORS + 1))
-        lifecycle_verify_scope_ok=false
+        lifecycle_risk_ok=false
       fi
     done
-    if rg -Fq 'repeat until **PASS** or **N/A**' "$lifecycle_implement_skill" || \
-      rg -qi 'last line of defense|almost always something to verify' "$lifecycle_verify_file"; then
-      echo "  ERROR: Verification must stay tier-scaled and capped (no uncapped re-verify loop or blanket thoroughness mandate)"
+    if rg -q '400 changed lines|401–1,500 changed lines|1,500 changed lines|Size Tier & Risk Lenses|round 3|round-3|round 5|round-5' "$lifecycle_implement_skill"; then
+      echo "  ERROR: implement must scale by risk/complexity (no LOC line-count thresholds or round>2 ceilings)"
       ERRORS=$((ERRORS + 1))
-      lifecycle_verify_scope_ok=false
+      lifecycle_risk_ok=false
     fi
-    if [ "$lifecycle_verify_scope_ok" = true ]; then
-      echo "  OK: Verification is tier-scaled, capped at 2 cycles, and baselines failures on the merge-base"
+    if [ "$lifecycle_risk_ok" = true ]; then
+      echo "  OK: Risk/complexity scaling, anti-overthinking posture, unified review-general (simplicity/security/quality), and 2-round cap enforced"
     fi
 
-    lifecycle_policy_decision() {
-      local checks_pass="$1"
-      local approvals_required="$2"
-      local approvals_met="$3"
-      local billing_failure="$4"
-      local repository_billing="$5"
-      local user_billing="$6"
-      local repository_methods="$7"
-      local user_method="$8"
-      local repository_retention="$9"
-      local user_retention="${10}"
-      local selected_method
-      local delete_branch=false
-
-      if [ "$checks_pass" != true ] || \
-        { [ "$approvals_required" = true ] && [ "$approvals_met" != true ]; }; then
-        printf '%s\n' '{"outcome":"reject"}'
-        return
-      fi
-      if [ "$billing_failure" = true ]; then
-        if [ "$repository_billing" = deny ] || \
-          { [ "$repository_billing" = silent ] && [ "$user_billing" != allow ]; }; then
-          printf '%s\n' '{"outcome":"reject"}'
-          return
-        fi
-      fi
-
-      selected_method="$user_method"
-      if [ "$selected_method" = silent ]; then
-        selected_method="${repository_methods%%,*}"
-      elif [[ ",$repository_methods," != *",$selected_method,"* ]]; then
-        printf '%s\n' '{"outcome":"reject"}'
-        return
-      fi
-
-      if [ "$repository_retention" != silent ] && \
-        [ "$user_retention" != silent ] && \
-        [ "$repository_retention" != "$user_retention" ]; then
-        printf '%s\n' '{"outcome":"reject"}'
-        return
-      fi
-      if [ "$repository_retention" = delete ] || \
-        { [ "$repository_retention" = silent ] && [ "$user_retention" = delete ]; }; then
-        delete_branch=true
-      fi
-      jq -cn --arg method "$selected_method" --argjson delete_branch "$delete_branch" \
-        '{outcome:"accept",merge_method:$method,delete_branch:$delete_branch}'
-    }
-
-    lifecycle_policy_fixtures=(
-      'no-review-required|true|false|false|false|silent|silent|merge,squash|merge|silent|silent|{"outcome":"accept","merge_method":"merge","delete_branch":false}'
-      'required-check-failure|false|false|false|false|silent|silent|merge|merge|silent|silent|{"outcome":"reject"}'
-      'approval-required-missing|true|true|false|false|silent|silent|merge|merge|silent|silent|{"outcome":"reject"}'
-      'approval-required-met|true|true|true|false|silent|silent|merge|merge|silent|silent|{"outcome":"accept","merge_method":"merge","delete_branch":false}'
-      'billing-exception-allowed|true|false|false|true|allow|silent|squash|squash|silent|silent|{"outcome":"accept","merge_method":"squash","delete_branch":false}'
-      'billing-exception-policy-denied|true|false|false|true|deny|allow|squash|squash|silent|silent|{"outcome":"reject"}'
-      'repository-method-selected|true|false|false|false|silent|silent|merge,rebase|rebase|silent|silent|{"outcome":"accept","merge_method":"rebase","delete_branch":false}'
-      'disallowed-method|true|false|false|false|silent|silent|merge,squash|rebase|silent|silent|{"outcome":"reject"}'
-      'retained-branch|true|false|false|false|silent|silent|merge|merge|retain|silent|{"outcome":"accept","merge_method":"merge","delete_branch":false}'
-      'retention-conflict|true|false|false|false|silent|silent|merge|merge|retain|delete|{"outcome":"reject"}'
-    )
-    for lifecycle_fixture in "${lifecycle_policy_fixtures[@]}"; do
-      IFS='|' read -r lifecycle_fixture_name lifecycle_checks_pass lifecycle_approvals_required lifecycle_approvals_met lifecycle_billing_failure lifecycle_repository_billing lifecycle_user_billing lifecycle_repository_methods lifecycle_user_method lifecycle_repository_retention lifecycle_user_retention lifecycle_expected_decision <<< "$lifecycle_fixture"
-      lifecycle_actual_decision=$(lifecycle_policy_decision \
-        "$lifecycle_checks_pass" "$lifecycle_approvals_required" "$lifecycle_approvals_met" \
-        "$lifecycle_billing_failure" "$lifecycle_repository_billing" "$lifecycle_user_billing" \
-        "$lifecycle_repository_methods" "$lifecycle_user_method" \
-        "$lifecycle_repository_retention" "$lifecycle_user_retention")
-      if [ "$lifecycle_actual_decision" != "$lifecycle_expected_decision" ]; then
-        echo "  ERROR: Merge policy fixture $lifecycle_fixture_name expected $lifecycle_expected_decision, got $lifecycle_actual_decision"
+    lifecycle_verify_merge_ok=true
+    for vm_check in       "$lifecycle_verify_loop_ref|Allow at most 2 FAIL → address → re-verify cycles; on a third FAIL, do not address again"       "$lifecycle_verify_loop_ref|failed-scenarios="       "$lifecycle_implement_skill|Payload: <pr-number> risk=<Low|Moderate|High> [failed-scenarios=<names>]"       "$lifecycle_implement_skill|never re-classify"       "$lifecycle_implement_skill|never spawn \`verify\` just to re-run unit tests"       "$lifecycle_implement_skill|verify: skipped (no live surface)"       "$lifecycle_verify_file|Automated test suites are not your job."       "$lifecycle_verify_file|**Data"       "$lifecycle_verify_file|**CLI"       "$lifecycle_verify_file|**Frontend"       "$lifecycle_verify_file|screenshots"       "$lifecycle_verify_file|Verified-Head: <full-head-sha>"       "$lifecycle_verify_file|git merge-base"       "$lifecycle_verify_file|return **PARTIAL** citing the merge-base SHA"       "$lifecycle_implement_skill|Evaluate and execute the canonical \`merge-pr\` skill inline against \`<pr-number>\`; do not spawn a child for it."       "$lifecycle_merge_file|follow the target project's rules"       "$lifecycle_merge_file|Ready for Human Merge"       "$lifecycle_merge_file|--match-head-commit"; do
+      if ! rg -Fq -- "${vm_check#*|}" "${vm_check%%|*}"; then
+        echo "  ERROR: Verification or inline merge invariant missing from $(basename "$(dirname "${vm_check%%|*}")"): ${vm_check#*|}"
         ERRORS=$((ERRORS + 1))
-        lifecycle_suite_contract_invalid=true
+        lifecycle_verify_merge_ok=false
       fi
     done
-
-    if ! rg -Fq 'Enforced repository constraints are binding.' "$lifecycle_merge_file" || \
-      ! rg -Fq 'Explicit user direction may select only among choices those constraints permit; it cannot waive or contradict them.' "$lifecycle_merge_file" || \
-      ! rg -Fq 'Apply this precedence consistently to required checks, approvals, billing exceptions, merge method, and branch retention.' "$lifecycle_merge_file" || \
-      ! rg -Fq 'If the established policy does not require approval, do not invent a requirement from the base branch name.' "$lifecycle_merge_file" || \
-      ! rg -Fq 'Use the corresponding supported GitHub CLI method flag (`--merge`, `--squash`, or `--rebase`).' "$lifecycle_merge_file" || \
-      ! rg -Fq 'omit it when the branch must be retained' "$lifecycle_merge_file"; then
-      echo "  ERROR: Merge readiness must defer checks, approvals, billing exceptions, merge method, and branch retention to target policy"
+    if rg -Fq 'repeat until **PASS** or **N/A**' "$lifecycle_implement_skill" ||       rg -qi 'last line of defense|almost always something to verify' "$lifecycle_verify_file"; then
+      echo "  ERROR: Verification must stay risk-scaled and capped"
       ERRORS=$((ERRORS + 1))
-    else
-      echo "  OK: Merge policy fixtures cover approvals, billing, non-squash methods, and retained branches"
+      lifecycle_verify_merge_ok=false
+    fi
+    if [ "$lifecycle_verify_merge_ok" = true ]; then
+      echo "  OK: Verification focuses on real-world checks (max 2 cycles) and merge-pr runs inline following project rules"
     fi
 
-    lifecycle_loop_ok=true
-    for loop_text in \
-      '| Small | ≤ 400 changed lines and no risk surface |' \
-      '| Large | > 1,500 changed lines, or any risk surface |' \
-      '| Medium | Neither Small nor Large |' \
-      'the addresser fixes the final round'"'"'s accepted findings and runs focused tests' \
-      '| Small | 1 |' '| Medium | 2 |' '| Large | 3 |' \
-      'nothing may lower it' \
-      'only accepted Minor findings' \
-      'Reject findings about code outside the round'"'"'s delta' \
-      'Follow-up reviewers judge only that range' \
-      'specialists are selected mechanically by tier and path trigger' \
-      'excluding whole-file deletions, lockfiles, and generated files' \
-      'inspect all changed paths (including deleted files)' \
-      'when the prior round accepted only `review-docs` findings and the fix delta touches only documentation files, run `review-docs` only; otherwise run `review-general`' \
-      'do not poll, sleep, or schedule wake-ups'; do
-      if ! rg -Fiq -- "$loop_text" "$lifecycle_implement_skill"; then
-        echo "  ERROR: implement Phase 4 must keep tier/loop invariant: $loop_text"
-        ERRORS=$((ERRORS + 1))
-        lifecycle_loop_ok=false
-      fi
-    done
-    if rg -qi 'round 5|round-5|mandatory loop' "$lifecycle_implement_skill"; then
-      echo "  ERROR: implement Phase 4 must not reference the retired round-5 ceiling or mandatory loop"
-      ERRORS=$((ERRORS + 1))
-      lifecycle_loop_ok=false
-    fi
-    if [ "$lifecycle_loop_ok" = true ]; then
-      echo "  OK: Phase 4 keeps tier thresholds, per-tier round caps, delta-only follow-ups, and Minor-only exit"
-    fi
     lifecycle_details_lines() {
       awk -v mode="$1" '
         /^<details>$/ { inside = 1; state = 1; rendered = 0; next }
@@ -1032,7 +752,7 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
         ledger_ok=false
       fi
     done
-    for ledger_field in '## Run Ledger' '- Tier:' '- Children:' '- Rounds: review' '- Fix commits:' '- Wall-clock:' '- Follow-up items:' '- Outcome:'; do
+    for ledger_field in '## Run Ledger' '- Risk & complexity:' '- Children:' '- Rounds: review' '- Fix commits:' '- Wall-clock:' '- Follow-up items:' '- Outcome:'; do
       if ! printf '%s' "$ledger_collapsed" | rg -Fq -- "$ledger_field"; then
         echo "  ERROR: implement run ledger template must collapse under <details> (blank line after </summary>) and include: $ledger_field"
         ERRORS=$((ERRORS + 1))
@@ -1040,7 +760,7 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
       fi
     done
     if [ "$ledger_ok" = true ]; then
-      echo "  OK: implement prints a collapsed run ledger with tier, children, rounds, fix commits, wall-clock, and follow-ups"
+      echo "  OK: implement prints a collapsed run ledger with risk/complexity, children, rounds, fix commits, wall-clock, and follow-ups"
     fi
 
     description_shape_ok=true
@@ -1157,7 +877,7 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
     fi
 
     review_comment_ref="$plugin_dir/skills/implement/references/consolidated-review.md"
-    if ! rg -Fq 'reading `references/consolidated-review.md`' "$lifecycle_implement_skill" || \
+    if ! rg -Fq 'references/consolidated-review.md' "$lifecycle_implement_skill" || \
       ! lifecycle_details_lines outside "$review_comment_ref" | rg -q '^### Reviewer Findings$' || \
       ! lifecycle_details_lines outside "$review_comment_ref" | rg -q '^\| # \| Finding \| Reviewer \| Reviewer Severity \| Decision \|$' || \
       lifecycle_details_lines outside "$review_comment_ref" | rg -Fq 'Reasoning' || \
@@ -1168,26 +888,26 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
       echo "  OK: The consolidated review comment shows findings and decisions and collapses referee reasoning"
     fi
 
-    verify_step5=$(sed -n '/^### Step 5: Report Findings$/,$p' "$lifecycle_verify_file")
-    verify_record_keys='^(verification-record|verification-head|suite-[a-z-]+):'
+    verify_step2=$(sed -n '/^### Step 2: Post Concise Verification Comment$/,$p' "$lifecycle_verify_file")
     verify_record_ok=true
-    if [ -z "$(printf '%s\n' "$verify_step5" | lifecycle_details_lines rendered -)" ] || \
-      printf '%s\n' "$verify_step5" | lifecycle_details_lines inside - | rg -q "$verify_record_keys" || \
-      [ "$(printf '%s\n' "$verify_step5" | lifecycle_details_lines outside - | rg -c "$verify_record_keys" || echo 0)" -lt 10 ] || \
-      ! rg -Fq 'Keep every record line outside any `<details>` block, since merge-pr parses them' "$lifecycle_verify_file"; then
-      echo "  ERROR: verify must keep every verification-record line outside <details> and collapse only evidence"
+    if [ -z "$(printf '%s\n' "$verify_step2" | lifecycle_details_lines rendered -)" ] || \
+      printf '%s\n' "$verify_step2" | lifecycle_details_lines inside - | rg -q '^(### Verdict:|Verified-Head:)' || \
+      ! printf '%s\n' "$verify_step2" | lifecycle_details_lines outside - | rg -Fq '### Verdict:' || \
+      ! printf '%s\n' "$verify_step2" | lifecycle_details_lines outside - | rg -Fq 'Verified-Head:' || \
+      ! rg -Fq 'keeping `### Verdict:` and `Verified-Head:` **outside** `<details>`' "$lifecycle_verify_file"; then
+      echo "  ERROR: verify must keep Verdict and Verified-Head lines outside <details> and collapse evidence"
       ERRORS=$((ERRORS + 1))
       verify_record_ok=false
     fi
     if ! rg -Fq 'Compare each change the PR description claims with `gh pr diff <number>`' "$lifecycle_verify_file" || \
       ! rg -q '^### Claim Mismatches$' "$lifecycle_verify_file" || \
-      ! rg -Fq 'correct any Claim Mismatches it lists in the PR description' "$lifecycle_implement_skill"; then
+      ! rg -Fq 'fix any `Claim Mismatches` via `gh pr edit --body-file`' "$lifecycle_implement_skill"; then
       echo "  ERROR: verify must report PR-description claims absent from the diff, and implement must correct them before merge"
       ERRORS=$((ERRORS + 1))
       verify_record_ok=false
     fi
     if [ "$verify_record_ok" = true ]; then
-      echo "  OK: verify keeps record lines outside <details> and checks description claims against the diff"
+      echo "  OK: verify keeps Verdict and Verified-Head outside <details> and checks description claims against the diff"
     fi
 
     issue_collapse_ok=true
@@ -1211,41 +931,42 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
     if [ "$issue_collapse_ok" = true ]; then
       echo "  OK: draft-issue and refine-issue collapse Technical Context and Proposed PRs; cleanup-issue preserves <details>"
     fi
-    lifecycle_prcheck_file="$plugin_dir/skills/pr-check/SKILL.md"
     if ! rg -Fq 'Evaluate and execute the canonical `merge-pr` skill inline' "$lifecycle_implement_skill" || \
       ! rg -Fq 'do not spawn a child for it' "$lifecycle_implement_skill" || \
-      ! rg -Fq 'Evaluate the canonical `pr-check` checklist inline' "$lifecycle_merge_file" || \
+      ! rg -Fq 'never spawn a subagent' "$lifecycle_merge_file" || \
       ! rg -Fq 'do not spawn a child for it' "$lifecycle_merge_file" || \
-      ! rg -Fq 'Block only on failures of those rules' "$lifecycle_merge_file" || \
-      ! rg -Fq 'non-blocking, and are reported as WARN' "$lifecycle_merge_file" || \
-      ! rg -Fq 'A fallback check never blocks' "$lifecycle_prcheck_file" || \
       rg -q 'spawn a fresh subagent|pi-subagents|Task/subagent|isolated delegation' "$lifecycle_merge_file"; then
-      echo "  ERROR: merge-pr must evaluate pr-check inline (no child) and treat fallback-only failures as non-blocking WARNs"
+      echo "  ERROR: implement and merge-pr must execute Phase 6 inline without spawning a subagent"
       ERRORS=$((ERRORS + 1))
     else
-      echo "  OK: merge-pr evaluates pr-check inline; fallback-only failures are non-blocking"
+      echo "  OK: merge-pr runs inline without spawning a subagent"
     fi
 
-    lifecycle_bundle_missing=false
-    for lifecycle_reviewer in review-general review-correctness review-security review-architecture review-testing review-docs; do
-      if ! rg -Fq 'Read the supplied context-bundle file when provided; fetch `gh pr view <pr-number>`, its changed-file summary (`--json files`), and `--comments` only when invoked standalone without a bundle.' "$plugin_dir/skills/$lifecycle_reviewer/SKILL.md"; then
-        echo "  ERROR: $lifecycle_reviewer must support file-backed context bundle and skip fetch when bundle is provided"
+    lifecycle_inline_slice_invalid=false
+    for lifecycle_reviewer in review-general review-docs; do
+      if ! rg -Fq 'judge against **this PR'"'"'s stated slice scope**' "$plugin_dir/skills/$lifecycle_reviewer/SKILL.md"; then
+        echo "  ERROR: $lifecycle_reviewer must scope Part of #N reviews to the PR's stated slice scope"
         ERRORS=$((ERRORS + 1))
-        lifecycle_bundle_missing=true
+        lifecycle_inline_slice_invalid=true
       fi
     done
-    if ! rg -Fq 'Read the findings file and supplied context-bundle file when provided; fetch PR metadata and comments only when invoked without a bundle.' "$plugin_dir/skills/implement-address/SKILL.md"; then
-      echo "  ERROR: implement-address must support file-backed context bundle and skip fetch when bundle is provided"
+    if ! rg -Fq 'stating this slice'"'"'s scope and deferred parent-issue items' "$plugin_dir/skills/implement-code/SKILL.md"; then
+      echo "  ERROR: implement-code must state Part of #N slice scope and deferred items in the PR description"
       ERRORS=$((ERRORS + 1))
-      lifecycle_bundle_missing=true
+      lifecycle_inline_slice_invalid=true
     fi
-    if ! rg -Fq 'read the supplied context-bundle file when provided, fetching PR metadata, comments, and `--json files` only when absent' "$plugin_dir/skills/verify/SKILL.md"; then
-      echo "  ERROR: verify must support file-backed context bundle and skip fetch when bundle is provided"
+    if ! rg -Fq 'Use the inline findings supplied in the prompt when orchestrated' "$plugin_dir/skills/implement-address/SKILL.md"; then
+      echo "  ERROR: implement-address must consume inline findings when orchestrated"
       ERRORS=$((ERRORS + 1))
-      lifecycle_bundle_missing=true
+      lifecycle_inline_slice_invalid=true
     fi
-    if [ "$lifecycle_bundle_missing" = false ]; then
-      echo "  OK: File-backed context bundle skip-fetch rule enforced across reviewers, addresser, and verifier"
+    if ! rg -Fq 'verify **this slice'"'"'s stated scope and changed behavior**' "$plugin_dir/skills/verify/SKILL.md"; then
+      echo "  ERROR: verify must scope Part of #N checks to the PR's stated slice scope and changed behavior"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_inline_slice_invalid=true
+    fi
+    if [ "$lifecycle_inline_slice_invalid" = false ]; then
+      echo "  OK: Zero-scratch inline handoffs and Part of #N slice scoping enforced across workers, reviewers, and verifier"
     fi
   fi
 

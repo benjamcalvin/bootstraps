@@ -1,94 +1,54 @@
 ---
 name: verify
-description: Delegated implement-lifecycle worker: exact-head verification and live runtime evidence.
-license: MIT
-metadata:
-  version: "1.2.0"
-  tags: ["verify", "e2e", "integration", "subagent"]
-  author: benjamcalvin
+description: "Delegated implement-lifecycle worker: real-world verification by inspecting and exercising the actual work."
 ---
 
-# End-to-End Verification
+# Real-World Verification
 
-<!-- lifecycle-suite-capability: full-suite-owner -->
-
-**Suite capability: `full-suite-owner`. Sole phase authorized to produce authoritative exact-head suite signoff (at most one full execution per PR head).**
-
-Verify the PR supplied with the invocation in the real, running system. If the client leaves `$ARGUMENTS` literal, use the delegation prompt.
+Verify the PR in practice by inspecting and exercising the actual built work (use the delegation prompt if `$ARGUMENTS` is literal).
 
 ```text
 $ARGUMENTS
 ```
 
-Parse the PR number, tier, record path (`record=`), failed scenarios, and `bundle=` path from the payload; read the supplied context-bundle file when provided, fetching PR metadata, comments, and `--json files` only when absent.
+**Automated test suites are not your job.** Unit/integration suites, linters, and builds were already run by the implementer or CI; do not spend Phase 5 re-running test suites, and never report `PASS` merely because unit tests passed. Your job is **real-world, hands-on verification** using the environment and tools available.
 
-## Scope
+Parse PR number, `risk=<Low|Moderate|High>` (`Moderate` when absent), and optional `failed-scenarios=` from the prompt; inspect PR metadata, comments, and `--json files` via `gh pr view <number>`. **Stay focused on the task at hand; do not overthink.** For `Part of #N` slice PRs, verify **this slice's stated scope and changed behavior** — never return `PARTIAL` solely because deferred parent-issue items are unbuilt.
 
-**Scale to the payload's tier** (Medium when absent): **Small** — suite evidence, plus one live check only when runtime behavior changed; otherwise Small may PASS on suite evidence alone and the report states `live check skipped (Small, no runtime change)`. **Medium** — live scenarios for changed behavior; **Large** — the full Step 3 plan, including regressions and failure modes. **Re-verification**: when the payload names failed scenarios, re-run only those scenarios plus suite evidence for the new head; without `failed-scenarios`, re-run suite evidence only.
+## What to Verify
 
-## Suite evidence
+Exercise and inspect the real built artifact matching what changed:
+- **Data, queries, migrations, or pipelines** — run against representative inputs and **inspect the actual output rows, schemas, counts, edge values, and persisted state** to confirm the data genuinely looks right (not merely exit code 0).
+- **CLI, TUI, scripts, or tools** — invoke the real command/binary across realistic flags, inputs, and error cases; inspect actual stdout/stderr, exit codes, and generated files or side effects.
+- **Frontend or web UI** — launch or open the running app, navigate the affected views in a browser, exercise interactions and states, inspect layout/console/network errors, and capture **screenshots** or visual evidence.
+- **APIs, services, configs, or background jobs** — hit live endpoints/workers or load configs through the real consumer and inspect responses, state transitions, and logs.
+- **No runnable or observable real-world surface** (docs/comments only, type-only edits, or pure internal refactors with no live surface beyond automated tests) — return **Verdict: N/A** immediately without inventing busywork.
 
-Establish the target repository's authoritative verification contract. Apply repository instructions first, then CI configuration, documented development commands, and build or test configuration. Use an explicit command when the repository declares one. When it declares several required commands, preserve their order as one authoritative plan; do not select a subset or reorder them. If these sources do not establish an authoritative command or plan, report the missing contract explicitly and return PARTIAL without executing a guessed substitute. When no authoritative contract can be established or when all changed files are documentation/comments only, read `references/special-verdicts.md`.
+## Depth & Guardrails
 
-For code changes, fetch `gh pr view <number> --json headRefOid --jq .headRefOid`. Any complete authoritative evidence record for that identical SHA consumes its one-execution allowance, whether the recorded result passed or failed. Consume a matching passing record without re-executing. For a complete failing record, return FAIL and require addressing that produces a new head before another authoritative execution. Otherwise use eligible CI evidence or execute the established command or ordered plan exactly once.
-
-**CI evidence.** Before relying on one, read `references/ci-evidence.md` and satisfy every condition there; a failing, other-SHA, other-repository, or unconfirmable run is not evidence, so execute instead.
-
-**Baseline on failure.** When any authoritative command exits non-zero, read `references/baseline-on-failure.md` before classifying FAIL vs PARTIAL.
-
-**Direct file handoff.** Write the JSON verification artifact to `record=<path>` (or scratch file) with file tools or python/jq. Map comment `none`/`n/a` to JSON `null`, adding `suite-evidence` mapping each `command-<N>` pointer to `{"command": "<exact-command>", "output": "<complete-unedited-output>"}`. Do not dump escaped JSON into the LLM message.
-
-After execution, re-check `headRefOid`. If it differs from `verification-head`, report FAIL and claim no evidence for the new head.
+Scale hands-on depth to risk and complexity without inventing contrived scenarios:
+- **`Low`** — quick smoke check of the changed real-world surface and output inspection.
+- **`Moderate`** — exercise the primary changed flows and inspect real outputs, UI, or data.
+- **`High`** — exercise changed flows, realistic edge/failure cases, and boundary/state interactions, inspecting resulting data, UI, or state thoroughly.
+- **Re-verification (`failed-scenarios=<names>`):** re-verify the named scenarios (plus sanity-check directly affected output) on the current `headRefOid`.
+- **Exact-head & baseline check:** record `gh pr view <number> --json headRefOid --jq .headRefOid` before starting and re-check afterward (if moved, return **FAIL**). If startup or a live scenario fails for reasons that appear unrelated to the PR, test `git merge-base origin/<base> <head>` in a separate checkout: if the exact failure already reproduces there, return **PARTIAL** citing the merge-base SHA (pre-existing; never mergeable); if introduced by the PR, return **FAIL**. If verification requires unavailable credentials, hardware, or external systems, return **PARTIAL** naming what could not be verified rather than faking live evidence.
 
 ## Steps
 
-### Step 1: Understand the Change & Check Claims
+### Step 1: Check Claims & Real-World Behavior
+Compare each change the PR description claims with `gh pr diff <number>` and list missing claims under `### Claim Mismatches`. Exercise and inspect real-world behavior cleanly; never edit source code or docs.
 
-Compare each change the PR description claims with `gh pr diff <number>`, and list every claimed change absent from the diff under Claim Mismatches.
-
-### Step 2: Check Existing Evidence
-
-Reuse manual evidence from comments only when it has the exact command, unedited output, and exercises behavior at current head.
-
-### Step 3: Plan Scenarios
-
-Each scenario runs the real entry point end to end (trigger → changed code → observable outcome):
-- **Changed behavior** (Medium/Large; one check for Small when runtime behavior changed)
-- **Regression** (Large) — flows sharing code paths with the change
-- **Failure mode** (Large) — invalid input or denied permissions degrade gracefully
-
-### Step 4: Execute Verification
-
-Run the authoritative command or plan once on `verification-head`, capturing its exit code and output. Run planned live scenarios. Do NOT fix failing code yourself.
-
-### Step 5: Report Findings
-
-Post a concise PR comment (`gh pr comment <pr-number>`): verdict, `verification-record:v1`, Issues Found, Claim Mismatches, and collapsed Evidence. Keep every record line outside any `<details>` block, since merge-pr parses them; collapse any evidence you include. Return:
+### Step 2: Post Concise Verification Comment
+Post one `gh pr comment <pr-number>` keeping `### Verdict:` and `Verified-Head:` **outside** `<details>` (and collapsing real-world evidence under `<details>` with a blank line after `</summary>`):
 
 ```markdown
-## End-to-End Verification — PR #<number>
+## Real-World Verification — PR #<number>
 
 ### Verdict: PASS / FAIL / PARTIAL / N/A
-
-verification-record: v1
-verification-head: <full-head-sha>
-suite-result: pass | fail | missing-contract | not-required
-suite-source: executed | ci
-suite-ci-run: <run-url> | none
-suite-ci-attempt: <n> | none
-suite-command: <exact-command-or-ordered-JSON-command-array> | none
-suite-executions: 0 | 1
-suite-exit-status: <integer> | n/a
-suite-command-results:
-  - command: <exact-command>
-    result: pass | fail
-    exit-status: <integer>
-    evidence-pointer: "#/suite-evidence/command-<N>"
-suite-baseline: <merge-base-sha> <ordered-result-list> | none
-verification-record-file: <resolved-path>
+Verified-Head: <full-head-sha>
 
 ### Issues Found
-<PR-introduced bugs or regressions, and pre-existing failures labeled as such — or "None">
+<PR-introduced bugs/data/UI issues, unavailable checks, or pre-existing merge-base failures citing merge-base SHA — or "None">
 
 ### Claim Mismatches
 <claimed changes absent from the diff, or "None">
@@ -96,10 +56,6 @@ verification-record-file: <resolved-path>
 <details>
 <summary>Evidence</summary>
 
-#### <Scenario>
-**Flow:** <trigger> → <processing> → <outcome>
-**Command:** <exact command>
-**Output:** <complete output>
-**Result:** PASS / FAIL — <what this demonstrates end to end>
+<real-world checks, inspected data/outputs, CLI results, or screenshot notes>
 </details>
 ```

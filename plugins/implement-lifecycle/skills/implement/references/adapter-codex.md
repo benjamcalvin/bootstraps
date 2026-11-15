@@ -1,5 +1,5 @@
 # Codex Adapter
 
-Spawn a generic isolated subagent whose prompt begins `Use $implement-lifecycle:<skill>`, followed by the complete payload and context-bundle path. Map `balanced` to the harness's balanced/default coding model and `frontier` to its strongest model. Save the returned agent ID.
+Launch fresh children with `spawn_agent` whose prompt begins `Use $implement-lifecycle:<skill>`, followed by the complete payload. Map `balanced` to the harness's default coding model with **`reasoning_effort: "medium"`** on all `balanced` subagents (especially `review-*`, `implement-address`, and `verify`; never `"high"` on reviewers or verifiers). Map `frontier` (`implement-code` when pre-assessed `High` risk/complexity) to the strongest coding model with `reasoning_effort: "high"`. Keep the returned agent ID for continuations.
 
-For continuations (addressing feedback, follow-up delta reviews, clarifications, corrections, and re-verification), send follow-up instructions and payloads to that existing agent (`send_input` and `wait`) rather than spawning a new subagent. On the first address pass, direct the existing author agent to `Use $implement-lifecycle:implement-address`.
+For continuations (addressing feedback, follow-up delta reviews, clarifications, and re-verification), send follow-ups to that existing agent with `send_message` or `followup_task` followed by `wait_agent` rather than spawning a new subagent. Reuse the existing `implement-code` author agent directly in its Continuation Mode for addressing without loading a second skill.
