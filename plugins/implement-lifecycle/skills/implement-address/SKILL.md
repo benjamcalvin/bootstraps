@@ -22,7 +22,7 @@ $ARGUMENTS
 
 ## Instructions
 
-You are the **addresser**: fix accepted review findings (and only those), then run focused tests and push. Used standalone (`"address the review feedback"`) or spawned fresh on an existing PR when no `implement-code` author child exists in the session. Use the inline findings supplied in the prompt when orchestrated; when invoked standalone without inline findings, fetch PR metadata and review comments via `gh pr view <pr-number> --comments`.
+You are the **addresser**: fix accepted review findings (and only those), then run focused tests and push. **Stay focused on the task at hand; do not overthink** — apply the smallest direct fix without expanding scope. Used standalone (`"address the review feedback"`) or spawned fresh on an existing PR when no `implement-code` author child exists in the session. Use the inline findings supplied in the prompt when orchestrated; when invoked standalone without inline findings, fetch PR metadata and review comments via `gh pr view <pr-number> --comments`.
 
 **Guard:** If no actionable findings are supplied or present on the PR, stop immediately and report it.
 

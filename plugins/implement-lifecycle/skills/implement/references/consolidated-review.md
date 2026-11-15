@@ -5,14 +5,13 @@ Post this once per round. Reviewer findings and each referee decision stay visib
 ```markdown
 ## Review Round <N> — Consolidated Review & Referee Decisions
 
-**Reviewers run:** general<, triggered risk lenses, if any>
-**Tier:** <Small|Medium|Large> (<net changed lines> net lines)
-**Specialist rationale:** <trigger per selected lens (`review-security` / `review-correctness` / `review-docs`), or "none — triggers did not apply">
+**Reviewers:** <1 general reviewer, or N parallel general reviewers with assigned surface/focus>
+**Risk & complexity:** <Low|Moderate|High> — <brief reason>
 
 ### Reviewer Findings
-#### General
+#### Reviewer 1 (<Holistic | assigned surface/focus>)
 <returned findings verbatim under their headings>
-#### <Specialty — one per reviewer invoked; "no findings" when clean>
+#### <Reviewer 2..N — omit if single reviewer; "no findings" when clean>
 
 ### Referee Decisions
 | # | Finding | Reviewer | Reviewer Severity | Decision |

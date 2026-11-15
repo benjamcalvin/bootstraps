@@ -1,6 +1,6 @@
 interface:
   display_name: "Review General"
-  short_description: "Holistic pull request review"
-  default_prompt: "Use $implement-lifecycle:review-general to inspect this PR against its requirements and project conventions."
+  short_description: "Holistic PR review for security, simplicity, and quality"
+  default_prompt: "Use $implement-lifecycle:review-general to review this PR across security, simplicity, and quality."
 policy:
   allow_implicit_invocation: false

@@ -1,26 +1,26 @@
-# Verification Failure Loop
+# Phase 5 Failure Loop
 
-Read this reference when `verify` returns **FAIL**.
+Read this reference when `verify` returns **FAIL** and/or parallel `review-docs` returns accepted `Action Required` findings.
 
 Allow at most 2 FAIL → address → re-verify cycles; on a third FAIL, do not address again: post an escalation comment listing the unresolved failures, then print the run ledger, stop, and inform the user.
 
-## Addressing Verification Failures
+## Addressing Phase 5 Failures
 
-Format `verify`'s failures inline as Action Required findings (`| # | Finding | Severity | Details |`, with expected vs. actual and how to fix). No referee step: `verify` is self-vetting.
+Batch `verify` failures and any accepted `Action Required` doc findings into one inline Action Required table (`| # | Finding | Severity | Details |`, with expected vs. actual and how to fix).
 
 Delegate the fixes through the active harness adapter without editing code yourself: continue the existing author child (or spawn a fresh `implement-address` child if no author child exists in the run):
 
 ```text
 Payload: <pr-number> verify-<round-number>
-<inline Action Required verification findings table>
+<inline Action Required Phase 5 findings table>
 ```
 
-Verify rounds count from 1, independent of Phase 4.
+Phase 5 fix rounds count from 1, independent of Phase 4.
 
-## Scoped Re-verification
+## Scoped Re-verification & Doc Re-check
 
-After fixes are committed, continue the existing `verify` child (or spawn a fresh `verify` child if none exists / one-shot harness) with the failed scenarios, or without `failed-scenarios` when only the suite failed:
+After fixes are committed, continue only the failed Phase 5 check(s) (`verify` and/or `review-docs`, spawning fresh only if none exists / one-shot harness). For `verify`, pass the failed scenarios, or without `failed-scenarios` when only the suite failed:
 
 ```text
-Payload: <pr-number> tier=<Small|Medium|Large> [failed-scenarios=<names>]
+Payload: <pr-number> risk=<Low|Moderate|High> [failed-scenarios=<names>]
 ```

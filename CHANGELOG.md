@@ -9,17 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Breaking:** `implement-lifecycle` 4.0.0 restructures the lifecycle around orthogonal LOC size tiers and targeted risk lenses:
-  - Decouples Size Tier (`Small` ≤400, `Medium` 401–1,500, `Large` >1,500 net LOC) from Risk Lenses (`review-security`, `review-correctness`, `review-docs`, capped at 2 lenses alongside `review-general` for max 3 reviewers in Round 1), caps reviews at 2 rounds across all tiers, and runs Round 2 only when Round 1 accepted at least one `Action Required` defect
+- **Breaking:** `implement-lifecycle` 4.0.0 streamlines the lifecycle around risk & complexity, unified general review, parallel verification + docs review, and inline rule-guided merge:
+  - Replaces LOC-based line counting with pragmatic risk & complexity scaling (`Low` / `Moderate` / `High`), paired with explicit anti-overthinking guidance across orchestrator, coders, reviewers, verifiers, and merge
+  - Unifies code review under `review-general` covering security, simplicity, and quality (1 reviewer by default, scaling to 2–3 parallel `review-general` instances only when surface area or complexity warrants it; capped at 2 rounds, Round 2 only when Round 1 accepted at least one `Action Required` defect)
   - Folds continuation addressing directly into `implement-code` (Continuation Mode) so resumed author subagents do not reload a second skill mid-thread (`implement-address` stays available for standalone/existing-PR runs)
-  - Makes reviewers strictly read-only (no duplicate test/build suite execution in parallel worktrees)
-  - Replaces dual Markdown+JSON `record=<path>` and `#/suite-evidence` verification handoffs with a flat 9-line `verification-record: v2` header on the PR verification comment, adding an inline Phase 5 fast gate for docs-only PRs and non-runtime `Small` PRs
-  - Eliminates all sidecar scratch files (`state.json`, `bundle.md`, scratch findings files, and `record=<path>` JSON files) so the PR description, consolidated review comments, and inline delegation prompts serve as the sole source of truth across parallel sessions, including `Part of #N` slice scoping
-  - Tightens skill instruction byte budgets from 56 KB / 14 KB to 46 KB total across 10 skills / 12.5 KB for `implement`
+  - Moves `review-docs` into Phase 5 to run **in parallel** with verification (`verify` or inline fast gate for docs-only and non-runtime `Low` PRs), posting concise `### Verdict:` + `Verified-Head:` lines instead of JSON pointer handoffs
+  - Streamlines Phase 6 `merge-pr` to run completely inline (zero subagents) as general guidance to follow the target project's rules and `--match-head-commit`
+  - Eliminates all sidecar scratch files (`state.json`, `bundle.md`, scratch findings files, and `record=<path>` JSON files) so the PR description (including `Part of #N` slice scoping), review comments, and inline prompts are the sole source of truth across parallel sessions
+  - Tightens skill instruction byte budgets from 56 KB / 14 KB to 34 KB total across 7 skills / 11.5 KB for `implement`
 
 ### Removed
 
-- Removes overlapping `review-architecture` and `review-testing` skills, `implement/references/large-tier.md`, `bundle=<path>` scratch context bundles, scratch findings files, and file-backed JSON verification pointer handoffs (`implement-lifecycle` 4.0.0)
+- Removes `review-architecture`, `review-testing`, `review-security`, `review-correctness`, `pr-check`, `implement/references/large-tier.md`, `merge-pr/references/ci-source.md`, `verify/references/`, `bundle=<path>` scratch context bundles, scratch findings files, and file-backed JSON verification pointer handoffs (`implement-lifecycle` 4.0.0)
 
 ### Fixed
 

@@ -11,7 +11,7 @@
   "interface": {
     "displayName": "Implement Lifecycle",
     "shortDescription": "Implement, review, verify, and merge changes.",
-    "longDescription": "Run a complete implementation lifecycle with delegated coding, orthogonal LOC size tiers and targeted security, correctness, and docs risk lenses, bounded addressing, an inline fast verification gate or live runtime verification, and exact-head merge.",
+    "longDescription": "Run a pragmatic implementation lifecycle scaled by risk and complexity, with delegated coding, holistic general review (security, simplicity, quality), parallel verification and docs review, and inline rule-guided merge.",
     "developerName": "benjamcalvin",
     "category": "Developer Tools",
     "capabilities": ["Read", "Write", "Interactive"],
