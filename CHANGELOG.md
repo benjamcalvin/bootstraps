@@ -14,12 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Folds continuation addressing directly into `implement-code` (Continuation Mode) so resumed author subagents do not reload a second skill mid-thread (`implement-address` stays available for standalone/existing-PR runs)
   - Makes reviewers strictly read-only (no duplicate test/build suite execution in parallel worktrees)
   - Replaces dual Markdown+JSON `record=<path>` and `#/suite-evidence` verification handoffs with a flat 9-line `verification-record: v2` header on the PR verification comment, adding an inline Phase 5 fast gate for docs-only PRs and non-runtime `Small` PRs
-  - Persists orchestrator `state.json` alongside scratch `bundle.md` so agent IDs, tier, rounds, and phase timestamps survive context compactions, and scopes `Part of #N` slices to their slice contract
+  - Eliminates all sidecar scratch files (`state.json`, `bundle.md`, scratch findings files, and `record=<path>` JSON files) so the PR description, consolidated review comments, and inline delegation prompts serve as the sole source of truth across parallel sessions, including `Part of #N` slice scoping
   - Tightens skill instruction byte budgets from 56 KB / 14 KB to 46 KB total across 10 skills / 12.5 KB for `implement`
 
 ### Removed
 
-- Removes overlapping `review-architecture` and `review-testing` skills, `implement/references/large-tier.md`, and file-backed JSON verification pointer handoffs (`implement-lifecycle` 4.0.0)
+- Removes overlapping `review-architecture` and `review-testing` skills, `implement/references/large-tier.md`, `bundle=<path>` scratch context bundles, scratch findings files, and file-backed JSON verification pointer handoffs (`implement-lifecycle` 4.0.0)
 
 ### Fixed
 

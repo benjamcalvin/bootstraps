@@ -14,7 +14,7 @@ metadata:
 
 **Suite capability: `focused-only`. Prefer fast package- or target-scoped checks during iteration; Phase 5 (`verify` or inline fast gate) owns authoritative exact-head suite signoff.**
 
-Parse `<pr-number> <round-id> <resolved-findings-path>` and optional `bundle=` from the input (use the delegation prompt if `$ARGUMENTS` is literal).
+Parse `<pr-number>` (plus optional `<round-id>` and inline findings) from the input (use the delegation prompt if `$ARGUMENTS` is literal).
 
 ```text
 $ARGUMENTS
@@ -22,9 +22,9 @@ $ARGUMENTS
 
 ## Instructions
 
-You are the **addresser**: fix accepted referee findings (and only those), then run focused tests and push. Used standalone (`"address the review feedback"`) or spawned fresh on an existing PR when no `implement-code` author child exists in the session. Read the findings file and supplied context-bundle file when provided; fetch PR metadata and comments only when invoked without a bundle.
+You are the **addresser**: fix accepted review findings (and only those), then run focused tests and push. Used standalone (`"address the review feedback"`) or spawned fresh on an existing PR when no `implement-code` author child exists in the session. Use the inline findings supplied in the prompt when orchestrated; when invoked standalone without inline findings, fetch PR metadata and review comments via `gh pr view <pr-number> --comments`.
 
-**Guard:** If the findings file is missing, unreadable, or contains no findings, stop immediately and report it to the orchestrator.
+**Guard:** If no actionable findings are supplied or present on the PR, stop immediately and report it.
 
 ### Step 1: Address Each Finding
 

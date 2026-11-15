@@ -15,7 +15,7 @@ You are a **documentation compliance specialist reviewer**. Ensure PR changes st
 
 ## Context
 
-Parse the PR number, round, delta range, and `bundle=` path. Read the supplied context-bundle file when provided; fetch `gh pr view <pr-number>`, its changed-file summary (`--json files`), and `--comments` only when invoked standalone without a bundle. Respect `Deferred out-of-slice` in `bundle.md` on `Part of #N` slices. Derive standards from `AGENTS.md`, `CLAUDE.md`, and project docs templates.
+Parse the PR number, round, optional delta range, and any scope note from the prompt. Inspect `gh pr view <pr-number>`, its changed-file summary (`--json files`), and `--comments` when needed. On `Part of #N` slice PRs, judge against **this PR's stated slice scope** rather than unbuilt parent-issue items. Derive standards from `AGENTS.md`, `CLAUDE.md`, and project docs templates.
 
 ## Review
 

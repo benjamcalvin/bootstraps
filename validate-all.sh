@@ -471,14 +471,13 @@ PYEOF
       ERRORS=$((ERRORS + 1))
       lifecycle_mapping_invalid=true
     fi
-    if ! rg -Fq 'state.json' "$lifecycle_implement_skill" || \
-      ! rg -Fq 'Continuation Mode' "$plugin_dir/skills/implement-code/SKILL.md"; then
-      echo "  ERROR: implement must persist state.json and implement-code must document Continuation Mode"
+    if ! rg -Fq 'Continuation Mode' "$plugin_dir/skills/implement-code/SKILL.md"; then
+      echo "  ERROR: implement-code must document Continuation Mode"
       ERRORS=$((ERRORS + 1))
       lifecycle_mapping_invalid=true
     fi
     if [ "$lifecycle_mapping_invalid" = false ]; then
-      echo "  OK: Canonical lifecycle mapping (7 workers), state.json persistence, and progressive-disclosure adapters are valid"
+      echo "  OK: Canonical lifecycle mapping (7 workers), Continuation Mode, and progressive-disclosure adapters are valid"
     fi
 
     lifecycle_continuation_invalid=false
@@ -566,10 +565,10 @@ PYEOF
     fi
 
     while IFS= read -r lifecycle_v1_reference; do
-      echo "  ERROR: implement-lifecycle skill or reference retains retired v1 evidence contract: $lifecycle_v1_reference"
+      echo "  ERROR: implement-lifecycle skill or reference retains retired v1 evidence or sidecar scratch-file contract: $lifecycle_v1_reference"
       ERRORS=$((ERRORS + 1))
       lifecycle_suite_contract_invalid=true
-    done < <(rg -n 'verification-record: v1|suite-evidence|\brecord=' "$plugin_dir/skills" -g 'SKILL.md' -g '**/references/*.md' || true)
+    done < <(rg -n 'verification-record: v1|suite-evidence|\brecord=|state\.json|\bbundle=|bundle\.md|resolved-findings-path|resolved-verify-findings-path' "$plugin_dir/skills" -g 'SKILL.md' -g '**/references/*.md' || true)
 
     while IFS= read -r lifecycle_prohibited_reference; do
       echo "  ERROR: Distributed lifecycle skill contains a source-repository or language-specific runtime assumption: $lifecycle_prohibited_reference"
@@ -908,7 +907,7 @@ PYEOF
     lifecycle_verify_scope_ok=true
     for lifecycle_scope_check in \
       "$lifecycle_verify_loop_ref|Allow at most 2 FAIL → address → re-verify cycles; on a third FAIL, do not address again" \
-      "$lifecycle_implement_skill|Payload: <pr-number> tier=<Small|Medium|Large> [failed-scenarios=<names>] bundle=<resolved-context-bundle-path>" \
+      "$lifecycle_implement_skill|Payload: <pr-number> tier=<Small|Medium|Large> [failed-scenarios=<names>]" \
       "$lifecycle_verify_file|**Small** — suite evidence, plus one live check only when runtime behavior changed" \
       "$lifecycle_verify_file|re-run only those scenarios plus suite evidence for the new head" \
       "$lifecycle_verify_baseline_ref|When the head's suite fails, run each failing command once on the PR's merge-base" \
@@ -1281,26 +1280,31 @@ PYEOF
       echo "  OK: merge-pr evaluates pr-check inline; fallback-only failures are non-blocking"
     fi
 
-    lifecycle_bundle_missing=false
+    lifecycle_inline_slice_invalid=false
     for lifecycle_reviewer in review-general review-correctness review-security review-docs; do
-      if ! rg -Fq 'Read the supplied context-bundle file when provided; fetch `gh pr view <pr-number>`, its changed-file summary (`--json files`), and `--comments` only when invoked standalone without a bundle.' "$plugin_dir/skills/$lifecycle_reviewer/SKILL.md"; then
-        echo "  ERROR: $lifecycle_reviewer must support file-backed context bundle and skip fetch when bundle is provided"
+      if ! rg -Fq 'judge against **this PR'"'"'s stated slice scope**' "$plugin_dir/skills/$lifecycle_reviewer/SKILL.md"; then
+        echo "  ERROR: $lifecycle_reviewer must scope Part of #N reviews to the PR's stated slice scope"
         ERRORS=$((ERRORS + 1))
-        lifecycle_bundle_missing=true
+        lifecycle_inline_slice_invalid=true
       fi
     done
-    if ! rg -Fq 'Read the findings file and supplied context-bundle file when provided; fetch PR metadata and comments only when invoked without a bundle.' "$plugin_dir/skills/implement-address/SKILL.md"; then
-      echo "  ERROR: implement-address must support file-backed context bundle and skip fetch when bundle is provided"
+    if ! rg -Fq 'stating this slice'"'"'s scope and deferred parent-issue items' "$plugin_dir/skills/implement-code/SKILL.md"; then
+      echo "  ERROR: implement-code must state Part of #N slice scope and deferred items in the PR description"
       ERRORS=$((ERRORS + 1))
-      lifecycle_bundle_missing=true
+      lifecycle_inline_slice_invalid=true
     fi
-    if ! rg -Fq 'read the supplied context-bundle file when provided, fetching PR metadata, comments, and `--json files` only when absent' "$plugin_dir/skills/verify/SKILL.md"; then
-      echo "  ERROR: verify must support file-backed context bundle and skip fetch when bundle is provided"
+    if ! rg -Fq 'Use the inline findings supplied in the prompt when orchestrated' "$plugin_dir/skills/implement-address/SKILL.md"; then
+      echo "  ERROR: implement-address must consume inline findings when orchestrated"
       ERRORS=$((ERRORS + 1))
-      lifecycle_bundle_missing=true
+      lifecycle_inline_slice_invalid=true
     fi
-    if [ "$lifecycle_bundle_missing" = false ]; then
-      echo "  OK: File-backed context bundle skip-fetch rule enforced across reviewers, addresser, and verifier"
+    if ! rg -Fq 'verify **this slice'"'"'s stated scope and changed behavior**' "$plugin_dir/skills/verify/SKILL.md"; then
+      echo "  ERROR: verify must scope Part of #N checks to the PR's stated slice scope and changed behavior"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_inline_slice_invalid=true
+    fi
+    if [ "$lifecycle_inline_slice_invalid" = false ]; then
+      echo "  OK: Zero-scratch inline handoffs and Part of #N slice scoping enforced across workers, reviewers, and verifier"
     fi
   fi
 

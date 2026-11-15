@@ -50,7 +50,7 @@ Follow target commit policy; fallback `<type>: <summary>` (imperative, no period
 
 ### Step 6: Sync, Push, and Create PR
 
-Rebase on target base branch (default branch from `gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name'`, or parent branch if stacked), rerun affected focused checks, and push `-u origin HEAD`. Use target PR template or `references/pr-description.md`. Link issue with `Closes #N` only when fully complete, else `Part of #N`.
+Rebase on target base branch (default branch from `gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name'`, or parent branch if stacked), rerun affected focused checks, and push `-u origin HEAD`. Use target PR template or `references/pr-description.md`. Link issue with `Closes #N` only when fully complete, else `Part of #N` (stating this slice's scope and deferred parent-issue items in `## Design`).
 
 ### Step 7: Return Result
 
@@ -58,4 +58,4 @@ Return exact summary (`PR_NUMBER:`, `PR_TITLE:`, `SUMMARY:`) plus any risk/runti
 
 ### Step 8: Continuation Mode (Addressing Findings)
 
-When continued/resumed with `<pr-number> <round-or-verify-id> <resolved-findings-path> [bundle=<path>]`, read the findings file (and `bundle=` if updated; stop and report if findings file is missing or empty). For each finding, read the code and either **Apply**, **Partially apply** (explain better fix), **Reject with justification** (citing specs, ADRs, or conventions — never ungrounded), or **Escalate**. Preserve strong assertions when compressing tests, keep comments within the allow-list (delete none unless made false), run focused tests/linters and `docs-check` when `docs-check.toml` exists, inspect your fix diff, commit as `fix: address review round <round> — <description>`, `git push`, and return a `| # | Finding | Action | Details |` table with `**Tests:**` and `**Commits:**` lines.
+When continued/resumed with `<pr-number> <round-or-verify-id>` and inline findings (stop and report if no findings are supplied), read the code around each finding and either **Apply**, **Partially apply** (explain better fix), **Reject with justification** (citing specs, ADRs, or conventions — never ungrounded), or **Escalate**. Preserve strong assertions when compressing tests, keep comments within the allow-list (delete none unless made false), run focused tests/linters and `docs-check` when `docs-check.toml` exists, inspect your fix diff, commit as `fix: address review round <round> — <description>`, `git push`, and return a `| # | Finding | Action | Details |` table with `**Tests:**` and `**Commits:**` lines.

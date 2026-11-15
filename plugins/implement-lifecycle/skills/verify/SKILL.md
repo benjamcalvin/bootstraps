@@ -20,7 +20,7 @@ Verify the PR in the real, running system (use the delegation prompt if `$ARGUME
 $ARGUMENTS
 ```
 
-Parse PR number, `tier=`, optional `failed-scenarios=`, and `bundle=` path; read the supplied context-bundle file when provided, fetching PR metadata, comments, and `--json files` only when absent. For `Part of #N` slices, verify **this slice's acceptance criteria and changed behavior** — never return `PARTIAL` solely because items listed under `Deferred out-of-slice` are unbuilt.
+Parse PR number, `tier=`, and optional `failed-scenarios=` from the prompt; inspect PR metadata, comments, and `--json files` via `gh pr view <number>`. For `Part of #N` slice PRs, verify **this slice's stated scope and changed behavior** — never return `PARTIAL` solely because deferred parent-issue items are unbuilt.
 
 ## Scope
 

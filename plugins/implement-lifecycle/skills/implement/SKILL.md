@@ -27,7 +27,7 @@ Inspect the branch and recent commits before delegating.
 
 ## Instructions
 
-You are a **lean orchestrator**: delegate and referee; do not implement. **Never edit source code, tests, or docs.** Run git/gh and focused checks for refereeing, read code to verify findings, and keep scratch files outside the repo (harness scratch or system-provided temporary directory). **You are the sole PR publisher** (except `verify`'s comment): post **one consolidated comment per review round**. Drive autonomously; pause only for genuine ambiguity or escalation.
+You are a **lean orchestrator**: delegate and referee; do not implement. **Never edit source code, tests, or docs.** Run git/gh and focused checks for refereeing and read code to verify findings. **You are the sole PR publisher** (except `verify`'s comment): post **one consolidated comment per review round**. Drive autonomously; pause only for genuine ambiguity or escalation.
 
 ### Harness-neutral delegation
 
@@ -48,10 +48,7 @@ Map tiers via the active adapter. **Never silently inherit the orchestrator mode
 
 Read only your harness adapter once at start (`references/adapter-claude.md`, `references/adapter-codex.md`, `references/adapter-agy.md`, `references/adapter-pi.md`, or `references/adapter-generic.md`). Wait for all selected reviewers; if any result lacks all four canonical headings, read `references/reviewer-recovery.md` before refereeing.
 
-**Scratch state & context bundle.** Keep one scratch directory per PR outside the codebase:
-- **`state.json`**: `{ pr, issue, link_mode, size_tier, lenses, round, last_reviewed_head, fix_commits, phase_times, agents }`. Update on every spawn, round, and phase transition; re-read before delegating, continuing, or printing the Run Ledger so compactions never orphan subagents or lose timings.
-- **`bundle.md`** (`bundle=<resolved-context-bundle-path>`): task/issue summary, **effective acceptance contract**, PR body, changed files, prior referee decisions, and Round 2 delta `<prev-head>..<head>`. Refresh each round and pass `bundle=` to every post-PR worker to skip redundant `gh pr view` fetches.
-- **Slice contract (`Part of #N`):** For `Part of #N` slice PRs, scope `bundle.md`'s effective contract to **this PR's slice** and list remaining parent items under `Deferred out-of-slice` so reviewers and `verify` never penalize or return `PARTIAL` for unfinished sibling slices.
+**PR & prompt as source of truth (no sidecar scratch files).** Do not write state, bundle, or scratch findings files. Keep active child handles, size tier, round, and phase start times in conversation context (recovering from PR comments, `gh pr view --json files`, and `git log` or spawning fresh children if compacted). For `Part of #N` slice PRs, scope review, refereeing, and verification to **this PR's slice** as stated in the PR description and prompt — never penalize or fail a slice PR for deferred parent-issue items.
 
 ### Entry Point
 
@@ -59,7 +56,7 @@ Leading token: `#N` → issue criteria; bare number → `gh pr view <n> --json n
 
 ### Phase 1–3: Implement & Create PR
 
-**Never edit code or docs.** Delegate `implement-code`: `Payload: <issue-number-or-0> <task, criteria, instructions>`. Record PR number and author handle in `state.json`. If from an issue, comment: `## In Progress` / `Implementation PR created: #<pr-number> — <PR title>`.
+**Never edit code or docs.** Delegate `implement-code`: `Payload: <issue-number-or-0> <task, criteria, instructions>`. Keep the PR number and author child handle for continuations. If from an issue, comment: `## In Progress` / `Implementation PR created: #<pr-number> — <PR title>`.
 
 ### Size Tier & Risk Lenses
 
@@ -71,7 +68,7 @@ Pre-classify `frontier` only if likely > 1,500 net lines. Once PR exists, count 
 | Medium | 401–1,500 changed lines |
 | Large | > 1,500 changed lines |
 
-**Size tier is determined strictly by net changed lines; risk paths select specialist lenses without escalating the size tier.** Save `size_tier` and `lenses` in `state.json`.
+**Size tier is determined strictly by net changed lines; risk paths select specialist lenses without escalating the size tier.**
 
 ### Phase 4: Review/Address Loop {#review-loop}
 
@@ -100,41 +97,41 @@ If all 3 trigger, keep `review-security` + `review-correctness` (or keep `review
 
 **Follow-up Round 2:** when Round 1 accepted `Action Required` solely from `review-docs` and the delta touches docs only, continue `review-docs` only; otherwise continue `review-general` plus specialists with accepted `Action Required` findings (and `review-docs` if the delta changes documented behavior).
 
-Run in parallel (`Payload: Review PR #<pr-number>, round <N>[, delta <prev>..<head>] bundle=<resolved-context-bundle-path>`). Reviewers are read-only and never post to GitHub or run suites. Follow-up reviewers judge only that range.
+Run in parallel (`Payload: Review PR #<pr-number>, round <N>[, delta <prev>..<head>][ — <task or slice scope note>]`). Reviewers are read-only and never post to GitHub or run suites. Follow-up reviewers judge only that range.
 
 #### Step B: Referee Evaluation
 
-Verify every finding against code, collapsing duplicates first (message reviewer if ambiguous). Accept verified violations of criteria/invariants (respecting `Deferred out-of-slice`) with the smallest fix. Reject unproven items and reject findings outside the delta as "out of delta" (record as follow-ups; never open a round). **Scope controls:** reject unrequested dependencies, subsystems, public interfaces, or layers; simplify over-engineered code instead of hardening it. Zero survivors → Step C clean comment → Phase 5.
+Verify every finding against code, collapsing duplicates first (message reviewer if ambiguous). Accept verified violations of criteria/invariants (respecting `Part of #N` slice scope) with the smallest fix. Reject unproven items and reject findings outside the delta as "out of delta" (record as follow-ups; never open a round). **Scope controls:** reject unrequested dependencies, subsystems, public interfaces, or layers; simplify over-engineered code instead of hardening it. Zero survivors → Step C clean comment → Phase 5.
 
 #### Step C: Post Consolidated Review
 
-Post **one** comment via `references/consolidated-review.md`. Write accepted findings only to a scratch findings file (`# Filtered Findings — Round <N>` + `| # | Finding | Severity | Details |` with `file:line` and fix).
+Post **one** comment via `references/consolidated-review.md`.
 
 #### Step D: Invoke Addresser
 
-Continue the author child (`implement-code` Continuation Mode), or spawn fresh `implement-address` if none exists (`Payload: <pr-number> <round-number> <resolved-findings-path> bundle=<resolved-context-bundle-path>`). Record fix commits in `state.json`.
+Continue the author child (`implement-code` Continuation Mode), or spawn fresh `implement-address` if none exists, passing only accepted findings inline (`Payload: <pr-number> <round-number>` followed by `| # | Finding | Severity | Details |` with `file:line` and smallest fix).
 
 #### Step E: Next Round
 
-Never run a clean-confirmation round. Rejected-only or non-blocking Round 1 exits to Phase 5 after Step D. If cap exit leaves unresolved `Action Required`, read `references/convergence-recovery.md`. Otherwise update `state.json` (`round: 2`, `<reviewed head>..<new head>`), refresh `bundle.md`, and return to Step A.
+Never run a clean-confirmation round. Rejected-only or non-blocking Round 1 exits to Phase 5 after Step D. If cap exit leaves unresolved `Action Required`, read `references/convergence-recovery.md`. Otherwise advance to Round 2 with delta `<reviewed head>..<new head>` and return to Step A.
 
 ### Phase 5: Verification Gate
 
-**Inline Fast Gate (no `verify` child):** Run Phase 5 inline per `verify/SKILL.md`, posting the flat `verification-record: v2` comment and logging `verify: inline (fast-gate)` in `state.json`, when **no live check is needed**:
+**Inline Fast Gate (no `verify` child):** Run Phase 5 inline per `verify/SKILL.md`, posting the flat `verification-record: v2` comment and recording `verify: inline (fast-gate)` for the Run Ledger, when **no live check is needed**:
 1. Docs/comments only (`Verdict: N/A`, `suite-result: not-required`, `live-check: skipped`), OR
 2. `Small` tier with **no runtime behavior, UI, CLI, API, migration, or deploy change**, where exact-head CI satisfies `verify`'s CI-evidence rules (`suite-source: ci`) or the authoritative command passes once inline on `verification-head` (`suite-source: executed`). On inline suite failure, spawn `verify` for merge-base baselining.
 
-**Delegated `verify` (`balanced`):** Spawn `verify` when runtime behavior changed (`Small` runtime changes; all executable `Medium`/`Large`) or baselining is needed: `Payload: <pr-number> tier=<Small|Medium|Large> [failed-scenarios=<names>] bundle=<resolved-context-bundle-path>` (`tier=` from `state.json`; never re-classify).
+**Delegated `verify` (`balanced`):** Spawn `verify` when runtime behavior changed (`Small` runtime changes; all executable `Medium`/`Large`) or baselining is needed: `Payload: <pr-number> tier=<Small|Medium|Large> [failed-scenarios=<names>]` (keep the classified `tier=`; never re-classify).
 
 **PASS** / **N/A** → confirm latest comment has valid `verification-record: v2` matching `headRefOid`, fix any `Claim Mismatches` via `gh pr edit --body-file`, then Phase 6. **FAIL** → capped at 2 cycles via `references/verify-fail-loop.md`. **PARTIAL** (missing contract, human-only check, pre-existing failures) → stop and print run ledger; never address or merge.
 
 ### Phase 6: Merge & Finalize
 
-Evaluate and execute the canonical `merge-pr` skill inline against `<pr-number>`; do not spawn a child for it. Update `state.json`, print the run ledger, and report the result.
+Evaluate and execute the canonical `merge-pr` skill inline against `<pr-number>`; do not spawn a child for it. Print the run ledger and report the result.
 
 ## Run ledger
 
-Track phase times, spawns/continuations, and fix commits in `state.json`. On every terminal path, re-read `state.json` and `references/run-ledger.md` and print the collapsed run ledger.
+Track phase times, spawns/continuations, and fix commits across the run. On every terminal path, read `references/run-ledger.md` and print the collapsed run ledger.
 
 ## Escalation
 
