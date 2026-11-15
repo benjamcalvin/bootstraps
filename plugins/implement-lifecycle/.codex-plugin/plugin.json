@@ -11,7 +11,7 @@
   "interface": {
     "displayName": "Implement Lifecycle",
     "shortDescription": "Implement, review, verify, and merge changes.",
-    "longDescription": "Run a pragmatic implementation lifecycle scaled by risk and complexity, with delegated coding, holistic general review (security, simplicity, quality), parallel verification and docs review, and inline rule-guided merge.",
+    "longDescription": "Run a pragmatic implementation lifecycle scaled by risk and complexity, with delegated coding, holistic general review (security, simplicity, quality), parallel real-world verification and docs review, and inline rule-guided merge.",
     "developerName": "benjamcalvin",
     "category": "Developer Tools",
     "capabilities": ["Read", "Write", "Interactive"],

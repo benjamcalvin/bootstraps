@@ -543,37 +543,15 @@ PYEOF
       echo "  OK: Lifecycle reviewer skills are strictly read-only and do not post to GitHub or duplicate test runs"
     fi
 
-    lifecycle_focused_contract="**Suite capability: \`focused-only\`. Prefer fast package- or target-scoped checks during iteration; Phase 5 (\`verify\` or inline fast gate) owns authoritative exact-head suite signoff.**"
-    lifecycle_orchestrator_contract="**Suite capability: \`orchestrator\`. Use fast package- or target-scoped checks when refereeing in Phases 1–4; execute the authoritative suite at most once per head in Phase 5 when running the inline fast gate, otherwise delegate Phase 5 to \`verify\`.**"
-    lifecycle_owner_contract="**Suite capability: \`full-suite-owner\`. Sole phase authorized to produce authoritative exact-head suite signoff (at most one full execution per PR head).**"
-    lifecycle_focused_skills=(
-      implement-code implement-address review-general review-docs merge-pr
-    )
+    lifecycle_verify_file="$plugin_dir/skills/verify/SKILL.md"
     lifecycle_prohibited_runtime_pattern='((^|[^[:alnum:]_.-])(\./)?validate-all\.sh([^[:alnum:]_.-]|$)|(^|[^[:alnum:]_])(go\.mod|go\.work|mise|golangci-lint|pinned[[:space:]]+go|go[[:space:]-]+toolchain|go[[:space:]]+1\.[0-9]+)([^[:alnum:]_]|$)|(^|[^[:alnum:]_])go[[:space:]]+test([^[:alnum:]_-]|$)|(^|[^[:alnum:]_])/tmp(/|[^[:alnum:]_]|$))'
     lifecycle_suite_contract_invalid=false
-    for lifecycle_skill in "${lifecycle_focused_skills[@]}"; do
-      lifecycle_skill_file="$plugin_dir/skills/$lifecycle_skill/SKILL.md"
-      if [ "$(rg -Fc '<!-- lifecycle-suite-capability: focused-only -->' "$lifecycle_skill_file")" -ne 1 ] || \
-        [ "$(rg -Fc "$lifecycle_focused_contract" "$lifecycle_skill_file")" -ne 1 ]; then
-        echo "  ERROR: $lifecycle_skill must declare focused-only exactly once with the canonical contract"
-        ERRORS=$((ERRORS + 1))
-        lifecycle_suite_contract_invalid=true
-      fi
-    done
-
-    if [ "$(rg -Fc '<!-- lifecycle-suite-capability: orchestrator -->' "$lifecycle_implement_skill")" -ne 1 ] || \
-      [ "$(rg -Fc "$lifecycle_orchestrator_contract" "$lifecycle_implement_skill")" -ne 1 ] || \
-      [ "$(rg -l '<!-- lifecycle-suite-capability: orchestrator -->' "$plugin_dir/skills"/*/SKILL.md | wc -l | tr -d ' ')" -ne 1 ]; then
-      echo "  ERROR: implement must be the sole orchestrator with the canonical contract"
-      ERRORS=$((ERRORS + 1))
-      lifecycle_suite_contract_invalid=true
-    fi
 
     while IFS= read -r lifecycle_v1_reference; do
-      echo "  ERROR: implement-lifecycle skill or reference retains retired v1 evidence or sidecar scratch-file contract: $lifecycle_v1_reference"
+      echo "  ERROR: implement-lifecycle skill or reference retains retired v1 evidence, suite-capability, or sidecar scratch-file contract: $lifecycle_v1_reference"
       ERRORS=$((ERRORS + 1))
       lifecycle_suite_contract_invalid=true
-    done < <(rg -n 'verification-record:|suite-evidence|\brecord=|state\.json|\bbundle=|bundle\.md|resolved-findings-path|resolved-verify-findings-path|pr-check|review-security|review-correctness' "$plugin_dir/skills" -g 'SKILL.md' -g '**/references/*.md' || true)
+    done < <(rg -n 'verification-record:|suite-evidence|\brecord=|state\.json|\bbundle=|bundle\.md|resolved-findings-path|resolved-verify-findings-path|pr-check|review-security|review-correctness|lifecycle-suite-capability|full-suite-owner|focused-only|fast-gate' "$plugin_dir/skills" -g 'SKILL.md' -g '**/references/*.md' || true)
 
     while IFS= read -r lifecycle_prohibited_reference; do
       echo "  ERROR: Distributed lifecycle skill contains a source-repository or language-specific runtime assumption: $lifecycle_prohibited_reference"
@@ -615,45 +593,14 @@ PYEOF
       fi
     done
 
-    lifecycle_capability_allows_command() {
-      local capability="$1"
-      local candidate_plan="$2"
-      local authoritative_plan="$3"
-      if [ "$capability" = full-suite-owner ]; then
-        return 0
-      fi
-      ! jq -e -n --argjson candidate "$candidate_plan" --argjson authoritative "$authoritative_plan" \
-        '$candidate == $authoritative' > /dev/null 2>&1
-    }
-    lifecycle_capability_fixtures=(
-      'focused-authoritative-plan|focused-only|["npm run lint","npm test"]|["npm run lint","npm test"]|reject'
-      'focused-equivalent-json-plan|focused-only|["npm run lint", "npm test"]|["npm run lint","npm test"]|reject'
-      'focused-nonauthoritative-command|focused-only|["npm run lint -- --changed"]|["npm run lint","npm test"]|accept'
-      'owner-authoritative-plan|full-suite-owner|["npm run lint","npm test"]|["npm run lint","npm test"]|accept'
-    )
-    for lifecycle_fixture in "${lifecycle_capability_fixtures[@]}"; do
-      IFS='|' read -r lifecycle_fixture_name lifecycle_capability lifecycle_candidate_plan lifecycle_authoritative_plan lifecycle_expected_outcome <<< "$lifecycle_fixture"
-      lifecycle_actual_outcome='reject'
-      if lifecycle_capability_allows_command "$lifecycle_capability" "$lifecycle_candidate_plan" "$lifecycle_authoritative_plan"; then
-        lifecycle_actual_outcome='accept'
-      fi
-      if [ "$lifecycle_actual_outcome" != "$lifecycle_expected_outcome" ]; then
-        echo "  ERROR: Suite capability fixture $lifecycle_fixture_name expected $lifecycle_expected_outcome, got $lifecycle_actual_outcome"
-        ERRORS=$((ERRORS + 1))
-        lifecycle_suite_contract_invalid=true
-      fi
-    done
-
-    lifecycle_verify_file="$plugin_dir/skills/verify/SKILL.md"
-    if [ "$(rg -Fc '<!-- lifecycle-suite-capability: full-suite-owner -->' "$lifecycle_verify_file")" -ne 1 ] || \
-      [ "$(rg -Fc "$lifecycle_owner_contract" "$lifecycle_verify_file")" -ne 1 ] || \
-      [ "$(rg -l '<!-- lifecycle-suite-capability: full-suite-owner -->' "$plugin_dir/skills"/*/SKILL.md | wc -l | tr -d ' ')" -ne 1 ]; then
-      echo "  ERROR: verify must be the sole full-suite-owner with the canonical contract"
+    if ! sed -n '/^### Step 4: Verify and Self-Review$/,/^### Step 5: /p' "$plugin_dir/skills/implement-code/SKILL.md" | rg -Fq 'automated tests, linters, and build before opening the PR' || \
+      ! rg -Fq 'Automated test suites are not your job.' "$lifecycle_verify_file"; then
+      echo "  ERROR: implement-code must own automated tests/linters/build while verify focuses strictly on real-world checks"
       ERRORS=$((ERRORS + 1))
       lifecycle_suite_contract_invalid=true
     fi
     if [ "$lifecycle_suite_contract_invalid" = false ]; then
-      echo "  OK: Lifecycle suite capabilities reserve the authoritative suite for verify"
+      echo "  OK: Coders own automated tests/builds, verify owns real-world checks, and retired contracts remain absent"
     fi
 
     if rg -q 'Phase 4\.5|Docs Compliance Gate|lifecycle-docs-gate' "$lifecycle_implement_skill" ||       sed -n '/^#### Step A/,/^#### Step B/p' "$lifecycle_implement_skill" | rg -Fq 'review-docs'; then
@@ -756,7 +703,7 @@ PYEOF
     fi
 
     lifecycle_verify_merge_ok=true
-    for vm_check in       "$lifecycle_verify_loop_ref|Allow at most 2 FAIL → address → re-verify cycles; on a third FAIL, do not address again"       "$lifecycle_verify_loop_ref|without \`failed-scenarios\` when only the suite failed"       "$lifecycle_implement_skill|Payload: <pr-number> risk=<Low|Moderate|High> [failed-scenarios=<names>]"       "$lifecycle_implement_skill|never re-classify"       "$lifecycle_verify_file|Verified-Head: <full-head-sha>"       "$lifecycle_verify_file|git merge-base"       "$lifecycle_verify_file|return **PARTIAL** citing the merge-base SHA"       "$lifecycle_verify_file|without \`failed-scenarios\`, re-run suite evidence only"       "$lifecycle_implement_skill|Evaluate and execute the canonical \`merge-pr\` skill inline against \`<pr-number>\`; do not spawn a child for it."       "$lifecycle_merge_file|follow the target project's rules"       "$lifecycle_merge_file|Ready for Human Merge"       "$lifecycle_merge_file|--match-head-commit"; do
+    for vm_check in       "$lifecycle_verify_loop_ref|Allow at most 2 FAIL → address → re-verify cycles; on a third FAIL, do not address again"       "$lifecycle_verify_loop_ref|failed-scenarios="       "$lifecycle_implement_skill|Payload: <pr-number> risk=<Low|Moderate|High> [failed-scenarios=<names>]"       "$lifecycle_implement_skill|never re-classify"       "$lifecycle_implement_skill|never spawn \`verify\` just to re-run unit tests"       "$lifecycle_implement_skill|verify: skipped (no live surface)"       "$lifecycle_verify_file|Automated test suites are not your job."       "$lifecycle_verify_file|**Data"       "$lifecycle_verify_file|**CLI"       "$lifecycle_verify_file|**Frontend"       "$lifecycle_verify_file|screenshots"       "$lifecycle_verify_file|Verified-Head: <full-head-sha>"       "$lifecycle_verify_file|git merge-base"       "$lifecycle_verify_file|return **PARTIAL** citing the merge-base SHA"       "$lifecycle_implement_skill|Evaluate and execute the canonical \`merge-pr\` skill inline against \`<pr-number>\`; do not spawn a child for it."       "$lifecycle_merge_file|follow the target project's rules"       "$lifecycle_merge_file|Ready for Human Merge"       "$lifecycle_merge_file|--match-head-commit"; do
       if ! rg -Fq -- "${vm_check#*|}" "${vm_check%%|*}"; then
         echo "  ERROR: Verification or inline merge invariant missing from $(basename "$(dirname "${vm_check%%|*}")"): ${vm_check#*|}"
         ERRORS=$((ERRORS + 1))
@@ -769,7 +716,7 @@ PYEOF
       lifecycle_verify_merge_ok=false
     fi
     if [ "$lifecycle_verify_merge_ok" = true ]; then
-      echo "  OK: Verification baselines failures at merge-base (max 2 cycles) and merge-pr runs inline following project rules"
+      echo "  OK: Verification focuses on real-world checks (max 2 cycles) and merge-pr runs inline following project rules"
     fi
 
     lifecycle_details_lines() {

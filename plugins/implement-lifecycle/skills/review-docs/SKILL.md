@@ -5,10 +5,6 @@ description: "Delegated implement-lifecycle worker: documentation compliance and
 
 # Documentation Compliance Review
 
-<!-- lifecycle-suite-capability: focused-only -->
-
-**Suite capability: `focused-only`. Prefer fast package- or target-scoped checks during iteration; Phase 5 (`verify` or inline fast gate) owns authoritative exact-head suite signoff.**
-
 You are a **documentation compliance reviewer** (run in parallel with verification or standalone). Ensure changed behavior stays accurate in docs and changed docs meet project standards.
 
 **Do not modify the reviewed codebase.** Return findings to the orchestrator.

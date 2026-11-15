@@ -13,14 +13,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Replaces LOC-based line counting with pragmatic risk & complexity scaling (`Low` / `Moderate` / `High`), paired with explicit anti-overthinking guidance across orchestrator, coders, reviewers, verifiers, and merge
   - Unifies code review under `review-general` covering security, simplicity, and quality (1 reviewer by default, scaling to 2–3 parallel `review-general` instances only when surface area or complexity warrants it; capped at 2 rounds, Round 2 only when Round 1 accepted at least one `Action Required` defect)
   - Folds continuation addressing directly into `implement-code` (Continuation Mode) so resumed author subagents do not reload a second skill mid-thread (`implement-address` stays available for standalone/existing-PR runs)
-  - Moves `review-docs` into Phase 5 to run **in parallel** with verification (`verify` or inline fast gate for docs-only and non-runtime `Low` PRs), posting concise `### Verdict:` + `Verified-Head:` lines instead of JSON pointer handoffs
+  - Gives `implement-code` / `implement-address` ownership of automated tests, linters, and builds before Phase 5, and focuses Phase 5 `verify` on real-world, hands-on inspection (data outputs/shapes, CLI execution, UI navigation & screenshots, live services; skipped when no live surface changed) **in parallel** with `review-docs`, posting concise `### Verdict:` + `Verified-Head:` lines instead of JSON pointer handoffs
   - Streamlines Phase 6 `merge-pr` to run completely inline (zero subagents) as general guidance to follow the target project's rules and `--match-head-commit`
   - Eliminates all sidecar scratch files (`state.json`, `bundle.md`, scratch findings files, and `record=<path>` JSON files) so the PR description (including `Part of #N` slice scoping), review comments, and inline prompts are the sole source of truth across parallel sessions
   - Tightens skill instruction byte budgets from 56 KB / 14 KB to 34 KB total across 7 skills / 11.5 KB for `implement`
 
 ### Removed
 
-- Removes `review-architecture`, `review-testing`, `review-security`, `review-correctness`, `pr-check`, `implement/references/large-tier.md`, `merge-pr/references/ci-source.md`, `verify/references/`, `bundle=<path>` scratch context bundles, scratch findings files, and file-backed JSON verification pointer handoffs (`implement-lifecycle` 4.0.0)
+- Removes `review-architecture`, `review-testing`, `review-security`, `review-correctness`, `pr-check`, `implement/references/large-tier.md`, `merge-pr/references/ci-source.md`, `verify/references/`, `lifecycle-suite-capability` (`focused-only` / `full-suite-owner`), `bundle=<path>` scratch context bundles, scratch findings files, and file-backed JSON verification pointer handoffs (`implement-lifecycle` 4.0.0)
 
 ### Fixed
 

@@ -1,6 +1,6 @@
 interface:
   display_name: "Verify Pull Request"
-  short_description: "Verify a pull request end to end"
-  default_prompt: "Use $implement-lifecycle:verify to verify this pull request in the real running system."
+  short_description: "Real-world verification of a pull request"
+  default_prompt: "Use $implement-lifecycle:verify to perform real-world verification by inspecting and exercising this pull request's actual built work."
 policy:
   allow_implicit_invocation: false

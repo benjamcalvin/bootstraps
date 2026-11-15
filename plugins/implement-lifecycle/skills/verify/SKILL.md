@@ -1,53 +1,54 @@
 ---
 name: verify
-description: "Delegated implement-lifecycle worker: exact-head verification and live runtime evidence."
+description: "Delegated implement-lifecycle worker: real-world verification by inspecting and exercising the actual work."
 ---
 
-# End-to-End Verification
+# Real-World Verification
 
-<!-- lifecycle-suite-capability: full-suite-owner -->
-
-**Suite capability: `full-suite-owner`. Sole phase authorized to produce authoritative exact-head suite signoff (at most one full execution per PR head).**
-
-Verify the PR in the real, running system (use the delegation prompt if `$ARGUMENTS` is literal).
+Verify the PR in practice by inspecting and exercising the actual built work (use the delegation prompt if `$ARGUMENTS` is literal).
 
 ```text
 $ARGUMENTS
 ```
 
+**Automated test suites are not your job.** Unit/integration suites, linters, and builds were already run by the implementer or CI; do not spend Phase 5 re-running test suites, and never report `PASS` merely because unit tests passed. Your job is **real-world, hands-on verification** using the environment and tools available.
+
 Parse PR number, `risk=<Low|Moderate|High>` (`Moderate` when absent), and optional `failed-scenarios=` from the prompt; inspect PR metadata, comments, and `--json files` via `gh pr view <number>`. **Stay focused on the task at hand; do not overthink.** For `Part of #N` slice PRs, verify **this slice's stated scope and changed behavior** — never return `PARTIAL` solely because deferred parent-issue items are unbuilt.
 
-## Scope
+## What to Verify
 
-Scale checks to risk and complexity without inventing contrived scenarios:
-- **Low** — suite evidence, plus one quick smoke check only if runtime behavior changed (otherwise PASS on suite evidence alone and report `live check skipped (Low, no runtime change)`).
-- **Moderate** — suite evidence plus live checks exercising the changed behavior.
-- **High** — suite evidence plus changed behavior, key edge/failure modes, and shared-path regressions.
-- **Re-verification:** when `failed-scenarios=` is supplied, re-run only those scenarios plus suite evidence for the new head; without `failed-scenarios`, re-run suite evidence only.
+Exercise and inspect the real built artifact matching what changed:
+- **Data, queries, migrations, or pipelines** — run against representative inputs and **inspect the actual output rows, schemas, counts, edge values, and persisted state** to confirm the data genuinely looks right (not merely exit code 0).
+- **CLI, TUI, scripts, or tools** — invoke the real command/binary across realistic flags, inputs, and error cases; inspect actual stdout/stderr, exit codes, and generated files or side effects.
+- **Frontend or web UI** — launch or open the running app, navigate the affected views in a browser, exercise interactions and states, inspect layout/console/network errors, and capture **screenshots** or visual evidence.
+- **APIs, services, configs, or background jobs** — hit live endpoints/workers or load configs through the real consumer and inspect responses, state transitions, and logs.
+- **No runnable or observable real-world surface** (docs/comments only, type-only edits, or pure internal refactors with no live surface beyond automated tests) — return **Verdict: N/A** immediately without inventing busywork.
 
-## Suite evidence
+## Depth & Guardrails
 
-- **Docs/comments only:** return **Verdict: N/A** without running tests.
-- **Contract discovery:** apply repository instructions (`AGENTS.md`, `CLAUDE.md`), CI workflow commands, documented dev commands, and build/test config. If none establishes an authoritative command/plan, stop without running a guessed substitute and return **PARTIAL**.
-- **Single exact-head signoff:** fetch `gh pr view <number> --json headRefOid --jq .headRefOid`. Reuse a passing required-CI run when the target repository's CI already ran the full plan cleanly on `headRefOid`; otherwise run the command/plan once on `headRefOid` and re-check `headRefOid` afterward (if moved, return **FAIL**).
-- **Merge-base baselining on failure:** if any command fails locally, run each failing command once on `git merge-base origin/<base> <head>` in a separate checkout. If every failure already matches at both SHAs, return **PARTIAL** citing the merge-base SHA (pre-existing; never mergeable); if any failure is new, return **FAIL**.
+Scale hands-on depth to risk and complexity without inventing contrived scenarios:
+- **`Low`** — quick smoke check of the changed real-world surface and output inspection.
+- **`Moderate`** — exercise the primary changed flows and inspect real outputs, UI, or data.
+- **`High`** — exercise changed flows, realistic edge/failure cases, and boundary/state interactions, inspecting resulting data, UI, or state thoroughly.
+- **Re-verification (`failed-scenarios=<names>`):** re-verify the named scenarios (plus sanity-check directly affected output) on the current `headRefOid`.
+- **Exact-head & baseline check:** record `gh pr view <number> --json headRefOid --jq .headRefOid` before starting and re-check afterward (if moved, return **FAIL**). If startup or a live scenario fails for reasons that appear unrelated to the PR, test `git merge-base origin/<base> <head>` in a separate checkout: if the exact failure already reproduces there, return **PARTIAL** citing the merge-base SHA (pre-existing; never mergeable); if introduced by the PR, return **FAIL**. If verification requires unavailable credentials, hardware, or external systems, return **PARTIAL** naming what could not be verified rather than faking live evidence.
 
 ## Steps
 
-### Step 1: Check Claims & Live Behavior
-Compare each change the PR description claims with `gh pr diff <number>` and list missing claims under `### Claim Mismatches`. Exercise real runtime entry points when in scope; never edit source code or docs.
+### Step 1: Check Claims & Real-World Behavior
+Compare each change the PR description claims with `gh pr diff <number>` and list missing claims under `### Claim Mismatches`. Exercise and inspect real-world behavior cleanly; never edit source code or docs.
 
 ### Step 2: Post Concise Verification Comment
-Post one `gh pr comment <pr-number>` keeping `### Verdict:` and `Verified-Head:` **outside** `<details>` (and collapsing command/scenario output under `<details>` with a blank line after `</summary>`):
+Post one `gh pr comment <pr-number>` keeping `### Verdict:` and `Verified-Head:` **outside** `<details>` (and collapsing real-world evidence under `<details>` with a blank line after `</summary>`):
 
 ```markdown
-## End-to-End Verification — PR #<number>
+## Real-World Verification — PR #<number>
 
 ### Verdict: PASS / FAIL / PARTIAL / N/A
 Verified-Head: <full-head-sha>
 
 ### Issues Found
-<PR-introduced bugs, or pre-existing merge-base failures citing merge-base SHA — or "None">
+<PR-introduced bugs/data/UI issues, unavailable checks, or pre-existing merge-base failures citing merge-base SHA — or "None">
 
 ### Claim Mismatches
 <claimed changes absent from the diff, or "None">
@@ -55,6 +56,6 @@ Verified-Head: <full-head-sha>
 <details>
 <summary>Evidence</summary>
 
-<commands/scenarios run and concise output>
+<real-world checks, inspected data/outputs, CLI results, or screenshot notes>
 </details>
 ```

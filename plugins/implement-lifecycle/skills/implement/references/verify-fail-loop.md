@@ -19,7 +19,7 @@ Phase 5 fix rounds count from 1, independent of Phase 4.
 
 ## Scoped Re-verification & Doc Re-check
 
-After fixes are committed, continue only the failed Phase 5 check(s) (`verify` and/or `review-docs`, spawning fresh only if none exists / one-shot harness). For `verify`, pass the failed scenarios, or without `failed-scenarios` when only the suite failed:
+After fixes are committed, continue only the failed Phase 5 check(s) (`verify` and/or `review-docs`, spawning fresh only if none exists / one-shot harness). For `verify`, pass `failed-scenarios=<names>` so re-verification targets what failed:
 
 ```text
 Payload: <pr-number> risk=<Low|Moderate|High> [failed-scenarios=<names>]

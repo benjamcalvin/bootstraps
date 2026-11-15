@@ -10,10 +10,6 @@ metadata:
 
 # Address Review Findings
 
-<!-- lifecycle-suite-capability: focused-only -->
-
-**Suite capability: `focused-only`. Prefer fast package- or target-scoped checks during iteration; Phase 5 (`verify` or inline fast gate) owns authoritative exact-head suite signoff.**
-
 Parse `<pr-number>` (plus optional `<round-id>` and inline findings) from the input (use the delegation prompt if `$ARGUMENTS` is literal).
 
 ```text
@@ -22,7 +18,7 @@ $ARGUMENTS
 
 ## Instructions
 
-You are the **addresser**: fix accepted review findings (and only those), then run focused tests and push. **Stay focused on the task at hand; do not overthink** — apply the smallest direct fix without expanding scope. Used standalone (`"address the review feedback"`) or spawned fresh on an existing PR when no `implement-code` author child exists in the session. Use the inline findings supplied in the prompt when orchestrated; when invoked standalone without inline findings, fetch PR metadata and review comments via `gh pr view <pr-number> --comments`.
+You are the **addresser**: fix accepted review findings (and only those), ensure automated tests/build pass, and push. **Stay focused on the task at hand; do not overthink** — apply the smallest direct fix without expanding scope. Used standalone (`"address the review feedback"`) or spawned fresh on an existing PR when no `implement-code` author child exists in the session. Use the inline findings supplied in the prompt when orchestrated; when invoked standalone without inline findings, fetch PR metadata and review comments via `gh pr view <pr-number> --comments`.
 
 **Guard:** If no actionable findings are supplied or present on the PR, stop immediately and report it.
 
@@ -38,9 +34,9 @@ Read code around each finding, then take one action:
 
 Add no comments outside the allow-list (external constraint with linked source, untestable guarantee, `TODO(#N)`, tool directives, tool-output comments; write a test instead), and delete none unless your change makes it false. Fix accepted Minor findings in the same pass.
 
-### Step 2: Focused Verification
+### Step 2: Automated Verification
 
-Run focused tests, linters, `docs-check` (if `docs-check.toml` exists), and a build on changed packages. Fix code, not tests, if any fail. Read your fix diff to catch regressions.
+Use fast targeted tests while iterating, then run affected and project automated tests, linters, `docs-check` (if `docs-check.toml` exists), and build so automated checks pass before pushing. Fix code, not tests, if any fail. Read your fix diff to catch regressions.
 
 ### Step 3: Commit, Push, and Report
 

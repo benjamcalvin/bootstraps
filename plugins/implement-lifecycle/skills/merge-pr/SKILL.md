@@ -11,10 +11,6 @@ metadata:
 
 # Merge PR and Update Issues
 
-<!-- lifecycle-suite-capability: focused-only -->
-
-**Suite capability: `focused-only`. Prefer fast package- or target-scoped checks during iteration; Phase 5 (`verify` or inline fast gate) owns authoritative exact-head suite signoff.**
-
 ```text
 /merge-pr <pr-number>
 $implement-lifecycle:merge-pr <pr-number>
@@ -29,7 +25,7 @@ Read the target project's documented rules (`AGENTS.md`, `CLAUDE.md`, contributi
 Confirm:
 1. PR is `OPEN` and has no merge conflicts (`mergeable` is not `CONFLICTING`).
 2. Required CI checks pass and there are no `CHANGES_REQUESTED` reviews or unresolved blocking gates required by the project.
-3. When verification ran on the PR, the latest verification comment reports `PASS` (or `N/A` for docs-only) with `Verified-Head` matching current `headRefOid` (`FAIL` or `PARTIAL` stops merge).
+3. When real-world verification ran on the PR, the latest verification comment reports `PASS` (or `N/A`) with `Verified-Head` matching current `headRefOid` (`FAIL` or `PARTIAL` stops merge).
 4. **Human approval / merge queue:** if project rules require human approval or merge-queue checks not yet satisfied, stop and report `## Ready for Human Merge — PR #<number>, awaiting human approval or merge queue.`
 
 ## Step 2: Merge

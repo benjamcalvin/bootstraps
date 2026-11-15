@@ -10,10 +10,6 @@ metadata:
 
 # Implement
 
-<!-- lifecycle-suite-capability: focused-only -->
-
-**Suite capability: `focused-only`. Prefer fast package- or target-scoped checks during iteration; Phase 5 (`verify` or inline fast gate) owns authoritative exact-head suite signoff.**
-
 Implement the task supplied by the orchestrator (use the delegation prompt if `$ARGUMENTS` is literal). First token is issue number, or `0` if none.
 
 ```text
@@ -42,7 +38,7 @@ Write minimum code to pass tests; match existing style; trace every line to the 
 
 ### Step 4: Verify and Self-Review
 
-Run focused tests, linters, and build for changed packages. Run `docs-check` with lint when the project has a `docs-check.toml`. Every touched test and lint must pass; fix code, not tests. Exercise runnable artifacts (CLIs, endpoints, config, migrations) with representative + error cases when changed. Read your diff to drop stray changes, unused symbols, and non-allow-listed comments (including tracker citations, step labels, or history prose).
+Use fast targeted tests while iterating, then run the project's automated tests, linters, and build before opening the PR so all automated checks pass cleanly (Phase 5 `verify` inspects real-world behavior rather than running unit suites). Run `docs-check` with lint when the project has a `docs-check.toml`. Every test and lint must pass; fix code, not tests. Exercise changed runnable artifacts (CLIs, UI, endpoints, config, migrations/data) with representative and edge inputs when practical. Read your diff to drop stray changes, unused symbols, and non-allow-listed comments (including tracker citations, step labels, or history prose).
 
 ### Step 5: Commit
 
@@ -50,12 +46,12 @@ Follow target commit policy; fallback `<type>: <summary>` (imperative, no period
 
 ### Step 6: Sync, Push, and Create PR
 
-Rebase on target base branch (default branch from `gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name'`, or parent branch if stacked), rerun affected focused checks, and push `-u origin HEAD`. Use target PR template or `references/pr-description.md`. Link issue with `Closes #N` only when fully complete, else `Part of #N` (stating this slice's scope and deferred parent-issue items in `## Design`).
+Rebase on target base branch (default branch from `gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name'`, or parent branch if stacked), rerun affected automated checks, and push `-u origin HEAD`. Use target PR template or `references/pr-description.md`. Link issue with `Closes #N` only when fully complete, else `Part of #N` (stating this slice's scope and deferred parent-issue items in `## Design`).
 
 ### Step 7: Return Result
 
-Return exact summary (`PR_NUMBER:`, `PR_TITLE:`, `SUMMARY:`) plus any risk/runtime-check note for the orchestrator.
+Return exact summary (`PR_NUMBER:`, `PR_TITLE:`, `SUMMARY:`) plus any risk or changed real-world surface note (UI flow, CLI command, data output, endpoint, or none) for the orchestrator.
 
 ### Step 8: Continuation Mode (Addressing Findings)
 
-When continued/resumed with `<pr-number> <round-or-verify-id>` and inline findings (stop and report if no findings are supplied), read the code around each finding and either **Apply**, **Partially apply** (explain better fix), **Reject with justification** (citing specs, ADRs, or conventions — never ungrounded), or **Escalate**. Preserve strong assertions when compressing tests, keep comments within the allow-list (delete none unless made false), run focused tests/linters and `docs-check` when `docs-check.toml` exists, inspect your fix diff, commit as `fix: address review round <round> — <description>`, `git push`, and return a `| # | Finding | Action | Details |` table with `**Tests:**` and `**Commits:**` lines.
+When continued/resumed with `<pr-number> <round-or-verify-id>` and inline findings (stop and report if no findings are supplied), read the code around each finding and either **Apply**, **Partially apply** (explain better fix), **Reject with justification** (citing specs, ADRs, or conventions — never ungrounded), or **Escalate**. Preserve strong assertions when compressing tests, keep comments within the allow-list (delete none unless made false), run affected automated tests/linters/build and `docs-check` when `docs-check.toml` exists, inspect your fix diff, commit as `fix: address review round <round> — <description>`, `git push`, and return a `| # | Finding | Action | Details |` table with `**Tests:**` and `**Commits:**` lines.

@@ -13,10 +13,6 @@ metadata:
 
 # Implement
 
-<!-- lifecycle-suite-capability: orchestrator -->
-
-**Suite capability: `orchestrator`. Use fast package- or target-scoped checks when refereeing in Phases 1–4; execute the authoritative suite at most once per head in Phase 5 when running the inline fast gate, otherwise delegate Phase 5 to `verify`.**
-
 Orchestrate the implementation lifecycle (use the prompt if `$ARGUMENTS` is literal):
 
 ```text
@@ -62,9 +58,9 @@ Assess **risk and complexity** pragmatically from what changed and what could br
 
 | Level | Profile | Review & verify shape |
 |-------|---------|-----------------------|
-| `Low` | Straightforward, localized changes (bugfixes, small features, config, tests, docs, localized refactors) | 1 `review-general` reviewer, max 1 round; inline fast gate if non-runtime (or smoke check via `verify` if runtime changed) |
-| `Moderate` | Multi-module logic, CLI/API/UI behavior changes, or non-trivial state handling | 1 `review-general` reviewer (or 2 splitting distinct subsystems); max 2 rounds (Round 2 only if Round 1 accepted ≥ 1 `Action Required` finding); delegated `verify` |
-| `High` | Auth/crypto/permissions/trust boundaries, schema/data migrations, concurrency/locking/distributed state, or very large cross-cutting surface area | 2–3 parallel `review-general` reviewers splitting surface area or focus; max 2 rounds (Round 2 only if Round 1 accepted ≥ 1 `Action Required` finding); delegated `verify` |
+| `Low` | Straightforward, localized changes (bugfixes, small features, config, tests, docs, localized refactors) | 1 `review-general` reviewer, max 1 round; quick real-world smoke check via `verify` if runnable/observable surface changed (skip `verify` if none) |
+| `Moderate` | Multi-module logic, CLI/API/UI behavior changes, or non-trivial state handling | 1 `review-general` reviewer (or 2 splitting distinct subsystems); max 2 rounds (Round 2 only if Round 1 accepted ≥ 1 `Action Required` finding); real-world `verify` |
+| `High` | Auth/crypto/permissions/trust boundaries, schema/data migrations, concurrency/locking/distributed state, or very large cross-cutting surface area | 2–3 parallel `review-general` reviewers splitting surface area or focus; max 2 rounds (Round 2 only if Round 1 accepted ≥ 1 `Action Required` finding); real-world `verify` |
 
 ### Phase 4: Code Review / Address Loop {#review-loop}
 
@@ -96,17 +92,17 @@ Never run a clean-confirmation round. `Low` runs and Round 1 runs with rejected-
 
 ### Phase 5: Parallel Verification & Docs Review
 
-Run **Verification** and **Docs Review** **in parallel** on the post-Phase-4 PR head:
+Automated tests, linters, and builds belong to `implement-code` / `implement-address` (and CI); if automated checks are failing on the PR head before Phase 5, send them straight back to the author/addresser child rather than `verify`. Run **Verification** and **Docs Review** **in parallel** on the post-Phase-4 PR head:
 
 - **Docs Review (`review-docs`, `balanced` child):** Spawn whenever docs, specs, READMEs, public interfaces (CLI/API/config), or behavior described in `AGENTS.md`, ADRs, or covered specs changed (`Payload: Review docs for PR #<pr-number>[, delta <prev>..<head>]`). Skip when purely internal code changed with no doc impact.
-- **Verification:**
-  - **Inline Fast Gate (no `verify` child):** Run inline (recording `verify: inline (fast-gate)` for the Run Ledger) when **no live runtime check is needed**: (1) docs/comments only (`Verdict: N/A`), or (2) `Low` risk with no runtime/UI/CLI/API/migration/deploy change where exact-head required CI already passed or the project's test command passes once inline on `headRefOid` (post concise verification comment with `### Verdict: PASS` and `Verified-Head: <full-head-sha>`). On inline suite failure, spawn `verify` for merge-base baselining.
-  - **Delegated `verify` (`balanced` child, in parallel with `review-docs`):** Spawn when runtime behavior changed or risk/complexity is `Moderate`/`High`: `Payload: <pr-number> risk=<Low|Moderate|High> [failed-scenarios=<names>]` (keep the classified `risk=`; never re-classify).
+- **Real-World Verification (`verify`, `balanced` child, in parallel with `review-docs`):** `verify` exercises and inspects the actual built work (data outputs/shapes, CLI execution, browser UI navigation & screenshots, live endpoints/services) — **never spawn `verify` just to re-run unit tests**:
+  - **Spawn `verify`** when the PR touches any runnable, visual, data-producing, or user-observable surface: `Payload: <pr-number> risk=<Low|Moderate|High> [failed-scenarios=<names>]` (keep the classified `risk=`; never re-classify).
+  - **Skip `verify`** (record `verify: skipped (no live surface)` for the Run Ledger, and compare PR description claims against `gh pr diff <pr-number>` inline) when the PR has no distinct real-world surface beyond passing automated tests/CI (docs/comments only, type-only edits, or pure internal refactors).
 
 **Resolve Phase 5:** Wait for both (when both run). Referee `review-docs` findings against code/docs (accept only concrete doc drift, broken links, missing interface docs, or `docs-check` errors).
-- **PASS / N/A & clean docs:** fix any `Claim Mismatches` via `gh pr edit --body-file`, then Phase 6.
+- **PASS / N/A / skipped & clean docs:** fix any `Claim Mismatches` via `gh pr edit --body-file`, then Phase 6.
 - **FAIL and/or accepted `Action Required` doc findings:** Batch both into **one** inline fix pass via `references/verify-fail-loop.md` (capped at 2 cycles), then re-run only the failed check(s).
-- **PARTIAL** (missing test contract, human-only check, or pre-existing merge-base failures): stop and print run ledger; never merge.
+- **PARTIAL** (unavailable live environment/credentials, human-only check, or pre-existing merge-base failures): stop and print run ledger; never merge.
 
 ### Phase 6: Merge & Finalize
 
