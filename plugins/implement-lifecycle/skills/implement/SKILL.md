@@ -6,7 +6,7 @@ description: >-
   Triggers: /implement, $implement-lifecycle:implement, implement this, build this feature
 license: MIT
 metadata:
-  version: "4.0.0"
+  version: "4.1.0"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -40,7 +40,7 @@ Map tiers via the active adapter. **Never silently inherit the orchestrator mode
 - **New roles:** Spawn a fresh isolated child (never inheriting orchestrator history) for `implement-code`, each Round-1 `review-general`, `review-docs`, and `verify`.
 - **Continuations:** When supported, reuse that same subagent rather than spawning a new one: continue the `implement-code` author child via its Continuation Mode for addressing/Phase-5 fixes (spawn `implement-address` fresh only when entering on an existing PR without an author child), continue `review-general` for Round 2 deltas, and continue `review-docs` / `verify` for Phase-5 re-checks. Spawn fresh only when none exists or the harness is one-shot.
 
-Read only your harness adapter once at start (`references/adapter-claude.md`, `references/adapter-codex.md`, `references/adapter-agy.md`, `references/adapter-pi.md`, or `references/adapter-generic.md`). Wait for reviewers; if any result lacks all four canonical headings, read `references/reviewer-recovery.md` before refereeing.
+Read only your harness adapter once at start (`references/adapter-claude.md`, `references/adapter-codex.md`, `references/adapter-opencode.md`, `references/adapter-agy.md`, `references/adapter-pi.md`, or `references/adapter-generic.md`). Wait for reviewers; if any result lacks all four canonical headings, read `references/reviewer-recovery.md` before refereeing.
 
 **PR & prompt as source of truth (no sidecar scratch files).** Do not write state, bundle, or scratch findings files. Keep active child handles, risk/complexity level, round, and phase start times in conversation context (recovering from PR comments, `gh pr view --json files`, and `git log` or spawning fresh children if compacted). For `Part of #N` slice PRs, scope review, refereeing, and verification to **this PR's slice** as stated in the PR description and prompt — never penalize or fail a slice PR for deferred parent-issue items.
 

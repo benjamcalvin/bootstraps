@@ -1,6 +1,8 @@
 ---
 name: review-general
 description: "Delegated implement-lifecycle worker: holistic code review covering security, simplicity, and quality."
+metadata:
+  opencode/autoinvoke: false
 ---
 
 # General Review

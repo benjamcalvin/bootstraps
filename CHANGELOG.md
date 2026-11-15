@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Native OpenCode v2 (`v2.2+`) Server plugin support across `bootstrap-docs` (`2.3.0`), `implement-lifecycle` (`4.1.0`), and `issue-management` (`1.5.0`): dependency-free `package.json` + `opencode.js` entrypoints installable via `opencode plugin add "github:benjamcalvin/bootstraps#main::path:plugins/<name>"`, registering public skills and slash commands (`/bootstrap-docs`, `/implement`, `/merge-pr`, `/draft-issue`, `/cleanup-issue`, `/refine-issue`), optional `options.balancedModel` configuration, `opencode/autoinvoke: false` gating on internal worker skills, and `references/adapter-opencode.md` for async `subagent` delegation and `sessionID` continuations
+
 ### Changed
 
 - **Breaking:** `implement-lifecycle` 4.0.0 streamlines the lifecycle around risk & complexity, unified general review, parallel verification + docs review, and inline rule-guided merge:

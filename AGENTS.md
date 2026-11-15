@@ -23,6 +23,8 @@ bootstraps/
 │       │   └── plugin.json  # Codex metadata (when compatible)
 │       ├── .claude-plugin/
 │       │   └── plugin.json  # Plugin metadata
+│       ├── package.json     # OpenCode v2 & Pi package manifest
+│       ├── opencode.js      # OpenCode v2 Server plugin entrypoint
 │       ├── skills/
 │       │   └── <skill-name>/
 │       │       ├── SKILL.md   # Skill definition (Agent Skills open standard)
@@ -41,7 +43,7 @@ Run as autonomously as possible by default. Do not ask for confirmation on routi
 
 ## Versioning
 
-Every change to a plugin **must** include a version bump in that plugin's `.claude-plugin/plugin.json`. Follow semver: patch for fixes, minor for new features or non-breaking changes, major for breaking changes. When a plugin also has `.codex-plugin/plugin.json` or `.antigravity-plugin/plugin.json`, keep its version synchronized.
+Every change to a plugin **must** include a version bump in that plugin's `.claude-plugin/plugin.json`. Follow semver: patch for fixes, minor for new features or non-breaking changes, major for breaking changes. When a plugin also has `.codex-plugin/plugin.json`, `.antigravity-plugin/plugin.json`, or `package.json`, keep its version synchronized.
 
 ## Conventions
 
@@ -62,4 +64,5 @@ Every change to a plugin **must** include a version bump in that plugin's `.clau
 4. Add entry to `.claude-plugin/marketplace.json`
 5. For Codex-compatible plugins, add `.codex-plugin/plugin.json` and an entry to `.agents/plugins/marketplace.json`
 6. Add `.antigravity-plugin/plugin.json` for Antigravity compatibility
-7. Validate: `./validate-all.sh`
+7. Add `package.json` and `opencode.js` for OpenCode v2 compatibility
+8. Validate: `./validate-all.sh`

@@ -1,6 +1,8 @@
 ---
 name: verify
 description: "Delegated implement-lifecycle worker: real-world verification by inspecting and exercising the actual work."
+metadata:
+  opencode/autoinvoke: false
 ---
 
 # Real-World Verification
