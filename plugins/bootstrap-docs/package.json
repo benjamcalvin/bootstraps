@@ -1,0 +1,14 @@
+{
+  "name": "bootstrap-docs",
+  "version": "2.3.0",
+  "description": "Set up a comprehensive, AI-readable documentation strategy in any project",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./opencode.js"
+  },
+  "files": ["opencode.js", "skills"],
+  "keywords": ["opencode-plugin", "agent-skills", "docs", "documentation", "strategy", "scaffolding"],
+  "author": "benjamcalvin",
+  "license": "MIT"
+}

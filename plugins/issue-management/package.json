@@ -1,0 +1,14 @@
+{
+  "name": "issue-management",
+  "version": "1.5.0",
+  "description": "Draft, clean up, and refine GitHub issues — optimized for AI agent consumption",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./opencode.js"
+  },
+  "files": ["opencode.js", "skills"],
+  "keywords": ["opencode-plugin", "agent-skills", "issue", "draft", "cleanup", "refine", "planning"],
+  "author": "benjamcalvin",
+  "license": "MIT"
+}

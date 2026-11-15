@@ -1,6 +1,6 @@
 # Bootstraps
 
-A cross-compatible Claude Code, OpenAI Codex, Antigravity (agy), and Pi collection of reusable skills and project scaffolds.
+A cross-compatible Claude Code, OpenAI Codex, OpenCode (v2), Antigravity (agy), and Pi collection of reusable skills and project scaffolds.
 
 ## Prerequisites
 
@@ -68,6 +68,60 @@ To validate a plugin definition against the Antigravity plugin schema:
 agy plugin validate plugins/<name> --strict
 ```
 
+## Install in OpenCode (v2)
+
+All three plugins ship native dependency-free OpenCode v2 Server plugin entrypoints (`package.json` + `opencode.js`). Install them globally in OpenCode v2 (`v2.2+`) with Git subdirectory specs:
+
+```sh
+opencode plugin add "github:benjamcalvin/bootstraps#main::path:plugins/bootstrap-docs"
+opencode plugin add "github:benjamcalvin/bootstraps#main::path:plugins/implement-lifecycle"
+opencode plugin add "github:benjamcalvin/bootstraps#main::path:plugins/issue-management"
+```
+
+For SSH key auth without HTTPS GitHub credentials, use `git+ssh://`:
+
+```sh
+opencode plugin add "git+ssh://git@github.com/benjamcalvin/bootstraps.git#main::path:plugins/implement-lifecycle"
+```
+
+Or load from a local checkout directly in `~/.config/opencode/opencode.jsonc` (or a project's `opencode.jsonc`):
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": [
+    "/path/to/bootstraps/plugins/bootstrap-docs",
+    "/path/to/bootstraps/plugins/implement-lifecycle",
+    "/path/to/bootstraps/plugins/issue-management"
+  ]
+}
+```
+
+### Pinning a balanced model in OpenCode (v2)
+
+`implement-lifecycle` runs code reviewers, addresser workers, and real-world verifiers on a `balanced` model tier. In `~/.config/opencode/opencode.jsonc`, either configure a dedicated `lifecycle-balanced` subagent (recommended when keeping `general` unchanged) or pass `options.balancedModel` to apply a balanced default to built-in `general` when it has no explicit model:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": [
+    {
+      "package": "github:benjamcalvin/bootstraps#main::path:plugins/implement-lifecycle",
+      "options": {
+        "balancedModel": "anthropic/claude-sonnet-4-6"
+      }
+    }
+  ],
+  "agents": {
+    "lifecycle-balanced": {
+      "mode": "subagent",
+      "model": "anthropic/claude-sonnet-4-6",
+      "description": "Balanced-tier worker for implement-lifecycle review, addressing, and verification"
+    }
+  }
+}
+```
+
 ## Install implement-lifecycle in Pi
 
 Pi can install the plugin directory as a local package. From a checkout of this repository, run:
@@ -128,6 +182,21 @@ $issue-management:cleanup-issue #42
 $issue-management:refine-issue #42
 ```
 
+### OpenCode (v2)
+
+Each OpenCode v2 plugin registers its public skills (selectable via the `skill` tool or `/command` completion) and slash commands:
+
+```
+/bootstrap-docs
+/implement #42
+/merge-pr 42
+/draft-issue add user avatar support
+/cleanup-issue #42
+/refine-issue #42
+```
+
+Internal lifecycle worker skills (`implement-code`, `implement-address`, `review-general`, `review-docs`, `verify`) set `opencode/autoinvoke: false` so they stay out of top-level auto-discovery while spawned subagents load them explicitly by ID via `skill`.
+
 ## Update Claude Code Plugins
 
 ```
@@ -144,15 +213,15 @@ $issue-management:refine-issue #42
 
 ## Available Plugins
 
-| Plugin | Claude Code | Codex | Antigravity | Pi | Description |
-|--------|-------------|-------|-------------|----|-------------|
-| **bootstrap-docs** | Yes | Yes | Yes | No | Set up a comprehensive, AI-readable documentation strategy in any project. Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates. |
-| **implement-lifecycle** | Yes | Yes | Yes | Yes | Streamlined implementation lifecycle scaled by risk and complexity — plan, implement, PR, bounded general review, parallel verify + docs review, and inline rule-guided merge. Pi delegation requires `pi-subagents`. |
-| **issue-management** | Yes | Yes | Yes | No | Draft, clean up, and refine GitHub issues — optimized for AI agent consumption. |
+| Plugin | Claude Code | Codex | OpenCode v2 | Antigravity | Pi | Description |
+|--------|-------------|-------|-------------|-------------|----|-------------|
+| **bootstrap-docs** | Yes | Yes | Yes | Yes | No | Set up a comprehensive, AI-readable documentation strategy in any project. Creates AGENTS.md, specs, ADRs, guides, plans, standards, and research templates. |
+| **implement-lifecycle** | Yes | Yes | Yes | Yes | Yes | Streamlined implementation lifecycle scaled by risk and complexity — plan, implement, PR, bounded general review, parallel verify + docs review, and inline rule-guided merge. Pi delegation requires `pi-subagents`. |
+| **issue-management** | Yes | Yes | Yes | Yes | No | Draft, clean up, and refine GitHub issues — optimized for AI agent consumption. |
 
 ### implement-lifecycle
 
-Provides a shared lifecycle orchestrator, a rule-guided merge skill, two coding/addressing workers, a unified general reviewer, a docs reviewer, and an end-to-end verification worker across Claude Code, Codex, Antigravity (agy), Pi, and other compatible harnesses:
+Provides a shared lifecycle orchestrator, a rule-guided merge skill, two coding/addressing workers, a unified general reviewer, a docs reviewer, and an end-to-end verification worker across Claude Code, Codex, OpenCode (v2), Antigravity (agy), Pi, and other compatible harnesses:
 
 **Skills:**
 
@@ -176,7 +245,7 @@ Provides a shared lifecycle orchestrator, a rule-guided merge skill, two coding/
 | `review-general` | Unified holistic reviewer covering **security**, **simplicity**, and **quality**. Defaults to 1 instance; scales to 2–3 parallel instances splitting surface area or focus only for very large/complex changes. |
 | `review-docs` | Documentation and spec compliance reviewer, triggered in Phase 5 **in parallel with verification** when docs, specs, READMEs, or public interfaces change. |
 
-The orchestrator spawns fresh generic isolated children for each new role while reusing existing children via continuations across addressing (`implement-code` Continuation Mode), Round 2 delta reviews, clarifications, and Phase-5 re-checks; Phase 6 `merge-pr` runs completely inline without spawning a subagent. Delegation uses progressive disclosure through `references/adapter-*.md` files (Claude Code, Codex, Antigravity `agy`, Pi, generic), explicitly pinning balanced models (`sonnet` in Claude Code, `medium` reasoning effort in Codex, `flash` in Antigravity). Effort is scaled by **risk and complexity** (`Low` / `Moderate` / `High`) rather than LOC line counts, with explicit instructions across every role to stay focused on the task at hand and not overthink things (`Low`: 1 round max; `Moderate`/`High`: 2 rounds max, with Round 2 running only when Round 1 accepted at least one `Action Required` defect).
+The orchestrator spawns fresh generic isolated children for each new role while reusing existing children via continuations across addressing (`implement-code` Continuation Mode), Round 2 delta reviews, clarifications, and Phase-5 re-checks; Phase 6 `merge-pr` runs completely inline without spawning a subagent. Delegation uses progressive disclosure through `references/adapter-*.md` files (Claude Code, Codex, OpenCode v2, Antigravity `agy`, Pi, generic), explicitly pinning balanced models (`sonnet` in Claude Code, `medium` reasoning effort in Codex, `lifecycle-balanced` / `balancedModel` in OpenCode v2, `flash` in Antigravity). Effort is scaled by **risk and complexity** (`Low` / `Moderate` / `High`) rather than LOC line counts, with explicit instructions across every role to stay focused on the task at hand and not overthink things (`Low`: 1 round max; `Moderate`/`High`: 2 rounds max, with Round 2 running only when Round 1 accepted at least one `Action Required` defect).
 
 The lifecycle runs with zero sidecar scratch or temp files: the PR description (including `Part of #N` slice boundaries), consolidated review comments, and inline delegation prompts serve as the sole source of truth across parallel sessions, while reviewers stay strictly read-only without running duplicate test suites. `implement-code` and `implement-address` own making automated tests, linters, and builds pass before Phase 5; Phase 5 skips `verify` when no live or observable surface changed (such as docs-only or pure internal refactors), or delegates real-world `verify` **in parallel with `review-docs`** when a runnable/visual/data surface changed, posting concise `### Verdict:` + `Verified-Head:` lines outside `<details>`. Phase 6 runs `merge-pr` inline following the target project's rules.
 

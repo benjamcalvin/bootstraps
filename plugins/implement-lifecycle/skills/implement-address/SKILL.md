@@ -6,6 +6,7 @@ metadata:
   version: "2.4.0"
   tags: ["implement", "address", "subagent"]
   author: benjamcalvin
+  opencode/autoinvoke: false
 ---
 
 # Address Review Findings

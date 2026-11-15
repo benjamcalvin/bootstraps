@@ -186,6 +186,31 @@ for plugin_dir in "${target_plugins[@]+"${target_plugins[@]}"}"; do
     fi
   fi
 
+  if [ ! -f "$plugin_dir/package.json" ] || [ ! -s "$plugin_dir/opencode.js" ]; then
+    echo "  ERROR: Missing OpenCode v2 package.json or opencode.js"
+    ERRORS=$((ERRORS + 1))
+  elif ! jq -e --arg name "$plugin_name" '
+    .name == $name and
+    (.version | type == "string" and length > 0) and
+    .type == "module" and
+    .exports["."] == "./opencode.js" and
+    (.keywords | type == "array" and index("opencode-plugin") != null) and
+    (has("dependencies") | not) and
+    (has("devDependencies") | not) and
+    (has("scripts") | not)
+  ' "$plugin_dir/package.json" > /dev/null 2>&1; then
+    echo "  ERROR: package.json must be a dependency-free ESM OpenCode v2 manifest exporting ./opencode.js"
+    ERRORS=$((ERRORS + 1))
+  elif [ -n "$version" ] && [ "$(jq -r '.version' "$plugin_dir/package.json")" != "$version" ]; then
+    echo "  ERROR: Version mismatch — Claude=$version, OpenCode package.json=$(jq -r '.version' "$plugin_dir/package.json")"
+    ERRORS=$((ERRORS + 1))
+  elif ! rg -Fq 'Plugin.define' "$plugin_dir/opencode.js" || ! rg -Fq "id: \"bootstraps.$plugin_name\"" "$plugin_dir/opencode.js"; then
+    echo "  ERROR: opencode.js must export Plugin.define with id \"bootstraps.$plugin_name\""
+    ERRORS=$((ERRORS + 1))
+  else
+    echo "  OK: OpenCode v2 package.json and opencode.js valid and in sync ($version)"
+  fi
+
   # Check skills
   for skill_dir in "$plugin_dir"/skills/*/; do
     [ -d "$skill_dir" ] || continue
@@ -233,7 +258,7 @@ for lineno, raw in enumerate(fm_lines, 2):
     stripped = raw.lstrip()
     if stripped.startswith("- "):
         continue
-    m = re.match(r'^([A-Za-z0-9_.-]+):(.*)$', stripped)
+    m = re.match(r'^("?[A-Za-z0-9_./-]+"?):(.*)$', stripped)
     if not m:
         raise SystemExit(f"line {lineno}: invalid YAML line: {raw}")
     key, val = m.group(1), m.group(2).strip()
@@ -419,6 +444,7 @@ PYEOF
     for adapter_ref in \
       'references/adapter-claude.md' \
       'references/adapter-codex.md' \
+      'references/adapter-opencode.md' \
       'references/adapter-agy.md' \
       'references/adapter-pi.md' \
       'references/adapter-generic.md'; do
@@ -455,6 +481,29 @@ PYEOF
       ERRORS=$((ERRORS + 1))
       lifecycle_mapping_invalid=true
     fi
+    opencode_adapter_file="$plugin_dir/skills/implement/references/adapter-opencode.md"
+    if ! rg -Fq '`subagent`' "$opencode_adapter_file" || \
+      ! rg -Fq 'Use the skill tool to load "<skill>"' "$opencode_adapter_file" || \
+      ! rg -Fq '`lifecycle-balanced`' "$opencode_adapter_file" || \
+      ! rg -Fq '`sessionID`' "$opencode_adapter_file"; then
+      echo "  ERROR: OpenCode v2 adapter must specify subagent tool, explicit skill load, lifecycle-balanced tier mapping, and sessionID continuations"
+      ERRORS=$((ERRORS + 1))
+      lifecycle_mapping_invalid=true
+    fi
+    for lifecycle_internal_worker in implement-code implement-address review-general review-docs verify; do
+      if ! sed -n '/^---$/,/^---$/p' "$plugin_dir/skills/$lifecycle_internal_worker/SKILL.md" | rg -Fq 'opencode/autoinvoke: false'; then
+        echo "  ERROR: $lifecycle_internal_worker must set opencode/autoinvoke: false in frontmatter"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_mapping_invalid=true
+      fi
+    done
+    for lifecycle_public_skill in implement merge-pr; do
+      if sed -n '/^---$/,/^---$/p' "$plugin_dir/skills/$lifecycle_public_skill/SKILL.md" | rg -Fq 'opencode/autoinvoke: false'; then
+        echo "  ERROR: Public skill $lifecycle_public_skill must not disable opencode/autoinvoke"
+        ERRORS=$((ERRORS + 1))
+        lifecycle_mapping_invalid=true
+      fi
+    done
     agy_adapter_file="$plugin_dir/skills/implement/references/adapter-agy.md"
     if ! rg -Fq '`invoke_subagent`' "$agy_adapter_file" || \
       ! rg -Fq '`TypeName: "self"`' "$agy_adapter_file" || \
@@ -496,6 +545,7 @@ PYEOF
     fi
     if ! rg -Fq 'resume' "$claude_adapter_file" || \
       ! rg -Fq 'send_message' "$codex_adapter_file" || \
+      ! rg -Fq 'sessionID' "$opencode_adapter_file" || \
       ! rg -Fq 'send_message' "$agy_adapter_file"; then
       echo "  ERROR: Progressive-disclosure adapters must specify continuation mechanisms (resume, send_message/followup_task)"
       ERRORS=$((ERRORS + 1))

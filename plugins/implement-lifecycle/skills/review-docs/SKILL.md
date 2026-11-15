@@ -1,6 +1,8 @@
 ---
 name: review-docs
 description: "Delegated implement-lifecycle worker: documentation compliance and spec drift review."
+metadata:
+  opencode/autoinvoke: false
 ---
 
 # Documentation Compliance Review

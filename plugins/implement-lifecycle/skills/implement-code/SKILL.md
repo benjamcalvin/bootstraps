@@ -6,6 +6,7 @@ metadata:
   version: "2.0.0"
   tags: ["implement", "code", "pr", "subagent"]
   author: benjamcalvin
+  opencode/autoinvoke: false
 ---
 
 # Implement
