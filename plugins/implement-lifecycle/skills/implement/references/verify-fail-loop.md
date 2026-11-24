@@ -19,7 +19,7 @@ Phase 5 fix rounds count from 1, independent of Phase 4.
 
 ## Scoped Re-verification & Doc Re-check
 
-After fixes are committed, continue only the failed Phase 5 check(s) (`verify` and/or `review-docs`, spawning fresh only if none exists / one-shot harness). For `verify`, pass `failed-scenarios=<names>` so re-verification targets what failed:
+Continue the failed check(s) on the new head. Target failed scenarios and directly affected behavior. If only docs failed but an earlier live verdict now names an old head, continue the verifier for the relevant real-world smoke on the candidate head before merge. Use the existing child unless unavailable:
 
 ```text
 Payload: <pr-number> risk=<Low|Moderate|High> [failed-scenarios=<names>]

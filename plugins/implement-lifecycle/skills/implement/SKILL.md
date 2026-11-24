@@ -6,7 +6,7 @@ description: >-
   Triggers: /implement, $implement-lifecycle:implement, implement this, build this feature
 license: MIT
 metadata:
-  version: "4.1.0"
+  version: "4.2.0"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -19,7 +19,7 @@ Orchestrate the implementation lifecycle (use the prompt if `$ARGUMENTS` is lite
 $ARGUMENTS
 ```
 
-Inspect the branch and recent commits before delegating.
+Record the invocation time in UTC from the session event or clock. Inspect the branch and recent commits.
 
 ## Instructions
 
@@ -42,7 +42,7 @@ Map tiers via the active adapter. **Never silently inherit the orchestrator mode
 
 Read only your harness adapter once at start (`references/adapter-claude.md`, `references/adapter-codex.md`, `references/adapter-opencode.md`, `references/adapter-agy.md`, `references/adapter-pi.md`, or `references/adapter-generic.md`). Wait for reviewers; if any result lacks all four canonical headings, read `references/reviewer-recovery.md` before refereeing.
 
-**PR & prompt as source of truth (no sidecar scratch files).** Do not write state, bundle, or scratch findings files. Keep active child handles, risk/complexity level, round, and phase start times in conversation context (recovering from PR comments, `gh pr view --json files`, and `git log` or spawning fresh children if compacted). For `Part of #N` slice PRs, scope review, refereeing, and verification to **this PR's slice** as stated in the PR description and prompt — never penalize or fail a slice PR for deferred parent-issue items.
+**PR & prompt as source of truth (no sidecar scratch files).** Do not write state, bundle, or scratch findings files. Keep child handles, risk, round and observed milestone times in context. Recover from events and PR history after compaction. For `Part of #N` slice PRs, scope review, refereeing, and verification to **this PR's slice** as stated in the PR description and prompt — never penalize or fail a slice PR for deferred parent-issue items.
 
 ### Entry Point
 
@@ -50,7 +50,7 @@ Leading token: `#N` → issue criteria; bare number → `gh pr view <n> --json n
 
 ### Phase 1–3: Implement & Create PR
 
-**Never edit code or docs.** Delegate `implement-code`: `Payload: <issue-number-or-0> <task, criteria, instructions>`. Keep the PR number and author child handle for continuations. If from an issue, comment: `## In Progress` / `Implementation PR created: #<pr-number> — <PR title>`.
+**Never edit code or docs.** Delegate `implement-code`: `Payload: <issue-number-or-0> <task, criteria, instructions>`. In every writer prompt, including corrections, name the repo, affected checks and when its full gate is due. For multi-PR work, identify the first usable result. Name a real integration interaction for the first runnable slice. Keep the PR number and author handle. If from an issue, comment: `## In Progress` / `Implementation PR created: #<pr-number> — <PR title>`.
 
 ### Risk & Complexity
 
@@ -64,15 +64,13 @@ Assess **risk and complexity** pragmatically from what changed and what could br
 
 ### Phase 4: Code Review / Address Loop {#review-loop}
 
-Bounded Steps A → E capped at 2 rounds (`Low`: max 1 round, no re-review after addressing; `Moderate`/`High`: max 2 rounds, delta-only Round 2 runs only if Round 1 accepted ≥ 1 `Action Required` finding).
-
 #### Before Round 1
 
 Rebase on base branch only when entering at Phase 4 or conflicting (`gh pr view` base, `git fetch`, `git rebase`). Mechanical conflict resolution is permitted: fix, run focused tests, `git push --force-with-lease`.
 
 #### Step A: Invoke Reviewers
 
-By default, spawn **1 `review-general` child** (`Payload: Review PR #<pr-number>, round <N>[, delta <prev>..<head>][ — <focus or surface slice>]`). Only when the surface area is very large or `High` risk/complexity, spawn **2–3 parallel `review-general` children**, assigning each a distinct subsystem slice or risk focus in its prompt (**max 3 reviewers total**). Reviewers are read-only and never post to GitHub or run suites. Follow-up Round 2 continues only the reviewer(s) whose `Action Required` findings were accepted, judging only `<prev>..<head>` (Follow-up reviewers judge only that range).
+By default, spawn **1 `review-general` child** (`Payload: Review PR #<pr-number>, round <N>[, delta <prev>..<head>][ — <focus or surface slice>]`). Only when the surface area is very large or `High` risk/complexity, spawn **2–3 parallel `review-general` children**, assigning each a distinct subsystem slice or risk focus in its prompt (**max 3 reviewers total**). Reviewers are read-only and never post to GitHub or run suites. For Low changes confined to docs, skill wording or tests, assign docs accuracy and links to the same reviewer. Honor any required independent docs review. Continue only reviewers with accepted `Action Required` findings for Round 2 on `<prev>..<head>`. Follow-up reviewers judge only that range.
 
 #### Step B: Referee Evaluation
 
@@ -92,25 +90,27 @@ Never run a clean-confirmation round. `Low` runs and Round 1 runs with rejected-
 
 ### Phase 5: Parallel Verification & Docs Review
 
-Automated tests, linters, and builds belong to `implement-code` / `implement-address` (and CI); if automated checks are failing on the PR head before Phase 5, send them straight back to the author/addresser child rather than `verify`. Run **Verification** and **Docs Review** **in parallel** on the post-Phase-4 PR head:
+Send failing automated checks to their owning writer for diagnosis. Keep required failures blocking. Run **Verification** and **Docs Review** **in parallel** on the post-review head when both apply:
 
-- **Docs Review (`review-docs`, `balanced` child):** Spawn whenever docs, specs, READMEs, public interfaces (CLI/API/config), or behavior described in `AGENTS.md`, ADRs, or covered specs changed (`Payload: Review docs for PR #<pr-number>[, delta <prev>..<head>]`). Skip when purely internal code changed with no doc impact.
+- **Docs Review (`review-docs`, `balanced` child):** Skip if the general reviewer covered the docs, fixes stayed in scope and no separate reviewer is required. Otherwise spawn when docs, specs, READMEs, public interfaces (CLI/API/config), or documented behavior changed (`Payload: Review docs for PR #<pr-number>[, delta <prev>..<head>]`). Skip when purely internal code changed with no doc impact.
 - **Real-World Verification (`verify`, `balanced` child, in parallel with `review-docs`):** `verify` exercises and inspects the actual built work (data outputs/shapes, CLI execution, browser UI navigation & screenshots, live endpoints/services) — **never spawn `verify` just to re-run unit tests**:
   - **Spawn `verify`** when the PR touches any runnable, visual, data-producing, or user-observable surface: `Payload: <pr-number> risk=<Low|Moderate|High> [failed-scenarios=<names>]` (keep the classified `risk=`; never re-classify).
-  - **Skip `verify`** (record `verify: skipped (no live surface)` for the Run Ledger, and compare PR description claims against `gh pr diff <pr-number>` inline) when the PR has no distinct real-world surface beyond passing automated tests/CI (docs/comments only, type-only edits, or pure internal refactors).
+  - **Skip `verify`** (record `verify: skipped (no live surface)` for the Run Ledger, and compare PR description claims against `gh pr diff <pr-number>` inline) when the PR has no changed live behavior. Exercise changed skill instructions when they affect what a user or agent can do.
 
 **Resolve Phase 5:** Wait for both (when both run). Referee `review-docs` findings against code/docs (accept only concrete doc drift, broken links, missing interface docs, or `docs-check` errors).
 - **PASS / N/A / skipped & clean docs:** fix any `Claim Mismatches` via `gh pr edit --body-file`, then Phase 6.
-- **FAIL and/or accepted `Action Required` doc findings:** Batch both into **one** inline fix pass via `references/verify-fail-loop.md` (capped at 2 cycles), then re-run only the failed check(s).
+- **FAIL and/or accepted `Action Required` doc findings:** Batch both into **one** inline fix pass via `references/verify-fail-loop.md` (capped at 2 cycles), then recheck failures and refresh any stale verification verdict.
 - **PARTIAL** (unavailable live environment/credentials, human-only check, or pre-existing merge-base failures): stop and print run ledger; never merge.
 
 ### Phase 6: Merge & Finalize
+
+Reuse permitted results for the candidate head, command and environment. Assign each missing required check once to its project-designated owner. For local checks, continue the writer with `final checks <PR> <head> <commands>` (fresh `implement-address` if none exists). Complete agent-runnable gates before a human handoff. A failing gate blocks merge. If a fix changes the head, revisit affected review and verification before merging.
 
 Evaluate and execute the canonical `merge-pr` skill inline against `<pr-number>`; do not spawn a child for it. Print the run ledger and report the result.
 
 ## Run ledger
 
-Track phase times, spawns/continuations, and fix commits across the run. On every terminal path, read `references/run-ledger.md` and print the collapsed run ledger.
+Capture UTC event times as PR opens, review and verification finish, the PR becomes ready, and merge or stop occurs. Track observed external waits, spawns/continuations and fix commits. On every terminal path, read `references/run-ledger.md` and print the collapsed run ledger.
 
 ## Escalation
 

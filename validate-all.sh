@@ -802,7 +802,7 @@ PYEOF
         ledger_ok=false
       fi
     done
-    for ledger_field in '## Run Ledger' '- Risk & complexity:' '- Children:' '- Rounds: review' '- Fix commits:' '- Wall-clock:' '- Follow-up items:' '- Outcome:'; do
+    for ledger_field in '## Run Ledger' '- Risk & complexity:' '- Children:' '- Rounds: review' '- Fix commits:' '- Milestones (UTC):' '- Wall-clock:' '- External waits:' '- Follow-up items:' '- Outcome:'; do
       if ! printf '%s' "$ledger_collapsed" | rg -Fq -- "$ledger_field"; then
         echo "  ERROR: implement run ledger template must collapse under <details> (blank line after </summary>) and include: $ledger_field"
         ERRORS=$((ERRORS + 1))
@@ -919,11 +919,11 @@ PYEOF
     fi
 
     if ! sed -n '/^### Step 4: Verify and Self-Review$/,/^### Step 5: /p' "$plugin_dir/skills/implement-code/SKILL.md" | rg -Fq 'Run `docs-check` with lint when the project has a `docs-check.toml`.' || \
-      ! rg -Fq 'Run `docs-check` on docs changes when the project has a `docs-check.toml`.' "$plugin_dir/skills/review-docs/SKILL.md"; then
-      echo "  ERROR: implement-code Step 4 must run docs-check with lint, and review-docs must run it on docs changes, when the project has a docs-check.toml"
+      ! rg -Fq 'Use the existing `docs-check` result for the reviewed head when the project has a `docs-check.toml`.' "$plugin_dir/skills/review-docs/SKILL.md"; then
+      echo "  ERROR: implement-code Step 4 must run docs-check with lint, and review-docs must use its reviewed-head result, when the project has a docs-check.toml"
       ERRORS=$((ERRORS + 1))
     else
-      echo "  OK: implement-code and review-docs run docs-check when the project has a docs-check.toml"
+      echo "  OK: the writer owns docs-check and docs review uses its result"
     fi
 
     review_comment_ref="$plugin_dir/skills/implement/references/consolidated-review.md"
