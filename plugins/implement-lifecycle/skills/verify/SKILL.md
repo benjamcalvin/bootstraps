@@ -19,6 +19,8 @@ Parse PR number, `risk=<Low|Moderate|High>` (`Moderate` when absent), and option
 
 ## What to Verify
 
+For an integration, exercise the named user interaction through the actual consumer or provider. Reuse inspectable evidence from the same head, environment and scenario when project rules permit. If only a stand-in was exercised and the real boundary remains unavailable, report PARTIAL with the missing interaction.
+
 Exercise and inspect the real built artifact matching what changed:
 - **Data, queries, migrations, or pipelines** — run against representative inputs and **inspect the actual output rows, schemas, counts, edge values, and persisted state** to confirm the data genuinely looks right (not merely exit code 0).
 - **CLI, TUI, scripts, or tools** — invoke the real command/binary across realistic flags, inputs, and error cases; inspect actual stdout/stderr, exit codes, and generated files or side effects.

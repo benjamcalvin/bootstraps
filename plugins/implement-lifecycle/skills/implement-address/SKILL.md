@@ -3,7 +3,7 @@ name: implement-address
 description: "Delegated implement-lifecycle worker: address accepted review findings when running standalone or fresh on an existing PR."
 license: MIT
 metadata:
-  version: "2.4.0"
+  version: "2.5.0"
   tags: ["implement", "address", "subagent"]
   author: benjamcalvin
   opencode/autoinvoke: false
@@ -21,7 +21,9 @@ $ARGUMENTS
 
 You are the **addresser**: fix accepted review findings (and only those), ensure automated tests/build pass, and push. **Stay focused on the task at hand; do not overthink** — apply the smallest direct fix without expanding scope. Used standalone (`"address the review feedback"`) or spawned fresh on an existing PR when no `implement-code` author child exists in the session. Use the inline findings supplied in the prompt when orchestrated; when invoked standalone without inline findings, fetch PR metadata and review comments via `gh pr view <pr-number> --comments`.
 
-**Guard:** If no actionable findings are supplied or present on the PR, stop immediately and report it.
+For `final checks <PR> <head> <commands>`, confirm the worktree and PR head match that commit, run only the assigned checks using Step 2’s failure handling, and return commands, commit, environment and results without edits.
+
+**Guard for addressing findings:** If no actionable findings are supplied or present on the PR, stop immediately and report it.
 
 ### Step 1: Address Each Finding
 
@@ -37,7 +39,7 @@ Add no comments outside the allow-list (external constraint with linked source, 
 
 ### Step 2: Automated Verification
 
-Use fast targeted tests while iterating, then run affected and project automated tests, linters, `docs-check` (if `docs-check.toml` exists), and build so automated checks pass before pushing. Fix code, not tests, if any fail. Read your fix diff to catch regressions.
+Run affected tests, lint and builds in this PR’s repository, including configured `docs-check` and any project-required pre-push checks. Read the fix diff. Isolate an apparently unrelated failure and compare it on the merge base. Report the command, commits and result. Follow the project's bounded retry policy or report the blocker. On timeout or a superseding head, stop only this run's obsolete job and its processes or container. Confirm termination before starting a replacement.
 
 ### Step 3: Commit, Push, and Report
 

@@ -19,7 +19,7 @@ Parse the PR number, round, optional delta range, and any scope note from the pr
 
 Inspect statically (do not run project test suites):
 - **Code → docs.** Flag code contradicting docs, undocumented public interfaces (flags, APIs, config keys), or unrecorded convention changes in `AGENTS.md` or guides. For mechanical internal changes with no docs impact, state: **"No documentation updates needed — changes are purely mechanical with no docs impact."**
-- **Frontmatter & links.** Run `docs-check` on docs changes when the project has a `docs-check.toml`. Verify added relative links resolve.
+- **Frontmatter & links.** Use the existing `docs-check` result for the reviewed head when the project has a `docs-check.toml`. Request a missing configured check from its owner (run it yourself if standalone). Verify added relative links resolve.
 - **Specs & touched docs.** For changed specs or code under a spec's `Covers:` paths, report Glossary terms that no longer appear in the covered code, unrecorded concept changes, or changed decisions without rationale; reconcile touched docs that still say "missing" or "not yet implemented" for behavior this PR changes.
 
 ## Findings

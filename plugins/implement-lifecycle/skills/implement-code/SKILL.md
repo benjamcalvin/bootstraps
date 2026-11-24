@@ -3,7 +3,7 @@ name: implement-code
 description: "Delegated implement-lifecycle worker: plan, test, implement, open a PR, and address review findings in continuation mode."
 license: MIT
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
   tags: ["implement", "code", "pr", "subagent"]
   author: benjamcalvin
   opencode/autoinvoke: false
@@ -39,7 +39,7 @@ Write minimum code to pass tests; match existing style; trace every line to the 
 
 ### Step 4: Verify and Self-Review
 
-Use fast targeted tests while iterating, then run the project's automated tests, linters, and build before opening the PR so all automated checks pass cleanly (Phase 5 `verify` inspects real-world behavior rather than running unit suites). Run `docs-check` with lint when the project has a `docs-check.toml`. Every test and lint must pass; fix code, not tests. Exercise changed runnable artifacts (CLIs, UI, endpoints, config, migrations/data) with representative and edge inputs when practical. Read your diff to drop stray changes, unused symbols, and non-allow-listed comments (including tracker citations, step labels, or history prose).
+Run affected automated tests, linters, and build before opening the PR, plus any checks the project requires at that point. Run `docs-check` with lint when the project has a `docs-check.toml`. Reserve merge-only checks for the candidate head. Work in the assigned repository. On an apparently unrelated failure, isolate the failing case and compare it on the merge base. Report the command, commits and result. Follow the project's bounded retry policy or report the blocker. On timeout or a superseding head, stop only this run's obsolete job and its processes or container. Confirm termination before starting a replacement. For other runnable changes, smoke-test representative inputs when practical. For an integration, exercise the first runnable slice through its real consumer or provider. Report the revision, environment and observed output, or the missing prerequisite. Read your diff to drop stray changes, unused symbols, and non-allow-listed comments (including tracker citations, step labels, or history prose).
 
 ### Step 5: Commit
 
@@ -47,12 +47,14 @@ Follow target commit policy; fallback `<type>: <summary>` (imperative, no period
 
 ### Step 6: Sync, Push, and Create PR
 
-Rebase on target base branch (default branch from `gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name'`, or parent branch if stacked), rerun affected automated checks, and push `-u origin HEAD`. Use target PR template or `references/pr-description.md`. Link issue with `Closes #N` only when fully complete, else `Part of #N` (stating this slice's scope and deferred parent-issue items in `## Design`).
+Rebase on target base branch (default branch from `gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name'`, or parent branch if stacked), rerun affected checks if the rebase changed the tested tree, and push `-u origin HEAD`. Use target PR template or `references/pr-description.md`. Link issue with `Closes #N` only when fully complete, else `Part of #N` (stating this slice's scope and deferred parent-issue items in `## Design`).
 
 ### Step 7: Return Result
 
-Return exact summary (`PR_NUMBER:`, `PR_TITLE:`, `SUMMARY:`) plus any risk or changed real-world surface note (UI flow, CLI command, data output, endpoint, or none) for the orchestrator.
+Return exact summary (`PR_NUMBER:`, `PR_TITLE:`, `SUMMARY:`) plus risk, changed live surface, checks run (command, tested revision and environment), and any required checks still due.
 
 ### Step 8: Continuation Mode (Addressing Findings)
 
-When continued/resumed with `<pr-number> <round-or-verify-id>` and inline findings (stop and report if no findings are supplied), read the code around each finding and either **Apply**, **Partially apply** (explain better fix), **Reject with justification** (citing specs, ADRs, or conventions — never ungrounded), or **Escalate**. Preserve strong assertions when compressing tests, keep comments within the allow-list (delete none unless made false), run affected automated tests/linters/build and `docs-check` when `docs-check.toml` exists, inspect your fix diff, commit as `fix: address review round <round> — <description>`, `git push`, and return a `| # | Finding | Action | Details |` table with `**Tests:**` and `**Commits:**` lines.
+For `final checks <PR> <head> <commands>`, confirm the worktree and PR head match the requested commit. Run only outstanding assigned checks using Step 4’s failure handling. Return commands, commit, environment and results. Leave the tree untouched.
+
+When continued/resumed with `<pr-number> <round-or-verify-id>` and inline findings (stop and report if no findings are supplied), read the code around each finding and either **Apply**, **Partially apply** (explain better fix), **Reject with justification** (citing specs, ADRs, or conventions — never ungrounded), or **Escalate**. Preserve strong assertions when compressing tests, keep comments within the allow-list (delete none unless made false), apply Step 4 to the affected checks and `docs-check` when `docs-check.toml` exists, inspect your fix diff, commit as `fix: address review round <round> — <description>`, `git push`, and return a `| # | Finding | Action | Details |` table with `**Tests:**` and `**Commits:**` lines.

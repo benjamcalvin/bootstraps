@@ -4,7 +4,7 @@ description: "Merge a verified PR following the target project's rules and post 
 argument-hint: <pr-number>
 license: MIT
 metadata:
-  version: "4.1.0"
+  version: "4.2.0"
   tags: ["merge", "pr", "issues"]
   author: benjamcalvin
 ---
@@ -24,7 +24,7 @@ Read the target project's documented rules (`AGENTS.md`, `CLAUDE.md`, contributi
 
 Confirm:
 1. PR is `OPEN` and has no merge conflicts (`mergeable` is not `CONFLICTING`).
-2. Required CI checks pass and there are no `CHANGES_REQUESTED` reviews or unresolved blocking gates required by the project.
+2. Required local and CI checks passed for the current candidate under project rules (confirm the commit, command and required environment for local results). A missing or failed required check blocks merge. Confirm there are no `CHANGES_REQUESTED` reviews or unresolved blocking gates required by the project.
 3. When real-world verification ran on the PR, the latest verification comment reports `PASS` (or `N/A`) with `Verified-Head` matching current `headRefOid` (`FAIL` or `PARTIAL` stops merge).
 4. **Human approval / merge queue:** if project rules require human approval or merge-queue checks not yet satisfied, stop and report `## Ready for Human Merge — PR #<number>, awaiting human approval or merge queue.`
 

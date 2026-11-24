@@ -21,6 +21,7 @@ Check the changed surface across three pillars without inventing hypothetical re
 - **Simplicity & scope** — solves the task directly with minimal moving parts; flag over-engineering, dead code, unnecessary abstractions, or unrequested features, dependencies, and interfaces that should be simplified or cut
 - **Security** — trust boundaries, authn/authz, tenant isolation, injection/command/path safety, secrets/PII handling, and newly exposed endpoints, permissions, or network surfaces
 - **Quality & correctness** — control flow, edge/error/resource handling, migrations/data integrity/concurrency, conventions (`AGENTS.md`, `CLAUDE.md`, ADRs, specs), and tests asserting real behavioral outcomes rather than fragile mocks
+- **Docs, when assigned** — check accuracy against the actual interface, resolve edited links and inspect configured docs-check results. Report missing check evidence to the orchestrator.
 - **Comments** — an added comment outside the allow-list is Minor and never blocking unless the target repository declares the comment policy
 
 Do not run test suites or builds when orchestrated or when `Author ran:` is recorded — inspect code, diffs, and test assertions statically so parallel reviewers never contend on worktree builds.

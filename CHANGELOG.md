@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `implement-lifecycle` 4.2.0 assigns each required check to one owner per candidate commit and environment, combines docs and general review for localized low-risk changes, exercises a real integration path in the first runnable slice, and records observed time to ready and external waits.
 - **Breaking:** `implement-lifecycle` 4.0.0 streamlines the lifecycle around risk & complexity, unified general review, parallel verification + docs review, and inline rule-guided merge:
   - Replaces LOC-based line counting with pragmatic risk & complexity scaling (`Low` / `Moderate` / `High`), paired with explicit anti-overthinking guidance across orchestrator, coders, reviewers, verifiers, and merge
   - Unifies code review under `review-general` covering security, simplicity, and quality (1 reviewer by default, scaling to 2–3 parallel `review-general` instances only when surface area or complexity warrants it; capped at 2 rounds, Round 2 only when Round 1 accepted at least one `Action Required` defect)
