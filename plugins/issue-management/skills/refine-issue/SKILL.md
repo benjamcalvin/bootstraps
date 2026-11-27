@@ -7,7 +7,7 @@ description: >-
 argument-hint: <#issue-number>
 license: MIT
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
   tags: ["issue", "refine", "planning", "research"]
   author: benjamcalvin
 ---
@@ -46,7 +46,7 @@ Read the issue body and comments from Context above. Identify:
 
 This is the core value of refinement. Explore the codebase to fill knowledge gaps.
 
-1. **Locate affected code.** Use Glob/Grep/Read to find the modules, files, and functions the issue touches. Record exact paths and line numbers.
+1. **Locate affected code.** Use Glob/Grep/Read to find the modules, files, and functions the issue touches. Record exact paths and line numbers, and confirm each exists on the default branch, not only on an unmerged branch.
 
 2. **Find existing patterns.** Search for analogous implementations. If the issue asks for "add pagination to the users endpoint," find another endpoint that already has pagination and note the pattern.
 
@@ -76,6 +76,8 @@ Replace vague criteria with specific, testable ones grounded in actual code:
 
 Each criterion should be independently verifiable and name the observable contract precisely (an endpoint, a function signature). Locational detail discovered during research — which file implements the pattern, which lines to mirror — goes in Technical Context, not the criterion: the criterion states *what must be true*, Technical Context states *where to look*. Cite a spec or related issue at the end of a bullet, never mid-clause.
 
+Replace any criterion that points at a spec instead of stating behavior ("behaves as the spec defines") with the behaviors it covers; if that list sprawls, decompose (4c). If criteria were added after the issue was written, for example as owner decisions arrived, re-check that Problem and Scope still describe them: update Scope, or split the new work into its own issue. Flag any two criteria that conflict.
+
 #### 4b: Add Technical Context
 
 Add or enhance the Technical Context section, collapsed under `<details>`:
@@ -100,7 +102,14 @@ Add or enhance the Technical Context section, collapsed under `<details>`:
 
 #### 4c: Decompose if Needed
 
-If the issue spans more than one logical change — independent concerns, or layers that must land in sequence — add a "Proposed PRs" section that gives each its own PR. A batch of small, independent, same-kind housekeeping changes may stay a single PR:
+Sprawl, not size, decides decomposition; a long issue about one concern can stay whole. Pick the shape:
+
+- **Slices of one concern that must land in sequence** (schema → data layer → API): add a "Proposed PRs" section, below.
+- **Sprawl** — independent concerns, subsystems, or repositories; parts waiting on owner decisions; or parts needing their own live rollout: turn the issue into a short parent stating the outcome, and propose one sub-issue per deliverable (Step 6).
+- **Unrelated items bundled together:** propose separate issues.
+- **Open owner decisions or actions:** propose a separate owner-request issue (`draft-issue`'s format: context, decisions with recommendations, runbook) that the build work depends on; the issue is not ready for `/implement` until they are answered.
+
+A batch of small, independent, same-kind housekeeping changes may stay a single PR. The Proposed PRs format:
 
 ```markdown
 <details>
@@ -147,8 +156,8 @@ Before presenting, verify:
 1. Every acceptance criterion names a real, observable contract (verified against the code, not guessed)
 2. Technical context has exact file paths (not guesses)
 3. Patterns to follow are actual patterns in the codebase
-4. Decomposition (if any) has clear dependency ordering
-5. No new requirements were invented — only existing intent was sharpened
+4. Decomposition (if any) has clear dependency ordering, and sprawl became sub-issues rather than Proposed PRs
+5. No new requirements were invented — only existing intent was sharpened; Scope still covers every criterion, and no two criteria conflict
 6. **Altitude check:** refinement did not push code identifiers into Problem or Solution; file/function/line references live only in Technical Context (and PR decomposition tables)
 7. **Collapse check:** Technical Context and Proposed PRs sit inside `<details>` blocks with a blank line after `</summary>`
 8. **Skim test:** the first sentence of each section, read in order, still forms a correct summary at descending altitude
@@ -179,5 +188,7 @@ Parent issue: #<parent-number>
 EOF
 )"
 ```
+
+Offer to create any proposed owner-request issues the same way, titled `Owner request: <what is needed> (#<blocked>)` with label `needs-owner` (`--label needs-owner`).
 
 Report what was refined (e.g., "Sharpened 4 acceptance criteria with code references, added Technical Context section, decomposed into 2 PRs").
