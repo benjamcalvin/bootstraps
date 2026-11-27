@@ -61,7 +61,7 @@ Sprawl, not size, decides the shape. A long, detailed issue about one concern is
 | A localized bug or tweak | Small Fix template |
 | One logical change, however detailed | Standard template |
 | Slices of one concern that must land in sequence (schema → data layer → API) | Large template with Proposed PRs |
-| Sprawling: independent concerns, subsystems, or repositories; parts waiting on owner decisions; or parts needing their own live rollout | A short parent issue stating the outcome, plus one sub-issue per deliverable, each with its own criteria and scope |
+| Sprawling: independent concerns, subsystems, or repositories; parts waiting on owner decisions; or parts needing their own live rollout | A short parent issue stating the outcome, plus one sub-issue per deliverable, each with its own criteria and scope; each pending owner decision goes in its own owner-request issue |
 | Unrelated items | Separate issues — never one bucket issue |
 
 Signs of hidden sprawl: a criterion that points at a spec instead of stating behavior ("behaves as the spec defines"), criteria that span unrelated components, or a criteria list that grows as decisions arrive.

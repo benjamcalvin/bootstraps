@@ -189,4 +189,6 @@ EOF
 )"
 ```
 
+Offer to create any proposed owner-request issues the same way, titled `Owner request: <what is needed> (#<blocked>)` with label `needs-owner` (`--label needs-owner`).
+
 Report what was refined (e.g., "Sharpened 4 acceptance criteria with code references, added Technical Context section, decomposed into 2 PRs").
