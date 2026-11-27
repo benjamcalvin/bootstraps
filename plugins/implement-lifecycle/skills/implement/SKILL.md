@@ -46,7 +46,7 @@ Read only your harness adapter once at start (`references/adapter-claude.md`, `r
 
 ### Entry Point
 
-Leading token: `#N` → issue criteria; bare number → `gh pr view <n> --json number,title,state`; else freeform. Modifiers: *(none)* → full lifecycle (Phases 1–6, or 4–6 on PR); `"just review"` / `"review only"` → classify + Step A/C + ledger; `"address the review feedback"` → addresser + ledger; `"review and address"` → Phase 4 + ledger; `"skip planning"` / `"just implement"` → pass to `implement-code`.
+Resume a target's pending owner request first. Leading token: `#N` → issue criteria; bare number → `gh pr view <n> --json number,title,state`; else freeform. Modifiers: *(none)* → full lifecycle (Phases 1–6, or 4–6 on PR); `"just review"` / `"review only"` → classify + Step A/C + ledger; `"address the review feedback"` → addresser + ledger; `"review and address"` → Phase 4 + ledger; `"skip planning"` / `"just implement"` → pass to `implement-code`.
 
 ### Phase 1–3: Implement & Create PR
 
@@ -100,7 +100,7 @@ Send failing automated checks to their owning writer for diagnosis. Keep require
 **Resolve Phase 5:** Wait for both (when both run). Referee `review-docs` findings against code/docs (accept only concrete doc drift, broken links, missing interface docs, or `docs-check` errors).
 - **PASS / N/A / skipped & clean docs:** fix any `Claim Mismatches` via `gh pr edit --body-file`, then Phase 6.
 - **FAIL and/or accepted `Action Required` doc findings:** Batch both into **one** inline fix pass via `references/verify-fail-loop.md` (capped at 2 cycles), then recheck failures and refresh any stale verification verdict.
-- **PARTIAL** (unavailable live environment/credentials, human-only check, or pre-existing merge-base failures): stop and print run ledger; never merge.
+- **PARTIAL** (unavailable live environment/credentials, human-only check, or pre-existing merge-base failures): never merge; escalate.
 
 ### Phase 6: Merge & Finalize
 
@@ -114,4 +114,4 @@ Capture UTC event times as PR opens, review and verification finish, the PR beco
 
 ## Escalation
 
-After `references/convergence-recovery.md`, escalate to human for ambiguous requirements, out-of-scope architecture, new dependencies, non-pattern auth/crypto/PII, human-only checks, or unrelated test failures, with options and the run ledger.
+After `references/convergence-recovery.md`, open an owner request per `references/owner-request.md` for ambiguous requirements, out-of-scope architecture, new dependencies, non-pattern auth/crypto/PII, human-only checks or actions, or unrelated test failures.

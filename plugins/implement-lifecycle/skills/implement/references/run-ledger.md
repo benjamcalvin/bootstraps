@@ -20,6 +20,6 @@ On every terminal path (merge, escalation, cap or stall exit, third verify FAIL,
 - External waits: <reason and observed interval, or none observed>
 - Stalls: <time, child, action, outcome per intervention, or none>
 - Follow-up items: <out-of-delta findings, or none>
-- Outcome: <merged|escalated|partial|stopped|reviewed|addressed> — <phase>
+- Outcome: <merged|awaiting owner — #<request>|escalated|partial|stopped|reviewed|addressed> — <phase>
 
 </details>
