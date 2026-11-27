@@ -333,6 +333,17 @@ PYEOF
       echo "  OK: No implement-lifecycle named agent templates distributed"
     fi
 
+    owner_request_ref="$plugin_dir/skills/implement/references/owner-request.md"
+    if [ ! -f "$owner_request_ref" ] || \
+      ! rg -Fq 'open an owner request per `references/owner-request.md`' "$plugin_dir/skills/implement/SKILL.md" || \
+      ! rg -Fq '## Runbook' "$owner_request_ref" || \
+      ! rg -Fq 'needs-owner' "$owner_request_ref"; then
+      echo "  ERROR: implement must escalate through an owner-request issue with a runbook (references/owner-request.md)"
+      ERRORS=$((ERRORS + 1))
+    else
+      echo "  OK: implement escalates through owner-request issues"
+    fi
+
     # Instruction byte budget: every child re-reads these files, so growth is a cost regression.
     lifecycle_budget_total=34000
     lifecycle_budget_implement=11500

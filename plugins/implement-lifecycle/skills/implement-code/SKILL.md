@@ -47,7 +47,7 @@ Follow target commit policy; fallback `<type>: <summary>` (imperative, no period
 
 ### Step 6: Sync, Push, and Create PR
 
-Rebase on target base branch (default branch from `gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name'`, or parent branch if stacked), rerun affected checks if the rebase changed the tested tree, and push `-u origin HEAD`. Use target PR template or `references/pr-description.md`. Link issue with `Closes #N` only when fully complete, else `Part of #N` (stating this slice's scope and deferred parent-issue items in `## Design`).
+Rebase on target base branch (default branch from `gh repo view --json defaultBranchRef --jq '.defaultBranchRef.name'`, or parent branch if stacked), rerun affected checks if the rebase changed the tested tree, and push `-u origin HEAD`. Use target PR template or `references/pr-description.md`. Link issue with `Closes #N` only when this PR's own diff fully completes it, live steps included, else `Part of #N` (stating this slice's scope and deferred parent-issue items in `## Design`); a stacked or roll-up PR carrying other PRs uses `Part of`. Report a defect found outside the task in your result, for its own issue/PR; never fold it into this PR or its stack.
 
 ### Step 7: Return Result
 
