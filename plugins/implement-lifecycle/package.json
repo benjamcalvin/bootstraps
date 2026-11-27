@@ -1,6 +1,6 @@
 {
   "name": "implement-lifecycle",
-  "version": "4.2.0",
+  "version": "4.3.0",
   "description": "Harness-neutral implementation lifecycle with adversarial PR review",
   "private": true,
   "type": "module",

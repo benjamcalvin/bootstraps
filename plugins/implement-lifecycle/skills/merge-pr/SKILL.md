@@ -4,7 +4,7 @@ description: "Merge a verified PR following the target project's rules and post 
 argument-hint: <pr-number>
 license: MIT
 metadata:
-  version: "4.2.0"
+  version: "4.3.0"
   tags: ["merge", "pr", "issues"]
   author: benjamcalvin
 ---

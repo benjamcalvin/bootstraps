@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `implement-lifecycle` 4.3.0 replaces "do not poll, sleep, or schedule wake-ups" with adaptive supervision. The orchestrator checks in on running children at sparse intervals set from what it has observed in this run, not fixed durations. It treats a child as stalled when it runs well past comparable children with no new activity, and escalates in steps: ask for status, stop the hung process, start a fresh child, then stop and report. Writers and verifiers put a time limit on long commands and never end a turn with a process still running. Each adapter names its check-in timer; Codex now passes an explicit `wait_agent` `timeout_ms` instead of the 30-second default. The run ledger gains a stalls line.
 - `implement-lifecycle` 4.2.0 assigns each required check to one owner per candidate commit and environment, combines docs and general review for localized low-risk changes, exercises a real integration path in the first runnable slice, and records observed time to ready and external waits.
 - **Breaking:** `implement-lifecycle` 4.0.0 streamlines the lifecycle around risk & complexity, unified general review, parallel verification + docs review, and inline rule-guided merge:
   - Replaces LOC-based line counting with pragmatic risk & complexity scaling (`Low` / `Moderate` / `High`), paired with explicit anti-overthinking guidance across orchestrator, coders, reviewers, verifiers, and merge

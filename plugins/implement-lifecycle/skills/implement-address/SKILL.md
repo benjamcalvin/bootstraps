@@ -39,7 +39,7 @@ Add no comments outside the allow-list (external constraint with linked source, 
 
 ### Step 2: Automated Verification
 
-Run affected tests, lint and builds in this PR’s repository, including configured `docs-check` and any project-required pre-push checks. Read the fix diff. Isolate an apparently unrelated failure and compare it on the merge base. Report the command, commits and result. Follow the project's bounded retry policy or report the blocker. On timeout or a superseding head, stop only this run's obsolete job and its processes or container. Confirm termination before starting a replacement.
+Run affected tests, lint and builds in this PR’s repository, including configured `docs-check` and any project-required pre-push checks. Read the fix diff. Isolate an apparently unrelated failure and compare it on the merge base. Report the command, commits and result. Follow the project's bounded retry policy or report the blocker. On timeout or a superseding head, stop only this run's obsolete job and its processes or container. Confirm termination before starting a replacement. Bound each long command with a time limit set from its observed duration; never end your turn while a process you started is still running.
 
 ### Step 3: Commit, Push, and Report
 
