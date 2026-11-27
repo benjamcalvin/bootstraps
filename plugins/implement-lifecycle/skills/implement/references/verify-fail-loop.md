@@ -2,7 +2,7 @@
 
 Read this reference when `verify` returns **FAIL** and/or parallel `review-docs` returns accepted `Action Required` findings.
 
-Allow at most 2 FAIL → address → re-verify cycles; on a third FAIL, do not address again: post an escalation comment listing the unresolved failures, then print the run ledger, stop, and inform the user.
+Allow at most 2 FAIL → address → re-verify cycles; on a third FAIL, do not address again: post an escalation comment listing the unresolved failures, open an owner request per `owner-request.md` carrying them, then print the run ledger and stop.
 
 ## Addressing Phase 5 Failures
 

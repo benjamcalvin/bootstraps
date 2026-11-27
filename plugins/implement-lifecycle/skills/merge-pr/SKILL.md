@@ -26,7 +26,7 @@ Confirm:
 1. PR is `OPEN` and has no merge conflicts (`mergeable` is not `CONFLICTING`).
 2. Required local and CI checks passed for the current candidate under project rules (confirm the commit, command and required environment for local results). A missing or failed required check blocks merge. Confirm there are no `CHANGES_REQUESTED` reviews or unresolved blocking gates required by the project.
 3. When real-world verification ran on the PR, the latest verification comment reports `PASS` (or `N/A`) with `Verified-Head` matching current `headRefOid` (`FAIL` or `PARTIAL` stops merge).
-4. A review is on record for this PR (a consolidated review comment or an approval the project accepts); if none, stop and report it unreviewed.
+4. A review is on record for this PR (a consolidated review comment or an approval the project accepts); if none, stop and report `## Unreviewed — PR #<number> has no review on record.`
 5. **Human approval / merge queue:** if project rules require human approval or merge-queue checks not yet satisfied, stop and report `## Ready for Human Merge — PR #<number>, awaiting human approval or merge queue.`
 
 ## Step 2: Merge
