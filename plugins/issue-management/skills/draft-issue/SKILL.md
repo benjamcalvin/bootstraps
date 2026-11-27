@@ -66,7 +66,15 @@ Sprawl, not size, decides the shape. A long, detailed issue about one concern is
 
 Signs of hidden sprawl: a criterion that points at a spec instead of stating behavior ("behaves as the spec defines"), criteria that span unrelated components, or a criteria list that grows as decisions arrive.
 
-**Open decisions.** If the work needs a product or design decision from the owner, resolve it before drafting, or draft a separate decision issue (options and a recommendation) that the build issue depends on. An issue with unanswered decisions is not ready for `/implement`.
+**Open decisions and owner actions.** If the work needs a decision or an action only the owner can take, resolve it before drafting, or draft a separate owner-request issue that the build issue depends on. Title it `Owner request: <what is needed> (#<blocked>)` and label it `needs-owner`. Its sections are:
+
+- **TL;DR** with a **Blocks:** line
+- **Context**
+- **Decisions:** a table of question, options and recommendation
+- **Runbook:** exact commands or actions in order, each with its expected result
+- **When done:** reply with the answers and `done`, then rerun `/implement` on the blocked issue
+
+An issue with unanswered decisions is not ready for `/implement`.
 
 ### Step 2: Research Context
 

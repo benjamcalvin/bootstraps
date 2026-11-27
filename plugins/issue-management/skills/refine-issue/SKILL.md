@@ -107,7 +107,7 @@ Sprawl, not size, decides decomposition; a long issue about one concern can stay
 - **Slices of one concern that must land in sequence** (schema → data layer → API): add a "Proposed PRs" section, below.
 - **Sprawl** — independent concerns, subsystems, or repositories; parts waiting on owner decisions; or parts needing their own live rollout: turn the issue into a short parent stating the outcome, and propose one sub-issue per deliverable (Step 6).
 - **Unrelated items bundled together:** propose separate issues.
-- **Open owner decisions:** propose a separate decision issue the build work depends on; the issue is not ready for `/implement` until they are answered.
+- **Open owner decisions or actions:** propose a separate owner-request issue (`draft-issue`'s format: context, decisions with recommendations, runbook) that the build work depends on; the issue is not ready for `/implement` until they are answered.
 
 A batch of small, independent, same-kind housekeeping changes may stay a single PR. The Proposed PRs format:
 
