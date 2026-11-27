@@ -40,7 +40,7 @@ Scale hands-on depth to risk and complexity without inventing contrived scenario
 ## Steps
 
 ### Step 1: Check Claims & Real-World Behavior
-Compare each change the PR description claims with `gh pr diff <number>` and list missing claims under `### Claim Mismatches`. Exercise and inspect real-world behavior cleanly; never edit source code or docs.
+Compare each change the PR description claims with `gh pr diff <number>` and list missing claims under `### Claim Mismatches`. Exercise and inspect real-world behavior cleanly; never edit source code or docs. Bound each long command with a time limit; never end your turn while a process you started is still running.
 
 ### Step 2: Post Concise Verification Comment
 Post one `gh pr comment <pr-number>` keeping `### Verdict:` and `Verified-Head:` **outside** `<details>` (and collapsing real-world evidence under `<details>` with a blank line after `</summary>`):

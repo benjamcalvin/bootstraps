@@ -6,7 +6,7 @@ description: >-
   Triggers: /implement, $implement-lifecycle:implement, implement this, build this feature
 license: MIT
 metadata:
-  version: "4.2.0"
+  version: "4.3.0"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
@@ -35,7 +35,7 @@ You are a **lean orchestrator**: delegate and referee; do not implement. **Never
 | Review docs | `review-docs` | `balanced` |
 | Verify | `verify` | `balanced` |
 
-Map tiers via the active adapter. **Never silently inherit the orchestrator model for a `balanced` role; pass the adapter's explicit `balanced` model on every `review-general`, `review-docs`, `implement-address`, and `verify` call.** Wait for children; do not poll, sleep, or schedule wake-ups.
+Map tiers via the active adapter. **Never silently inherit the orchestrator model for a `balanced` role; pass the adapter's explicit `balanced` model on every `review-general`, `review-docs`, `implement-address`, and `verify` call.** Supervise running children per `references/supervision.md`: sparse check-ins adapted to observed progress, never tight polling.
 
 - **New roles:** Spawn a fresh isolated child (never inheriting orchestrator history) for `implement-code`, each Round-1 `review-general`, `review-docs`, and `verify`.
 - **Continuations:** When supported, reuse that same subagent rather than spawning a new one: continue the `implement-code` author child via its Continuation Mode for addressing/Phase-5 fixes (spawn `implement-address` fresh only when entering on an existing PR without an author child), continue `review-general` for Round 2 deltas, and continue `review-docs` / `verify` for Phase-5 re-checks. Spawn fresh only when none exists or the harness is one-shot.
