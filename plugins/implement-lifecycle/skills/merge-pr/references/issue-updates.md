@@ -30,3 +30,5 @@ This PR fully addresses this issue.
 ### Remaining work
 <Remaining items, or "See issue description for remaining scope.">
 ```
+
+If this PR delivers the last remaining item of a `Part of #N` issue (every criterion met, every listed live step done), post the `Delivered` comment instead and close it with `gh issue close <N>`. If only live steps remain, name them under Remaining work and leave the issue open.

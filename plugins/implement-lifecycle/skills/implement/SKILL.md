@@ -6,7 +6,7 @@ description: >-
   Triggers: /implement, $implement-lifecycle:implement, implement this, build this feature
 license: MIT
 metadata:
-  version: "4.3.0"
+  version: "4.4.0"
   tags: ["implement", "lifecycle", "review", "tdd"]
   author: benjamcalvin
 ---
