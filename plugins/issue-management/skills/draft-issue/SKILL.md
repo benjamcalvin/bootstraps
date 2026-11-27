@@ -7,7 +7,7 @@ description: >-
 argument-hint: <brief description of what needs to be done>
 license: MIT
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
   tags: ["issue", "draft", "planning"]
   author: benjamcalvin
 ---
@@ -48,21 +48,56 @@ Three disciplines keep the layers readable:
 Parse `$ARGUMENTS` to determine:
 - **Type:** Is this a bug, feature, chore, refactor, or docs task?
 - **Scope:** What modules/files are likely involved?
-- **Decomposition:** Is this one logical change a reviewer can hold in their head in one sitting — or a small batch of same-kind housekeeping changes? If not, it needs splitting into several PRs.
+- **Shape:** Is this one logical change a reviewer can hold in their head in one sitting — or a small batch of same-kind housekeeping changes? Choose the shape below.
 
 If the request is vague, use the `AskUserQuestion` tool to clarify before proceeding. Do not guess at intent — surface ambiguity early.
+
+#### Choosing the shape
+
+Sprawl, not size, decides the shape. A long, detailed issue about one concern is fine; length and criteria count only prompt you to check for sprawl.
+
+| The work is… | Shape |
+|---|---|
+| A localized bug or tweak | Small Fix template |
+| One logical change, however detailed | Standard template |
+| Slices of one concern that must land in sequence (schema → data layer → API) | Large template with Proposed PRs |
+| Sprawling: independent concerns, subsystems, or repositories; parts waiting on owner decisions; or parts needing their own live rollout | A short parent issue stating the outcome, plus one sub-issue per deliverable, each with its own criteria and scope |
+| Unrelated items | Separate issues — never one bucket issue |
+
+Signs of hidden sprawl: a criterion that points at a spec instead of stating behavior ("behaves as the spec defines"), criteria that span unrelated components, or a criteria list that grows as decisions arrive.
+
+**Open decisions.** If the work needs a product or design decision from the owner, resolve it before drafting, or draft a separate decision issue (options and a recommendation) that the build issue depends on. An issue with unanswered decisions is not ready for `/implement`.
 
 ### Step 2: Research Context
 
 Before drafting, explore the codebase to ground the issue in reality.
 
-1. **Find relevant code.** Use Glob/Grep/Read to locate modules, files, and patterns the implementation must interact with. Record exact file paths.
+1. **Find relevant code.** Use Glob/Grep/Read to locate modules, files, and patterns the implementation must interact with. Record exact file paths, and confirm each exists on the default branch, not only on an unmerged branch.
 2. **Identify existing patterns.** Find analogous implementations. Note specific files and line numbers.
 3. **Check related work.** Search `gh issue list --state all` and `gh pr list --state all` for related issues/PRs. Link anything relevant.
 4. **Read referenced specs.** If the task touches a domain covered by specs in `docs/`, read them.
 5. **Understand the blast radius.** Which tests exercise the affected code? What other modules depend on it?
 
 ### Step 3: Draft the Issue
+
+#### Template: Small Fix
+
+Use for a localized bug or tweak a reviewer reads in minutes. Problem may quote the evidence directly, including code identifiers in an error message or failing command; the other altitude rules do not apply.
+
+```markdown
+## Problem
+
+<What is wrong and why it matters, with the evidence: error output,
+reproduction, or observed behavior.>
+
+## Acceptance Criteria
+
+- [ ] <testable criterion, including a regression test for a bug>
+
+## Out of Scope
+
+- <what this fix must not touch>
+```
 
 #### Template: Standard Issue (Single PR)
 
@@ -80,7 +115,9 @@ or line numbers. Someone who has never read the code must understand the gap.>
 <Design layer. The target state and the shape of the change in component
 terms: which components change roles, how the flow differs before and after.
 Component and operation names allowed; no files, functions, or line numbers.
-Describe the target state, not implementation steps.>
+Describe the target state, not implementation steps. For infrastructure or a
+new capability, add one line naming the simplest built-in or existing option
+and why it is not enough.>
 
 ## Acceptance Criteria
 
@@ -102,6 +139,9 @@ Cite a spec or guarantee at the end of the bullet, not mid-clause.>
 - **Automated tests:** <which criteria map to tests? what patterns?>
 - **Manual checks:** <anything requiring human/visual verification — keep minimal>
 - **Existing test suite:** <must continue to pass>
+- **Live steps owed:** <only for work verifiable solely on a live system: the
+  rollout or check steps that remain after merge. Acceptance Criteria stay
+  checkable before merge. Omit otherwise.>
 
 ## Scope
 
@@ -136,7 +176,7 @@ sections above. Omit if there is none.>
 
 #### Template: Large Issue (Multiple PRs)
 
-Use when the work spans several logical changes — independent concerns, or layers that must land in sequence (schema → data layer → API).
+Use when one concern needs several PRs that must land in sequence (schema → data layer → API). Sprawling work becomes a parent issue with sub-issues instead (see Choosing the shape).
 
 Add these sections to the standard template:
 
@@ -210,17 +250,19 @@ Ask: "Can an AI agent write a test from this sentence alone?" If not, add detail
 Before presenting to the user, verify:
 
 1. Problem is framed, not just stated
-2. Acceptance criteria are machine-testable
+2. Acceptance criteria are machine-testable, and no two conflict
 3. Scope is bounded with explicit "out of scope" items
-4. Technical context has exact file paths and pattern references
-5. Scope is one logical change per PR (decomposed into `Proposed PRs` if it spans several)
-6. No ambiguity — an AI agent could start implementing without clarifying questions
-7. References are linked
-8. Verification is explicit
-9. **Collapse check:** Technical Context and Proposed PRs sit inside `<details>` blocks with a blank line after `</summary>`
-10. **Altitude check:** Problem and Solution contain zero file paths, function names, or line numbers; all code identifiers live in Acceptance Criteria (contracts only), Technical Context, and Proposed PRs file tables
-11. **Skim test:** the first sentence of each section, read in order, forms a correct summary at descending altitude
-12. **Sentence discipline:** no sentence carries a claim, its mechanism, and a citation at once; provenance lives only in History
+4. **Shape check:** the shape matches Choosing the shape — sprawl is split into sub-issues, not embedded as Proposed PRs; no unrelated items share an issue; no owner decision is left open
+5. No ambiguity — an AI agent could start implementing without clarifying questions
+6. Verification is explicit
+
+For Standard and Large issues, also verify:
+
+7. Technical context has exact file paths and pattern references, and references are linked
+8. **Collapse check:** Technical Context and Proposed PRs sit inside `<details>` blocks with a blank line after `</summary>`
+9. **Altitude check:** Problem and Solution contain zero file paths, function names, or line numbers; all code identifiers live in Acceptance Criteria (contracts only), Technical Context, and Proposed PRs file tables
+10. **Skim test:** the first sentence of each section, read in order, forms a correct summary at descending altitude
+11. **Sentence discipline:** no sentence carries a claim, its mechanism, and a citation at once; provenance lives only in History
 
 Present the draft to the user via `AskUserQuestion` with options to submit as-is, edit, or cancel.
 
@@ -235,4 +277,6 @@ EOF
 
 Title format: `<type>: <imperative summary>` (under 72 characters). Types: `feat`, `fix`, `chore`, `refactor`, `docs`, `test`.
 
-Report the created issue number and URL.
+For sprawling work, create the parent first, then each sub-issue with a `Parent issue: #<parent-number>` line, then edit the parent to list the sub-issues and their dependency order.
+
+Report the created issue numbers and URLs.

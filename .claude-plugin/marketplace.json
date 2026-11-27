@@ -36,7 +36,7 @@
       "name": "issue-management",
       "source": "./plugins/issue-management",
       "description": "Draft, clean up, and refine GitHub issues — optimized for AI agent consumption",
-      "version": "1.5.0",
+      "version": "1.6.0",
       "category": "productivity",
       "tags": ["issue", "draft", "cleanup", "refine", "planning"],
       "author": {
